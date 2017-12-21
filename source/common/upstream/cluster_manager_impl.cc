@@ -230,8 +230,7 @@ ClusterManagerImpl::ClusterManagerImpl(const envoy::api::v2::Bootstrap& bootstra
 
   tls_->set([this, local_cluster_name](
                 Event::Dispatcher& dispatcher) -> ThreadLocal::ThreadLocalObjectSharedPtr {
-    return ThreadLocal::ThreadLocalObjectSharedPtr{
-        new ThreadLocalClusterManagerImpl(*this, dispatcher, local_cluster_name)};
+    return std::make_shared<ThreadLocalClusterManagerImpl>(*this, dispatcher, local_cluster_name);
   });
 
   init_helper_.onStaticLoadComplete();
@@ -303,7 +302,8 @@ bool ClusterManagerImpl::addOrUpdatePrimaryCluster(const envoy::api::v2::Cluster
     }
 
     cluster_manager.thread_local_clusters_[new_cluster->name()].reset(
-        new ThreadLocalClusterManagerImpl::ClusterEntry(cluster_manager, new_cluster));
+        // fixfix
+        new ThreadLocalClusterManagerImpl::ClusterEntry(cluster_manager, new_cluster, nullptr));
   });
 
   postInitializeCluster(*primary_clusters_.at(cluster_name).cluster_);

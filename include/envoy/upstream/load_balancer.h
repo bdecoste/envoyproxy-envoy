@@ -57,5 +57,26 @@ public:
 
 typedef std::unique_ptr<LoadBalancer> LoadBalancerPtr;
 
+/**
+ * fixfix
+ */
+class LoadBalancerFactory {
+};
+
+typedef std::shared_ptr<LoadBalancerFactory> LoadBalancerFactorySharedPtr;
+
+/**
+ * fixfix
+ */
+class ThreadAwareLoadBalancer {
+public:
+  virtual ~ThreadAwareLoadBalancer() {}
+
+  virtual const LoadBalancerFactorySharedPtr& factory() PURE;
+  virtual void setNewThreadLocalLoadBalancerCallback(const std::function<void()>& callback) PURE;
+};
+
+typedef std::unique_ptr<ThreadAwareLoadBalancer> ThreadAwareLoadBalancerPtr;
+
 } // namespace Upstream
 } // namespace Envoy

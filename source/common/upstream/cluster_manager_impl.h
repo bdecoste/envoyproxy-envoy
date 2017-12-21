@@ -192,7 +192,8 @@ private:
     };
 
     struct ClusterEntry : public ThreadLocalCluster {
-      ClusterEntry(ThreadLocalClusterManagerImpl& parent, ClusterInfoConstSharedPtr cluster);
+      ClusterEntry(ThreadLocalClusterManagerImpl& parent, ClusterInfoConstSharedPtr cluster,
+                   LoadBalancerPtr&& thread_aware_lb);
       ~ClusterEntry();
 
       Http::ConnectionPool::Instance* connPool(ResourcePriority priority,
