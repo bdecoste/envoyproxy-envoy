@@ -42,9 +42,13 @@ REPOSITORY_LOCATIONS = dict(
         commit = "c3d2faf04a1070b0b852b0efdef81e1a81ba925e",
         remote = "https://github.com/google/libprotobuf-mutator",
     ),
+#    com_github_grpc_grpc = dict(
+#        commit = "b9fbc3e5ae10a31c082ba56c1afd968263ed3cd6",  # v1.12.0
+#        remote = "https://github.com/bdecoste/grpc.git",
+#    ),
     com_github_grpc_grpc = dict(
-        commit = "b9fbc3e5ae10a31c082ba56c1afd968263ed3cd6",  # v1.12.0
-        remote = "https://github.com/bdecoste/grpc.git",
+        commit = "bec3b5ada2c5e5d782dff0b7b5018df646b65cb0",  # v1.12.0
+        remote = "https://github.com/grpc/grpc.git",
     ),
     io_opentracing_cpp = dict(
         commit = "3b36b084a4d7fffc196eac83203cf24dfb8696b3",  # v1.4.2
