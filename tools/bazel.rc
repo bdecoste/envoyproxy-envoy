@@ -1,5 +1,8 @@
 # Envoy specific Bazel build/test options.
 
+build --cxxopt -D_GLIBCXX_USE_CXX11_ABI=1
+build --cxxopt -DENVOY_IGNORE_GLIBCXX_USE_CXX11_ABI_ERROR=1
+
 build --workspace_status_command=bazel/get_workspace_status
 
 # Basic ASAN/UBSAN that works for gcc

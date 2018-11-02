@@ -7,8 +7,8 @@
 #include "envoy/stats/stats_macros.h"
 
 #include "common/common/logger.h"
+#include "common/ssl/ssl_impl.h"
 
-#include "openssl/bytestring.h"
 #include "openssl/ssl.h"
 
 namespace Envoy {

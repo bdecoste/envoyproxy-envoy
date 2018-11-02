@@ -116,3 +116,8 @@ envoy_cc_library(
         "//source/common/common:utility_lib",
     ],
 )
+
+envoy_cc_library(
+    name = "ssl_impl_lib",
+    hdrs = ["ssl_impl.h"],
+)
