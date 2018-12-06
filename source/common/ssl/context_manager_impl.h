@@ -3,7 +3,7 @@
 #include <functional>
 #include <list>
 
-#include "envoy/common/time.h"
+#include "envoy/runtime/runtime.h"
 #include "envoy/ssl/context_manager.h"
 #include "envoy/stats/scope.h"
 
@@ -19,7 +19,7 @@ namespace Ssl {
  */
 class ContextManagerImpl final : public ContextManager {
 public:
-  ContextManagerImpl(TimeSource& time_source) : time_source_(time_source) {}
+  ContextManagerImpl(Runtime::Loader& runtime) : runtime_(runtime) {}
   ~ContextManagerImpl();
 
   // Ssl::ContextManager
@@ -33,7 +33,7 @@ public:
 
 private:
   void removeEmptyContexts();
-  TimeSource& time_source_;
+  Runtime::Loader& runtime_;
   std::list<std::weak_ptr<Context>> contexts_;
 };
 

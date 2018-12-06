@@ -3,19 +3,14 @@
 #include <algorithm>
 #include <cstdint>
 #include <fstream>
-#include <regex>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
-#include "envoy/admin/v2alpha/certs.pb.h"
 #include "envoy/admin/v2alpha/clusters.pb.h"
 #include "envoy/admin/v2alpha/config_dump.pb.h"
-#include "envoy/admin/v2alpha/memory.pb.h"
-#include "envoy/admin/v2alpha/mutex_stats.pb.h"
-#include "envoy/admin/v2alpha/server_info.pb.h"
 #include "envoy/filesystem/filesystem.h"
 #include "envoy/runtime/runtime.h"
 #include "envoy/server/hot_restart.h"
@@ -32,7 +27,6 @@
 #include "common/common/assert.h"
 #include "common/common/enum_to_int.h"
 #include "common/common/fmt.h"
-#include "common/common/mutex_tracer_impl.h"
 #include "common/common/utility.h"
 #include "common/common/version.h"
 #include "common/html/utility.h"
@@ -41,7 +35,6 @@
 #include "common/http/headers.h"
 #include "common/http/http1/codec_impl.h"
 #include "common/json/json_loader.h"
-#include "common/memory/stats.h"
 #include "common/network/listen_socket_impl.h"
 #include "common/network/utility.h"
 #include "common/profiler/profiler.h"
@@ -135,8 +128,6 @@ const char AdminHtmlEnd[] = R"(
   </table>
 </body>
 )";
-
-const std::regex PromRegex("[^a-zA-Z0-9_]");
 
 void populateFallbackResponseHeaders(Http::Code code, Http::HeaderMap& header_map) {
   header_map.insertStatus().value(std::to_string(enumToInt(code)));
@@ -293,37 +284,17 @@ void AdminImpl::writeClustersAsJson(Buffer::Instance& response) {
         envoy::admin::v2alpha::HostStatus& host_status = *cluster_status.add_host_statuses();
         Network::Utility::addressToProtobufAddress(*host->address(),
                                                    *host_status.mutable_address());
-        std::vector<Stats::CounterSharedPtr> sorted_counters;
+
         for (const Stats::CounterSharedPtr& counter : host->counters()) {
-          sorted_counters.push_back(counter);
-        }
-        std::sort(
-            sorted_counters.begin(), sorted_counters.end(),
-            [](const Stats::CounterSharedPtr& counter1, const Stats::CounterSharedPtr& counter2) {
-              return counter1->name() < counter2->name();
-            });
-
-        for (const Stats::CounterSharedPtr& counter : sorted_counters) {
-          auto& metric = *host_status.add_stats();
-          metric.set_name(counter->name());
-          metric.set_value(counter->value());
+          auto& metric = (*host_status.mutable_stats())[counter->name()];
           metric.set_type(envoy::admin::v2alpha::SimpleMetric::COUNTER);
+          metric.set_value(counter->value());
         }
 
-        std::vector<Stats::GaugeSharedPtr> sorted_gauges;
         for (const Stats::GaugeSharedPtr& gauge : host->gauges()) {
-          sorted_gauges.push_back(gauge);
-        }
-        std::sort(sorted_gauges.begin(), sorted_gauges.end(),
-                  [](const Stats::GaugeSharedPtr& gauge1, const Stats::GaugeSharedPtr& gauge2) {
-                    return gauge1->name() < gauge2->name();
-                  });
-
-        for (const Stats::GaugeSharedPtr& gauge : sorted_gauges) {
-          auto& metric = *host_status.add_stats();
-          metric.set_name(gauge->name());
-          metric.set_value(gauge->value());
+          auto& metric = (*host_status.mutable_stats())[gauge->name()];
           metric.set_type(envoy::admin::v2alpha::SimpleMetric::GAUGE);
+          metric.set_value(gauge->value());
         }
 
         envoy::admin::v2alpha::HostHealthStatus& health_status =
@@ -340,8 +311,6 @@ void AdminImpl::writeClustersAsJson(Buffer::Instance& response) {
         if (success_rate >= 0.0) {
           host_status.mutable_success_rate()->set_value(success_rate);
         }
-
-        host_status.set_weight(host->weight());
       }
     }
   }
@@ -420,36 +389,18 @@ Http::Code AdminImpl::handlerClusters(absl::string_view url, Http::HeaderMap& re
 Http::Code AdminImpl::handlerConfigDump(absl::string_view, Http::HeaderMap& response_headers,
                                         Buffer::Instance& response, AdminStream&) const {
   envoy::admin::v2alpha::ConfigDump dump;
+  auto& config_dump_map = *(dump.mutable_configs());
   for (const auto& key_callback_pair : config_tracker_.getCallbacksMap()) {
     ProtobufTypes::MessagePtr message = key_callback_pair.second();
     RELEASE_ASSERT(message, "");
-    auto& any_message = *(dump.add_configs());
+    ProtobufWkt::Any any_message;
     any_message.PackFrom(*message);
+    config_dump_map[key_callback_pair.first] = any_message;
   }
 
   response_headers.insertContentType().value().setReference(
       Http::Headers::get().ContentTypeValues.Json);
   response.add(MessageUtil::getJsonStringFromMessage(dump, true)); // pretty-print
-  return Http::Code::OK;
-}
-
-// TODO(ambuc) Export this as a server (?) stat for monitoring.
-Http::Code AdminImpl::handlerContention(absl::string_view, Http::HeaderMap& response_headers,
-                                        Buffer::Instance& response, AdminStream&) {
-
-  if (server_.options().mutexTracingEnabled() && server_.mutexTracer() != nullptr) {
-    response_headers.insertContentType().value().setReference(
-        Http::Headers::get().ContentTypeValues.Json);
-
-    envoy::admin::v2alpha::MutexStats mutex_stats;
-    mutex_stats.set_num_contentions(server_.mutexTracer()->numContentions());
-    mutex_stats.set_current_wait_cycles(server_.mutexTracer()->currentWaitCycles());
-    mutex_stats.set_lifetime_wait_cycles(server_.mutexTracer()->lifetimeWaitCycles());
-    response.add(MessageUtil::getJsonStringFromMessage(mutex_stats, true, true));
-  } else {
-    response.add("Mutex contention tracing is not enabled. To enable, run Envoy with flag "
-                 "--enable-mutex-tracing.");
-  }
   return Http::Code::OK;
 }
 
@@ -523,21 +474,6 @@ Http::Code AdminImpl::handlerLogging(absl::string_view url, Http::HeaderMap&,
   return rc;
 }
 
-// TODO(ambuc): Add more tcmalloc stats, export proto details based on allocator.
-Http::Code AdminImpl::handlerMemory(absl::string_view, Http::HeaderMap& response_headers,
-                                    Buffer::Instance& response, AdminStream&) {
-  response_headers.insertContentType().value().setReference(
-      Http::Headers::get().ContentTypeValues.Json);
-  envoy::admin::v2alpha::Memory memory;
-  memory.set_allocated(Memory::Stats::totalCurrentlyAllocated());
-  memory.set_heap_size(Memory::Stats::totalCurrentlyReserved());
-  memory.set_total_thread_cache(Memory::Stats::totalThreadCacheBytes());
-  memory.set_pageheap_unmapped(Memory::Stats::totalPageHeapUnmapped());
-  memory.set_pageheap_free(Memory::Stats::totalPageHeapFree());
-  response.add(MessageUtil::getJsonStringFromMessage(memory, true, true)); // pretty-print
-  return Http::Code::OK;
-}
-
 Http::Code AdminImpl::handlerResetCounters(absl::string_view, Http::HeaderMap&,
                                            Buffer::Instance& response, AdminStream&) {
   for (const Stats::CounterSharedPtr& counter : server_.stats().counters()) {
@@ -548,32 +484,14 @@ Http::Code AdminImpl::handlerResetCounters(absl::string_view, Http::HeaderMap&,
   return Http::Code::OK;
 }
 
-Http::Code AdminImpl::handlerServerInfo(absl::string_view, Http::HeaderMap& headers,
+Http::Code AdminImpl::handlerServerInfo(absl::string_view, Http::HeaderMap&,
                                         Buffer::Instance& response, AdminStream&) {
   time_t current_time = time(nullptr);
-  envoy::admin::v2alpha::ServerInfo server_info;
-  server_info.set_version(VersionInfo::version());
-
-  switch (server_.initManager().state()) {
-  case Init::Manager::State::NotInitialized:
-    server_info.set_state(envoy::admin::v2alpha::ServerInfo::PRE_INITIALIZING);
-    break;
-  case Init::Manager::State::Initializing:
-    server_info.set_state(envoy::admin::v2alpha::ServerInfo::INITIALIZING);
-    break;
-  default:
-    server_info.set_state(server_.healthCheckFailed() ? envoy::admin::v2alpha::ServerInfo::DRAINING
-                                                      : envoy::admin::v2alpha::ServerInfo::LIVE);
-  }
-  server_info.mutable_uptime_current_epoch()->set_seconds(current_time -
-                                                          server_.startTimeCurrentEpoch());
-  server_info.mutable_uptime_all_epochs()->set_seconds(current_time -
-                                                       server_.startTimeFirstEpoch());
-  envoy::admin::v2alpha::CommandLineOptions* command_line_options =
-      server_info.mutable_command_line_options();
-  *command_line_options = *server_.options().toCommandLineOptions();
-  response.add(MessageUtil::getJsonStringFromMessage(server_info, true, true));
-  headers.insertContentType().value().setReference(Http::Headers::get().ContentTypeValues.Json);
+  response.add(fmt::format("envoy {} {} {} {} {}\n", VersionInfo::version(),
+                           server_.healthCheckFailed() ? "draining" : "live",
+                           current_time - server_.startTimeCurrentEpoch(),
+                           current_time - server_.startTimeFirstEpoch(),
+                           server_.options().restartEpoch()));
   return Http::Code::OK;
 }
 
@@ -582,22 +500,18 @@ Http::Code AdminImpl::handlerStats(absl::string_view url, Http::HeaderMap& respo
   Http::Code rc = Http::Code::OK;
   const Http::Utility::QueryParams params = Http::Utility::parseQueryString(url);
 
-  const bool used_only = params.find("usedonly") != params.end();
+  const bool show_all = params.find("usedonly") == params.end();
   const bool has_format = !(params.find("format") == params.end());
-  const absl::optional<std::regex> regex =
-      (params.find("filter") != params.end())
-          ? absl::optional<std::regex>{std::regex(params.at("filter"))}
-          : absl::nullopt;
 
   std::map<std::string, uint64_t> all_stats;
   for (const Stats::CounterSharedPtr& counter : server_.stats().counters()) {
-    if (shouldShowMetric(counter, used_only, regex)) {
+    if (show_all || counter->used()) {
       all_stats.emplace(counter->name(), counter->value());
     }
   }
 
   for (const Stats::GaugeSharedPtr& gauge : server_.stats().gauges()) {
-    if (shouldShowMetric(gauge, used_only, regex)) {
+    if (show_all || gauge->used()) {
       all_stats.emplace(gauge->name(), gauge->value());
     }
   }
@@ -607,8 +521,7 @@ Http::Code AdminImpl::handlerStats(absl::string_view url, Http::HeaderMap& respo
     if (format_value == "json") {
       response_headers.insertContentType().value().setReference(
           Http::Headers::get().ContentTypeValues.Json);
-      response.add(
-          AdminImpl::statsAsJson(all_stats, server_.stats().histograms(), used_only, regex));
+      response.add(AdminImpl::statsAsJson(all_stats, server_.stats().histograms(), show_all));
     } else if (format_value == "prometheus") {
       return handlerPrometheusStats(url, response_headers, response, admin_stream);
     } else {
@@ -620,12 +533,12 @@ Http::Code AdminImpl::handlerStats(absl::string_view url, Http::HeaderMap& respo
     for (auto stat : all_stats) {
       response.add(fmt::format("{}: {}\n", stat.first, stat.second));
     }
-    // TODO(ramaraochavali): See the comment in ThreadLocalStoreImpl::histograms() for why we use a
+    // TOOD(ramaraochavali): See the comment in ThreadLocalStoreImpl::histograms() for why we use a
     // multimap here. This makes sure that duplicate histograms get output. When shared storage is
     // implemented this can be switched back to a normal map.
     std::multimap<std::string, std::string> all_histograms;
     for (const Stats::ParentHistogramSharedPtr& histogram : server_.stats().histograms()) {
-      if (shouldShowMetric(histogram, used_only, regex)) {
+      if (show_all || histogram->used()) {
         all_histograms.emplace(histogram->name(), histogram->summary());
       }
     }
@@ -644,14 +557,10 @@ Http::Code AdminImpl::handlerPrometheusStats(absl::string_view, Http::HeaderMap&
 }
 
 std::string PrometheusStatsFormatter::sanitizeName(const std::string& name) {
-  // The name must match the regex [a-zA-Z_][a-zA-Z0-9_]* as required by
-  // prometheus. Refer to https://prometheus.io/docs/concepts/data_model/.
-  std::string stats_name = std::regex_replace(name, PromRegex, "_");
-  if (stats_name[0] >= '0' && stats_name[0] <= '9') {
-    return fmt::format("_{}", stats_name);
-  } else {
-    return stats_name;
-  }
+  std::string stats_name = name;
+  std::replace(stats_name.begin(), stats_name.end(), '.', '_');
+  std::replace(stats_name.begin(), stats_name.end(), '-', '_');
+  return stats_name;
 }
 
 std::string PrometheusStatsFormatter::formattedTags(const std::vector<Stats::Tag>& tags) {
@@ -666,7 +575,7 @@ std::string PrometheusStatsFormatter::metricName(const std::string& extractedNam
   // Add namespacing prefix to avoid conflicts, as per best practice:
   // https://prometheus.io/docs/practices/naming/#metric-names
   // Also, naming conventions on https://prometheus.io/docs/concepts/data_model/
-  return sanitizeName(fmt::format("envoy_{0}", extractedName));
+  return fmt::format("envoy_{0}", sanitizeName(extractedName));
 }
 
 // TODO(ramaraochavali): Add summary histogram output for Prometheus.
@@ -700,8 +609,7 @@ PrometheusStatsFormatter::statsAsPrometheus(const std::vector<Stats::CounterShar
 std::string
 AdminImpl::statsAsJson(const std::map<std::string, uint64_t>& all_stats,
                        const std::vector<Stats::ParentHistogramSharedPtr>& all_histograms,
-                       const bool used_only, const absl::optional<std::regex> regex,
-                       const bool pretty_print) {
+                       const bool show_all, const bool pretty_print) {
   rapidjson::Document document;
   document.SetObject();
   rapidjson::Value stats_array(rapidjson::kArrayType);
@@ -728,7 +636,7 @@ AdminImpl::statsAsJson(const std::map<std::string, uint64_t>& all_stats,
   rapidjson::Value histogram_array(rapidjson::kArrayType);
 
   for (const Stats::ParentHistogramSharedPtr& histogram : all_histograms) {
-    if (shouldShowMetric(histogram, used_only, regex)) {
+    if (show_all || histogram->used()) {
       if (!found_used_histogram) {
         // It is not possible for the supported quantiles to differ across histograms, so it is ok
         // to send them once.
@@ -806,25 +714,22 @@ Http::Code AdminImpl::handlerListenerInfo(absl::string_view, Http::HeaderMap& re
   return Http::Code::OK;
 }
 
-Http::Code AdminImpl::handlerCerts(absl::string_view, Http::HeaderMap& response_headers,
-                                   Buffer::Instance& response, AdminStream&) {
+Http::Code AdminImpl::handlerCerts(absl::string_view, Http::HeaderMap&, Buffer::Instance& response,
+                                   AdminStream&) {
   // This set is used to track distinct certificates. We may have multiple listeners, upstreams, etc
   // using the same cert.
-  response_headers.insertContentType().value().setReference(
-      Http::Headers::get().ContentTypeValues.Json);
-  envoy::admin::v2alpha::Certificates certificates;
+  std::unordered_set<std::string> context_info_set;
+  std::string context_format = "{{\n\t\"ca_cert\": \"{}\",\n\t\"cert_chain\": \"{}\"\n}}\n";
   server_.sslContextManager().iterateContexts([&](const Ssl::Context& context) -> void {
-    envoy::admin::v2alpha::Certificate& certificate = *certificates.add_certificates();
-    if (context.getCaCertInformation() != nullptr) {
-      envoy::admin::v2alpha::CertificateDetails* ca_certificate = certificate.add_ca_cert();
-      *ca_certificate = *context.getCaCertInformation();
-    }
-    for (const auto& cert_details : context.getCertChainInformation()) {
-      envoy::admin::v2alpha::CertificateDetails* cert_chain = certificate.add_cert_chain();
-      *cert_chain = *cert_details;
-    }
+    context_info_set.insert(fmt::format(context_format, context.getCaCertInformation(),
+                                        context.getCertChainInformation()));
   });
-  response.add(MessageUtil::getJsonStringFromMessage(certificates, true, true));
+
+  std::string cert_result_string;
+  for (const std::string& context_info : context_info_set) {
+    cert_result_string += context_info;
+  }
+  response.add(cert_result_string);
   return Http::Code::OK;
 }
 
@@ -862,7 +767,7 @@ Http::Code AdminImpl::handlerRuntime(absl::string_view url, Http::HeaderMap& res
   for (const auto& layer : layers) {
     for (auto& kv : entry_objects) {
       const auto it = layer->values().find(kv.first);
-      const auto& entry_value = it == layer->values().end() ? "" : it->second.raw_string_value_;
+      const auto& entry_value = it == layer->values().end() ? "" : it->second.string_value_;
       rapidjson::Value entry_value_object;
       entry_value_object.SetString(entry_value.c_str(), allocator);
       if (!entry_value.empty()) {
@@ -903,7 +808,7 @@ std::string AdminImpl::runtimeAsJson(
     if (entry.second.uint_value_) {
       entry_value.SetUint64(entry.second.uint_value_.value());
     } else {
-      entry_value.SetString(entry.second.raw_string_value_.c_str(), allocator);
+      entry_value.SetString(entry.second.string_value_.c_str(), allocator);
     }
     entry_obj.AddMember("value", entry_value, allocator);
 
@@ -950,38 +855,18 @@ void AdminFilter::onComplete() {
   }
 }
 
-AdminImpl::NullRouteConfigProvider::NullRouteConfigProvider(TimeSource& time_source)
-    : config_(new Router::NullConfigImpl()), time_source_(time_source) {}
+AdminImpl::NullRouteConfigProvider::NullRouteConfigProvider()
+    : config_(new Router::NullConfigImpl()) {}
 
-void AdminImpl::startHttpListener(const std::string& access_log_path,
-                                  const std::string& address_out_path,
-                                  Network::Address::InstanceConstSharedPtr address,
-                                  Stats::ScopePtr&& listener_scope) {
-  // TODO(mattklein123): Allow admin to use normal access logger extension loading and avoid the
-  // hard dependency here.
-  access_logs_.emplace_back(new Extensions::AccessLoggers::File::FileAccessLog(
-      access_log_path, {}, AccessLog::AccessLogFormatUtils::defaultAccessLogFormatter(),
-      server_.accessLogManager()));
-  socket_ = std::make_unique<Network::TcpListenSocket>(address, nullptr, true);
-  listener_ = std::make_unique<AdminListener>(*this, std::move(listener_scope));
-  if (!address_out_path.empty()) {
-    std::ofstream address_out_file(address_out_path);
-    if (!address_out_file) {
-      ENVOY_LOG(critical, "cannot open admin address output file {} for writing.",
-                address_out_path);
-    } else {
-      address_out_file << socket_->localAddress()->asString();
-    }
-  }
-}
-
-AdminImpl::AdminImpl(const std::string& profile_path, Server::Instance& server)
+AdminImpl::AdminImpl(const std::string& access_log_path, const std::string& profile_path,
+                     const std::string& address_out_path,
+                     Network::Address::InstanceConstSharedPtr address, Server::Instance& server,
+                     Stats::ScopePtr&& listener_scope)
     : server_(server), profile_path_(profile_path),
+      socket_(new Network::TcpListenSocket(address, nullptr, true)),
       stats_(Http::ConnectionManagerImpl::generateStats("http.admin.", server_.stats())),
       tracing_stats_(
           Http::ConnectionManagerImpl::generateTracingStats("http.admin.", no_op_store_)),
-      route_config_provider_(server.timeSystem()),
-      // TODO(jsedgwick) add /runtime_reset endpoint that removes all admin-set values
       handlers_{
           {"/", "Admin home page", MAKE_ADMIN_HANDLER(handlerAdminHome), false, false},
           {"/certs", "print certs on machine", MAKE_ADMIN_HANDLER(handlerCerts), false, false},
@@ -989,8 +874,6 @@ AdminImpl::AdminImpl(const std::string& profile_path, Server::Instance& server)
            false},
           {"/config_dump", "dump current Envoy configs (experimental)",
            MAKE_ADMIN_HANDLER(handlerConfigDump), false, false},
-          {"/contention", "dump current Envoy mutex contention stats (if enabled)",
-           MAKE_ADMIN_HANDLER(handlerContention), false, false},
           {"/cpuprofiler", "enable/disable the CPU profiler",
            MAKE_ADMIN_HANDLER(handlerCpuProfiler), false, true},
           {"/healthcheck/fail", "cause the server to fail health checks",
@@ -1003,8 +886,6 @@ AdminImpl::AdminImpl(const std::string& profile_path, Server::Instance& server)
            MAKE_ADMIN_HANDLER(handlerHotRestartVersion), false, false},
           {"/logging", "query/change logging levels", MAKE_ADMIN_HANDLER(handlerLogging), false,
            true},
-          {"/memory", "print current allocation/heap usage", MAKE_ADMIN_HANDLER(handlerMemory),
-           false, false},
           {"/quitquitquit", "exit the server", MAKE_ADMIN_HANDLER(handlerQuitQuitQuit), false,
            true},
           {"/reset_counters", "reset all counters to zero",
@@ -1020,8 +901,27 @@ AdminImpl::AdminImpl(const std::string& profile_path, Server::Instance& server)
           {"/runtime_modify", "modify runtime values", MAKE_ADMIN_HANDLER(handlerRuntimeModify),
            false, true},
       },
-      date_provider_(server.dispatcher().timeSystem()),
-      admin_filter_chain_(std::make_shared<AdminFilterChain>()) {}
+
+      // TODO(jsedgwick) add /runtime_reset endpoint that removes all admin-set values
+      listener_(*this, std::move(listener_scope)),
+      admin_filter_chain_(std::make_shared<AdminFilterChain>()) {
+
+  if (!address_out_path.empty()) {
+    std::ofstream address_out_file(address_out_path);
+    if (!address_out_file) {
+      ENVOY_LOG(critical, "cannot open admin address output file {} for writing.",
+                address_out_path);
+    } else {
+      address_out_file << socket_->localAddress()->asString();
+    }
+  }
+
+  // TODO(mattklein123): Allow admin to use normal access logger extension loading and avoid the
+  // hard dependency here.
+  access_logs_.emplace_back(new Extensions::AccessLoggers::File::FileAccessLog(
+      access_log_path, {}, AccessLog::AccessLogFormatUtils::defaultAccessLogFormatter(),
+      server.accessLogManager()));
+}
 
 Http::ServerConnectionPtr AdminImpl::createCodec(Network::Connection& connection,
                                                  const Buffer::Instance&,
@@ -1032,11 +932,9 @@ Http::ServerConnectionPtr AdminImpl::createCodec(Network::Connection& connection
 
 bool AdminImpl::createNetworkFilterChain(Network::Connection& connection,
                                          const std::vector<Network::FilterFactoryCb>&) {
-  // Don't pass in the overload manager so that the admin interface is accessible even when
-  // the envoy is overloaded.
   connection.addReadFilter(Network::ReadFilterSharedPtr{new Http::ConnectionManagerImpl(
-      *this, server_.drainManager(), server_.random(), server_.httpContext(), server_.runtime(),
-      server_.localInfo(), server_.clusterManager(), nullptr, server_.timeSystem())});
+      *this, server_.drainManager(), server_.random(), server_.httpTracer(), server_.runtime(),
+      server_.localInfo(), server_.clusterManager())});
   return true;
 }
 
@@ -1205,18 +1103,6 @@ Http::Code AdminImpl::request(absl::string_view path_and_query, absl::string_vie
   populateFallbackResponseHeaders(code, response_headers);
   body = response.toString();
   return code;
-}
-
-void AdminImpl::closeSocket() {
-  if (socket_) {
-    socket_->close();
-  }
-}
-
-void AdminImpl::addListenerToHandler(Network::ConnectionHandler* handler) {
-  if (listener_) {
-    handler->addListener(*listener_);
-  }
 }
 
 } // namespace Server

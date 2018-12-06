@@ -31,7 +31,6 @@ envoy_cc_test(
         "//source/common/decompressor:decompressor_lib",
         "//source/extensions/filters/http/gzip:config",
         "//test/integration:http_integration_lib",
-        "//test/test_common:simulated_time_system_lib",
         "//test/test_common:utility_lib",
     ],
 )

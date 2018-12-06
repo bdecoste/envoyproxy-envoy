@@ -51,7 +51,6 @@ envoy_cc_test(
         "//test/mocks/stats:stats_mocks",
         "//test/test_common:environment_lib",
         "//test/test_common:network_utility_lib",
-        "//test/test_common:simulated_time_system_lib",
     ],
 )
 
@@ -73,7 +72,6 @@ envoy_cc_test(
         "//test/mocks/network:network_mocks",
         "//test/test_common:environment_lib",
         "//test/test_common:network_utility_lib",
-        "//test/test_common:test_time_lib",
         "//test/test_common:utility_lib",
     ],
 )
@@ -92,7 +90,6 @@ envoy_cc_test(
         "//source/common/upstream:upstream_lib",
         "//source/extensions/filters/network/ratelimit:ratelimit_lib",
         "//test/common/upstream:utility_lib",
-        "//test/extensions/filters/common/ratelimit:ratelimit_mocks",
         "//test/mocks/buffer:buffer_mocks",
         "//test/mocks/network:network_mocks",
         "//test/mocks/ratelimit:ratelimit_mocks",
@@ -142,7 +139,6 @@ envoy_cc_test(
         "//test/mocks/server:server_mocks",
         "//test/test_common:environment_lib",
         "//test/test_common:network_utility_lib",
-        "//test/test_common:test_time_lib",
         "//test/test_common:utility_lib",
     ],
 )
@@ -198,7 +194,6 @@ envoy_cc_test(
     deps = [
         "//source/common/network:address_lib",
         "//source/common/network:utility_lib",
-        "//test/mocks/network:network_mocks",
         "//test/test_common:environment_lib",
     ],
 )

@@ -26,6 +26,7 @@ using testing::Return;
 using testing::ReturnRef;
 using testing::SetArgReferee;
 using testing::StrictMock;
+using testing::Test;
 using testing::TestParamInfo;
 using testing::TestWithParam;
 using testing::Values;
@@ -36,50 +37,57 @@ namespace NetworkFilters {
 namespace ThriftProxy {
 namespace {
 
-ExpectationSet expectValue(MockProtocol& proto, MockDecoderEventHandler& handler,
+ExpectationSet expectValue(MockProtocol& proto, ThriftFilters::MockDecoderFilter& filter,
                            FieldType field_type, bool result = true) {
   ExpectationSet s;
   switch (field_type) {
   case FieldType::Bool:
     s += EXPECT_CALL(proto, readBool(_, _)).WillOnce(Return(result));
     if (result) {
-      s += EXPECT_CALL(handler, boolValue(_)).WillOnce(Return(FilterStatus::Continue));
+      s +=
+          EXPECT_CALL(filter, boolValue(_)).WillOnce(Return(ThriftFilters::FilterStatus::Continue));
     }
     break;
   case FieldType::Byte:
     s += EXPECT_CALL(proto, readByte(_, _)).WillOnce(Return(result));
     if (result) {
-      s += EXPECT_CALL(handler, byteValue(_)).WillOnce(Return(FilterStatus::Continue));
+      s +=
+          EXPECT_CALL(filter, byteValue(_)).WillOnce(Return(ThriftFilters::FilterStatus::Continue));
     }
     break;
   case FieldType::Double:
     s += EXPECT_CALL(proto, readDouble(_, _)).WillOnce(Return(result));
     if (result) {
-      s += EXPECT_CALL(handler, doubleValue(_)).WillOnce(Return(FilterStatus::Continue));
+      s += EXPECT_CALL(filter, doubleValue(_))
+               .WillOnce(Return(ThriftFilters::FilterStatus::Continue));
     }
     break;
   case FieldType::I16:
     s += EXPECT_CALL(proto, readInt16(_, _)).WillOnce(Return(result));
     if (result) {
-      s += EXPECT_CALL(handler, int16Value(_)).WillOnce(Return(FilterStatus::Continue));
+      s += EXPECT_CALL(filter, int16Value(_))
+               .WillOnce(Return(ThriftFilters::FilterStatus::Continue));
     }
     break;
   case FieldType::I32:
     s += EXPECT_CALL(proto, readInt32(_, _)).WillOnce(Return(result));
     if (result) {
-      s += EXPECT_CALL(handler, int32Value(_)).WillOnce(Return(FilterStatus::Continue));
+      s += EXPECT_CALL(filter, int32Value(_))
+               .WillOnce(Return(ThriftFilters::FilterStatus::Continue));
     }
     break;
   case FieldType::I64:
     s += EXPECT_CALL(proto, readInt64(_, _)).WillOnce(Return(result));
     if (result) {
-      s += EXPECT_CALL(handler, int64Value(_)).WillOnce(Return(FilterStatus::Continue));
+      s += EXPECT_CALL(filter, int64Value(_))
+               .WillOnce(Return(ThriftFilters::FilterStatus::Continue));
     }
     break;
   case FieldType::String:
     s += EXPECT_CALL(proto, readString(_, _)).WillOnce(Return(result));
     if (result) {
-      s += EXPECT_CALL(handler, stringValue(_)).WillOnce(Return(FilterStatus::Continue));
+      s += EXPECT_CALL(filter, stringValue(_))
+               .WillOnce(Return(ThriftFilters::FilterStatus::Continue));
     }
     break;
   default:
@@ -88,58 +96,37 @@ ExpectationSet expectValue(MockProtocol& proto, MockDecoderEventHandler& handler
   return s;
 }
 
-ExpectationSet expectContainerStart(MockProtocol& proto, MockDecoderEventHandler& handler,
+ExpectationSet expectContainerStart(MockProtocol& proto, ThriftFilters::MockDecoderFilter& filter,
                                     FieldType field_type, FieldType inner_type) {
-  int16_t field_id = 1;
-  uint32_t size = 1;
-
   ExpectationSet s;
   switch (field_type) {
   case FieldType::Struct:
     s += EXPECT_CALL(proto, readStructBegin(_, _)).WillOnce(Return(true));
-    s += EXPECT_CALL(handler, structBegin(absl::string_view()))
-             .WillOnce(Return(FilterStatus::Continue));
+    s += EXPECT_CALL(filter, structBegin(absl::string_view()))
+             .WillOnce(Return(ThriftFilters::FilterStatus::Continue));
     s += EXPECT_CALL(proto, readFieldBegin(_, _, _, _))
-             .WillOnce(
-                 DoAll(SetArgReferee<2>(inner_type), SetArgReferee<3>(field_id), Return(true)));
-    s += EXPECT_CALL(handler, fieldBegin(absl::string_view(), _, _))
-             .WillOnce(Invoke([=](absl::string_view, FieldType& ft, int16_t& id) -> FilterStatus {
-               EXPECT_EQ(inner_type, ft);
-               EXPECT_EQ(field_id, id);
-               return FilterStatus::Continue;
-             }));
+             .WillOnce(DoAll(SetArgReferee<2>(inner_type), SetArgReferee<3>(1), Return(true)));
+    s += EXPECT_CALL(filter, fieldBegin(absl::string_view(), inner_type, 1))
+             .WillOnce(Return(ThriftFilters::FilterStatus::Continue));
     break;
   case FieldType::List:
     s += EXPECT_CALL(proto, readListBegin(_, _, _))
-             .WillOnce(DoAll(SetArgReferee<1>(inner_type), SetArgReferee<2>(size), Return(true)));
-    s += EXPECT_CALL(handler, listBegin(_, _))
-             .WillOnce(Invoke([=](FieldType& t, uint32_t& s) -> FilterStatus {
-               EXPECT_EQ(inner_type, t);
-               EXPECT_EQ(size, s);
-               return FilterStatus::Continue;
-             }));
+             .WillOnce(DoAll(SetArgReferee<1>(inner_type), SetArgReferee<2>(1), Return(true)));
+    s += EXPECT_CALL(filter, listBegin(inner_type, 1))
+             .WillOnce(Return(ThriftFilters::FilterStatus::Continue));
     break;
   case FieldType::Map:
     s += EXPECT_CALL(proto, readMapBegin(_, _, _, _))
              .WillOnce(DoAll(SetArgReferee<1>(inner_type), SetArgReferee<2>(inner_type),
-                             SetArgReferee<3>(size), Return(true)));
-    s += EXPECT_CALL(handler, mapBegin(_, _, _))
-             .WillOnce(Invoke([=](FieldType& kt, FieldType& vt, uint32_t& s) -> FilterStatus {
-               EXPECT_EQ(inner_type, kt);
-               EXPECT_EQ(inner_type, vt);
-               EXPECT_EQ(size, s);
-               return FilterStatus::Continue;
-             }));
+                             SetArgReferee<3>(1), Return(true)));
+    s += EXPECT_CALL(filter, mapBegin(inner_type, inner_type, 1))
+             .WillOnce(Return(ThriftFilters::FilterStatus::Continue));
     break;
   case FieldType::Set:
     s += EXPECT_CALL(proto, readSetBegin(_, _, _))
-             .WillOnce(DoAll(SetArgReferee<1>(inner_type), SetArgReferee<2>(size), Return(true)));
-    s += EXPECT_CALL(handler, setBegin(_, _))
-             .WillOnce(Invoke([=](FieldType& t, uint32_t& s) -> FilterStatus {
-               EXPECT_EQ(inner_type, t);
-               EXPECT_EQ(size, s);
-               return FilterStatus::Continue;
-             }));
+             .WillOnce(DoAll(SetArgReferee<1>(inner_type), SetArgReferee<2>(1), Return(true)));
+    s += EXPECT_CALL(filter, setBegin(inner_type, 1))
+             .WillOnce(Return(ThriftFilters::FilterStatus::Continue));
     break;
   default:
     NOT_REACHED_GCOVR_EXCL_LINE;
@@ -147,29 +134,29 @@ ExpectationSet expectContainerStart(MockProtocol& proto, MockDecoderEventHandler
   return s;
 }
 
-ExpectationSet expectContainerEnd(MockProtocol& proto, MockDecoderEventHandler& handler,
+ExpectationSet expectContainerEnd(MockProtocol& proto, ThriftFilters::MockDecoderFilter& filter,
                                   FieldType field_type) {
   ExpectationSet s;
   switch (field_type) {
   case FieldType::Struct:
     s += EXPECT_CALL(proto, readFieldEnd(_)).WillOnce(Return(true));
-    s += EXPECT_CALL(handler, fieldEnd()).WillOnce(Return(FilterStatus::Continue));
+    s += EXPECT_CALL(filter, fieldEnd()).WillOnce(Return(ThriftFilters::FilterStatus::Continue));
     s += EXPECT_CALL(proto, readFieldBegin(_, _, _, _))
              .WillOnce(DoAll(SetArgReferee<2>(FieldType::Stop), Return(true)));
     s += EXPECT_CALL(proto, readStructEnd(_)).WillOnce(Return(true));
-    s += EXPECT_CALL(handler, structEnd()).WillOnce(Return(FilterStatus::Continue));
+    s += EXPECT_CALL(filter, structEnd()).WillOnce(Return(ThriftFilters::FilterStatus::Continue));
     break;
   case FieldType::List:
     s += EXPECT_CALL(proto, readListEnd(_)).WillOnce(Return(true));
-    s += EXPECT_CALL(handler, listEnd()).WillOnce(Return(FilterStatus::Continue));
+    s += EXPECT_CALL(filter, listEnd()).WillOnce(Return(ThriftFilters::FilterStatus::Continue));
     break;
   case FieldType::Map:
     s += EXPECT_CALL(proto, readMapEnd(_)).WillOnce(Return(true));
-    s += EXPECT_CALL(handler, mapEnd()).WillOnce(Return(FilterStatus::Continue));
+    s += EXPECT_CALL(filter, mapEnd()).WillOnce(Return(ThriftFilters::FilterStatus::Continue));
     break;
   case FieldType::Set:
     s += EXPECT_CALL(proto, readSetEnd(_)).WillOnce(Return(true));
-    s += EXPECT_CALL(handler, setEnd()).WillOnce(Return(FilterStatus::Continue));
+    s += EXPECT_CALL(filter, setEnd()).WillOnce(Return(ThriftFilters::FilterStatus::Continue));
     break;
   default:
     NOT_REACHED_GCOVR_EXCL_LINE;
@@ -186,7 +173,7 @@ public:
 
   NiceMock<MockProtocol> proto_;
   MessageMetadataSharedPtr metadata_;
-  NiceMock<MockDecoderEventHandler> handler_;
+  NiceMock<ThriftFilters::MockDecoderFilter> filter_;
 };
 
 class DecoderStateMachineNonValueTest : public DecoderStateMachineTestBase,
@@ -205,7 +192,7 @@ INSTANTIATE_TEST_CASE_P(NonValueProtocolStates, DecoderStateMachineNonValueTest,
                                ProtocolState::SetBegin, ProtocolState::SetEnd),
                         protoStateParamToString);
 
-class DecoderStateMachineTest : public DecoderStateMachineTestBase, public testing::Test {};
+class DecoderStateMachineTest : public DecoderStateMachineTestBase, public Test {};
 
 class DecoderStateMachineValueTest : public DecoderStateMachineTestBase,
                                      public TestWithParam<FieldType> {};
@@ -239,7 +226,7 @@ TEST_P(DecoderStateMachineNonValueTest, NoData) {
   ProtocolState state = GetParam();
   Buffer::OwnedImpl buffer;
 
-  DecoderStateMachine dsm(proto_, metadata_, handler_);
+  DecoderStateMachine dsm(proto_, metadata_, filter_);
   dsm.setCurrentState(state);
   EXPECT_EQ(dsm.run(buffer), ProtocolState::WaitForData);
   EXPECT_EQ(dsm.currentState(), state);
@@ -254,12 +241,12 @@ TEST_P(DecoderStateMachineValueTest, NoFieldValueData) {
   EXPECT_CALL(proto_, readFieldBegin(Ref(buffer), _, _, _))
       .WillOnce(DoAll(SetArgReferee<1>(std::string("")), SetArgReferee<2>(field_type),
                       SetArgReferee<3>(1), Return(true)));
-  expectValue(proto_, handler_, field_type, false);
-  expectValue(proto_, handler_, field_type, true);
+  expectValue(proto_, filter_, field_type, false);
+  expectValue(proto_, filter_, field_type, true);
   EXPECT_CALL(proto_, readFieldEnd(Ref(buffer))).WillOnce(Return(true));
   EXPECT_CALL(proto_, readFieldBegin(Ref(buffer), _, _, _)).WillOnce(Return(false));
 
-  DecoderStateMachine dsm(proto_, metadata_, handler_);
+  DecoderStateMachine dsm(proto_, metadata_, filter_);
 
   dsm.setCurrentState(ProtocolState::FieldBegin);
   EXPECT_EQ(dsm.run(buffer), ProtocolState::WaitForData);
@@ -278,12 +265,12 @@ TEST_P(DecoderStateMachineValueTest, FieldValue) {
       .WillOnce(DoAll(SetArgReferee<1>(std::string("")), SetArgReferee<2>(field_type),
                       SetArgReferee<3>(1), Return(true)));
 
-  expectValue(proto_, handler_, field_type);
+  expectValue(proto_, filter_, field_type);
 
   EXPECT_CALL(proto_, readFieldEnd(Ref(buffer))).WillOnce(Return(true));
   EXPECT_CALL(proto_, readFieldBegin(Ref(buffer), _, _, _)).WillOnce(Return(false));
 
-  DecoderStateMachine dsm(proto_, metadata_, handler_);
+  DecoderStateMachine dsm(proto_, metadata_, filter_);
 
   dsm.setCurrentState(ProtocolState::FieldBegin);
   EXPECT_EQ(dsm.run(buffer), ProtocolState::WaitForData);
@@ -298,7 +285,7 @@ TEST_F(DecoderStateMachineTest, NoListValueData) {
       .WillOnce(DoAll(SetArgReferee<1>(FieldType::I32), SetArgReferee<2>(1), Return(true)));
   EXPECT_CALL(proto_, readInt32(Ref(buffer), _)).WillOnce(Return(false));
 
-  DecoderStateMachine dsm(proto_, metadata_, handler_);
+  DecoderStateMachine dsm(proto_, metadata_, filter_);
 
   dsm.setCurrentState(ProtocolState::ListBegin);
   EXPECT_EQ(dsm.run(buffer), ProtocolState::WaitForData);
@@ -313,7 +300,7 @@ TEST_F(DecoderStateMachineTest, EmptyList) {
       .WillOnce(DoAll(SetArgReferee<1>(FieldType::I32), SetArgReferee<2>(0), Return(true)));
   EXPECT_CALL(proto_, readListEnd(Ref(buffer))).WillOnce(Return(false));
 
-  DecoderStateMachine dsm(proto_, metadata_, handler_);
+  DecoderStateMachine dsm(proto_, metadata_, filter_);
 
   dsm.setCurrentState(ProtocolState::ListBegin);
   EXPECT_EQ(dsm.run(buffer), ProtocolState::WaitForData);
@@ -328,11 +315,11 @@ TEST_P(DecoderStateMachineValueTest, ListValue) {
   EXPECT_CALL(proto_, readListBegin(Ref(buffer), _, _))
       .WillOnce(DoAll(SetArgReferee<1>(field_type), SetArgReferee<2>(1), Return(true)));
 
-  expectValue(proto_, handler_, field_type);
+  expectValue(proto_, filter_, field_type);
 
   EXPECT_CALL(proto_, readListEnd(Ref(buffer))).WillOnce(Return(false));
 
-  DecoderStateMachine dsm(proto_, metadata_, handler_);
+  DecoderStateMachine dsm(proto_, metadata_, filter_);
 
   dsm.setCurrentState(ProtocolState::ListBegin);
   EXPECT_EQ(dsm.run(buffer), ProtocolState::WaitForData);
@@ -348,12 +335,12 @@ TEST_P(DecoderStateMachineValueTest, MultipleListValues) {
       .WillOnce(DoAll(SetArgReferee<1>(field_type), SetArgReferee<2>(5), Return(true)));
 
   for (int i = 0; i < 5; i++) {
-    expectValue(proto_, handler_, field_type);
+    expectValue(proto_, filter_, field_type);
   }
 
   EXPECT_CALL(proto_, readListEnd(Ref(buffer))).WillOnce(Return(false));
 
-  DecoderStateMachine dsm(proto_, metadata_, handler_);
+  DecoderStateMachine dsm(proto_, metadata_, filter_);
 
   dsm.setCurrentState(ProtocolState::ListBegin);
   EXPECT_EQ(dsm.run(buffer), ProtocolState::WaitForData);
@@ -369,7 +356,7 @@ TEST_F(DecoderStateMachineTest, NoMapKeyData) {
                       SetArgReferee<3>(1), Return(true)));
   EXPECT_CALL(proto_, readInt32(Ref(buffer), _)).WillOnce(Return(false));
 
-  DecoderStateMachine dsm(proto_, metadata_, handler_);
+  DecoderStateMachine dsm(proto_, metadata_, filter_);
 
   dsm.setCurrentState(ProtocolState::MapBegin);
   EXPECT_EQ(dsm.run(buffer), ProtocolState::WaitForData);
@@ -386,7 +373,7 @@ TEST_F(DecoderStateMachineTest, NoMapValueData) {
   EXPECT_CALL(proto_, readInt32(Ref(buffer), _)).WillOnce(Return(true));
   EXPECT_CALL(proto_, readString(Ref(buffer), _)).WillOnce(Return(false));
 
-  DecoderStateMachine dsm(proto_, metadata_, handler_);
+  DecoderStateMachine dsm(proto_, metadata_, filter_);
 
   dsm.setCurrentState(ProtocolState::MapBegin);
   EXPECT_EQ(dsm.run(buffer), ProtocolState::WaitForData);
@@ -402,7 +389,7 @@ TEST_F(DecoderStateMachineTest, EmptyMap) {
                       SetArgReferee<3>(0), Return(true)));
   EXPECT_CALL(proto_, readMapEnd(Ref(buffer))).WillOnce(Return(false));
 
-  DecoderStateMachine dsm(proto_, metadata_, handler_);
+  DecoderStateMachine dsm(proto_, metadata_, filter_);
 
   dsm.setCurrentState(ProtocolState::MapBegin);
   EXPECT_EQ(dsm.run(buffer), ProtocolState::WaitForData);
@@ -418,12 +405,12 @@ TEST_P(DecoderStateMachineValueTest, MapKeyValue) {
       .WillOnce(DoAll(SetArgReferee<1>(field_type), SetArgReferee<2>(FieldType::String),
                       SetArgReferee<3>(1), Return(true)));
 
-  expectValue(proto_, handler_, field_type);        // key
-  expectValue(proto_, handler_, FieldType::String); // value
+  expectValue(proto_, filter_, field_type);        // key
+  expectValue(proto_, filter_, FieldType::String); // value
 
   EXPECT_CALL(proto_, readMapEnd(Ref(buffer))).WillOnce(Return(false));
 
-  DecoderStateMachine dsm(proto_, metadata_, handler_);
+  DecoderStateMachine dsm(proto_, metadata_, filter_);
 
   dsm.setCurrentState(ProtocolState::MapBegin);
   EXPECT_EQ(dsm.run(buffer), ProtocolState::WaitForData);
@@ -439,12 +426,12 @@ TEST_P(DecoderStateMachineValueTest, MapValueValue) {
       .WillOnce(DoAll(SetArgReferee<1>(FieldType::I32), SetArgReferee<2>(field_type),
                       SetArgReferee<3>(1), Return(true)));
 
-  expectValue(proto_, handler_, FieldType::I32); // key
-  expectValue(proto_, handler_, field_type);     // value
+  expectValue(proto_, filter_, FieldType::I32); // key
+  expectValue(proto_, filter_, field_type);     // value
 
   EXPECT_CALL(proto_, readMapEnd(Ref(buffer))).WillOnce(Return(false));
 
-  DecoderStateMachine dsm(proto_, metadata_, handler_);
+  DecoderStateMachine dsm(proto_, metadata_, filter_);
 
   dsm.setCurrentState(ProtocolState::MapBegin);
   EXPECT_EQ(dsm.run(buffer), ProtocolState::WaitForData);
@@ -461,13 +448,13 @@ TEST_P(DecoderStateMachineValueTest, MultipleMapKeyValues) {
                       SetArgReferee<3>(5), Return(true)));
 
   for (int i = 0; i < 5; i++) {
-    expectValue(proto_, handler_, FieldType::I32); // key
-    expectValue(proto_, handler_, field_type);     // value
+    expectValue(proto_, filter_, FieldType::I32); // key
+    expectValue(proto_, filter_, field_type);     // value
   }
 
   EXPECT_CALL(proto_, readMapEnd(Ref(buffer))).WillOnce(Return(false));
 
-  DecoderStateMachine dsm(proto_, metadata_, handler_);
+  DecoderStateMachine dsm(proto_, metadata_, filter_);
 
   dsm.setCurrentState(ProtocolState::MapBegin);
   EXPECT_EQ(dsm.run(buffer), ProtocolState::WaitForData);
@@ -482,7 +469,7 @@ TEST_F(DecoderStateMachineTest, NoSetValueData) {
       .WillOnce(DoAll(SetArgReferee<1>(FieldType::I32), SetArgReferee<2>(1), Return(true)));
   EXPECT_CALL(proto_, readInt32(Ref(buffer), _)).WillOnce(Return(false));
 
-  DecoderStateMachine dsm(proto_, metadata_, handler_);
+  DecoderStateMachine dsm(proto_, metadata_, filter_);
 
   dsm.setCurrentState(ProtocolState::SetBegin);
   EXPECT_EQ(dsm.run(buffer), ProtocolState::WaitForData);
@@ -497,7 +484,7 @@ TEST_F(DecoderStateMachineTest, EmptySet) {
       .WillOnce(DoAll(SetArgReferee<1>(FieldType::I32), SetArgReferee<2>(0), Return(true)));
   EXPECT_CALL(proto_, readSetEnd(Ref(buffer))).WillOnce(Return(false));
 
-  DecoderStateMachine dsm(proto_, metadata_, handler_);
+  DecoderStateMachine dsm(proto_, metadata_, filter_);
 
   dsm.setCurrentState(ProtocolState::SetBegin);
   EXPECT_EQ(dsm.run(buffer), ProtocolState::WaitForData);
@@ -512,11 +499,11 @@ TEST_P(DecoderStateMachineValueTest, SetValue) {
   EXPECT_CALL(proto_, readSetBegin(Ref(buffer), _, _))
       .WillOnce(DoAll(SetArgReferee<1>(field_type), SetArgReferee<2>(1), Return(true)));
 
-  expectValue(proto_, handler_, field_type);
+  expectValue(proto_, filter_, field_type);
 
   EXPECT_CALL(proto_, readSetEnd(Ref(buffer))).WillOnce(Return(false));
 
-  DecoderStateMachine dsm(proto_, metadata_, handler_);
+  DecoderStateMachine dsm(proto_, metadata_, filter_);
 
   dsm.setCurrentState(ProtocolState::SetBegin);
   EXPECT_EQ(dsm.run(buffer), ProtocolState::WaitForData);
@@ -532,12 +519,12 @@ TEST_P(DecoderStateMachineValueTest, MultipleSetValues) {
       .WillOnce(DoAll(SetArgReferee<1>(field_type), SetArgReferee<2>(5), Return(true)));
 
   for (int i = 0; i < 5; i++) {
-    expectValue(proto_, handler_, field_type);
+    expectValue(proto_, filter_, field_type);
   }
 
   EXPECT_CALL(proto_, readSetEnd(Ref(buffer))).WillOnce(Return(false));
 
-  DecoderStateMachine dsm(proto_, metadata_, handler_);
+  DecoderStateMachine dsm(proto_, metadata_, filter_);
 
   dsm.setCurrentState(ProtocolState::SetBegin);
   EXPECT_EQ(dsm.run(buffer), ProtocolState::WaitForData);
@@ -561,7 +548,7 @@ TEST_F(DecoderStateMachineTest, EmptyStruct) {
   EXPECT_CALL(proto_, readStructEnd(Ref(buffer))).WillOnce(Return(true));
   EXPECT_CALL(proto_, readMessageEnd(Ref(buffer))).WillOnce(Return(true));
 
-  DecoderStateMachine dsm(proto_, metadata_, handler_);
+  DecoderStateMachine dsm(proto_, metadata_, filter_);
 
   EXPECT_EQ(dsm.run(buffer), ProtocolState::Done);
   EXPECT_EQ(dsm.currentState(), ProtocolState::Done);
@@ -579,45 +566,41 @@ TEST_P(DecoderStateMachineValueTest, SingleFieldStruct) {
         metadata.setSequenceId(100);
         return true;
       }));
-  EXPECT_CALL(handler_, messageBegin(_))
-      .WillOnce(Invoke([&](MessageMetadataSharedPtr metadata) -> FilterStatus {
+  EXPECT_CALL(filter_, messageBegin(_))
+      .WillOnce(Invoke([&](MessageMetadataSharedPtr metadata) -> ThriftFilters::FilterStatus {
         EXPECT_TRUE(metadata->hasMethodName());
         EXPECT_TRUE(metadata->hasMessageType());
         EXPECT_TRUE(metadata->hasSequenceId());
         EXPECT_EQ("name", metadata->methodName());
         EXPECT_EQ(MessageType::Call, metadata->messageType());
         EXPECT_EQ(100U, metadata->sequenceId());
-        return FilterStatus::Continue;
+        return ThriftFilters::FilterStatus::Continue;
       }));
 
   EXPECT_CALL(proto_, readStructBegin(Ref(buffer), _)).WillOnce(Return(true));
-  EXPECT_CALL(handler_, structBegin(absl::string_view())).WillOnce(Return(FilterStatus::Continue));
+  EXPECT_CALL(filter_, structBegin(absl::string_view()))
+      .WillOnce(Return(ThriftFilters::FilterStatus::Continue));
 
-  int16_t field_id = 1;
   EXPECT_CALL(proto_, readFieldBegin(Ref(buffer), _, _, _))
-      .WillOnce(DoAll(SetArgReferee<2>(field_type), SetArgReferee<3>(field_id), Return(true)));
-  EXPECT_CALL(handler_, fieldBegin(absl::string_view(), _, _))
-      .WillOnce(Invoke([&](absl::string_view, FieldType& ft, int16_t& id) -> FilterStatus {
-        EXPECT_EQ(field_type, ft);
-        EXPECT_EQ(field_id, id);
-        return FilterStatus::Continue;
-      }));
+      .WillOnce(DoAll(SetArgReferee<2>(field_type), SetArgReferee<3>(1), Return(true)));
+  EXPECT_CALL(filter_, fieldBegin(absl::string_view(), field_type, 1))
+      .WillOnce(Return(ThriftFilters::FilterStatus::Continue));
 
-  expectValue(proto_, handler_, field_type);
+  expectValue(proto_, filter_, field_type);
 
   EXPECT_CALL(proto_, readFieldEnd(Ref(buffer))).WillOnce(Return(true));
-  EXPECT_CALL(handler_, fieldEnd()).WillOnce(Return(FilterStatus::Continue));
+  EXPECT_CALL(filter_, fieldEnd()).WillOnce(Return(ThriftFilters::FilterStatus::Continue));
 
   EXPECT_CALL(proto_, readFieldBegin(Ref(buffer), _, _, _))
       .WillOnce(DoAll(SetArgReferee<2>(FieldType::Stop), Return(true)));
 
   EXPECT_CALL(proto_, readStructEnd(Ref(buffer))).WillOnce(Return(true));
-  EXPECT_CALL(handler_, structEnd()).WillOnce(Return(FilterStatus::Continue));
+  EXPECT_CALL(filter_, structEnd()).WillOnce(Return(ThriftFilters::FilterStatus::Continue));
 
   EXPECT_CALL(proto_, readMessageEnd(Ref(buffer))).WillOnce(Return(true));
-  EXPECT_CALL(handler_, messageEnd()).WillOnce(Return(FilterStatus::Continue));
+  EXPECT_CALL(filter_, messageEnd()).WillOnce(Return(ThriftFilters::FilterStatus::Continue));
 
-  DecoderStateMachine dsm(proto_, metadata_, handler_);
+  DecoderStateMachine dsm(proto_, metadata_, filter_);
 
   EXPECT_EQ(dsm.run(buffer), ProtocolState::Done);
   EXPECT_EQ(dsm.currentState(), ProtocolState::Done);
@@ -638,47 +621,44 @@ TEST_F(DecoderStateMachineTest, MultiFieldStruct) {
         metadata.setSequenceId(100);
         return true;
       }));
-  EXPECT_CALL(handler_, messageBegin(_))
-      .WillOnce(Invoke([&](MessageMetadataSharedPtr metadata) -> FilterStatus {
+  EXPECT_CALL(filter_, messageBegin(_))
+      .WillOnce(Invoke([&](MessageMetadataSharedPtr metadata) -> ThriftFilters::FilterStatus {
         EXPECT_TRUE(metadata->hasMethodName());
         EXPECT_TRUE(metadata->hasMessageType());
         EXPECT_TRUE(metadata->hasSequenceId());
         EXPECT_EQ("name", metadata->methodName());
         EXPECT_EQ(MessageType::Call, metadata->messageType());
         EXPECT_EQ(100U, metadata->sequenceId());
-        return FilterStatus::Continue;
+        return ThriftFilters::FilterStatus::Continue;
       }));
 
   EXPECT_CALL(proto_, readStructBegin(Ref(buffer), _)).WillOnce(Return(true));
-  EXPECT_CALL(handler_, structBegin(absl::string_view())).WillOnce(Return(FilterStatus::Continue));
+  EXPECT_CALL(filter_, structBegin(absl::string_view()))
+      .WillOnce(Return(ThriftFilters::FilterStatus::Continue));
 
   int16_t field_id = 1;
   for (FieldType field_type : field_types) {
     EXPECT_CALL(proto_, readFieldBegin(Ref(buffer), _, _, _))
         .WillOnce(DoAll(SetArgReferee<2>(field_type), SetArgReferee<3>(field_id), Return(true)));
-    EXPECT_CALL(handler_, fieldBegin(absl::string_view(), _, _))
-        .WillOnce(Invoke([=](absl::string_view, FieldType& ft, int16_t& id) -> FilterStatus {
-          EXPECT_EQ(field_type, ft);
-          EXPECT_EQ(field_id, id);
-          return FilterStatus::Continue;
-        }));
+    EXPECT_CALL(filter_, fieldBegin(absl::string_view(), field_type, field_id))
+        .WillOnce(Return(ThriftFilters::FilterStatus::Continue));
     field_id++;
 
-    expectValue(proto_, handler_, field_type);
+    expectValue(proto_, filter_, field_type);
 
     EXPECT_CALL(proto_, readFieldEnd(Ref(buffer))).WillOnce(Return(true));
-    EXPECT_CALL(handler_, fieldEnd()).WillOnce(Return(FilterStatus::Continue));
+    EXPECT_CALL(filter_, fieldEnd()).WillOnce(Return(ThriftFilters::FilterStatus::Continue));
   }
 
   EXPECT_CALL(proto_, readFieldBegin(Ref(buffer), _, _, _))
       .WillOnce(DoAll(SetArgReferee<2>(FieldType::Stop), Return(true)));
   EXPECT_CALL(proto_, readStructEnd(Ref(buffer))).WillOnce(Return(true));
-  EXPECT_CALL(handler_, structEnd()).WillOnce(Return(FilterStatus::Continue));
+  EXPECT_CALL(filter_, structEnd()).WillOnce(Return(ThriftFilters::FilterStatus::Continue));
 
   EXPECT_CALL(proto_, readMessageEnd(Ref(buffer))).WillOnce(Return(true));
-  EXPECT_CALL(handler_, messageEnd()).WillOnce(Return(FilterStatus::Continue));
+  EXPECT_CALL(filter_, messageEnd()).WillOnce(Return(ThriftFilters::FilterStatus::Continue));
 
-  DecoderStateMachine dsm(proto_, metadata_, handler_);
+  DecoderStateMachine dsm(proto_, metadata_, filter_);
 
   EXPECT_EQ(dsm.run(buffer), ProtocolState::Done);
   EXPECT_EQ(dsm.currentState(), ProtocolState::Done);
@@ -699,192 +679,194 @@ TEST_P(DecoderStateMachineNestingTest, NestedTypes) {
         metadata.setSequenceId(100);
         return true;
       }));
-  EXPECT_CALL(handler_, messageBegin(_))
-      .WillOnce(Invoke([&](MessageMetadataSharedPtr metadata) -> FilterStatus {
+  EXPECT_CALL(filter_, messageBegin(_))
+      .WillOnce(Invoke([&](MessageMetadataSharedPtr metadata) -> ThriftFilters::FilterStatus {
         EXPECT_TRUE(metadata->hasMethodName());
         EXPECT_TRUE(metadata->hasMessageType());
         EXPECT_TRUE(metadata->hasSequenceId());
         EXPECT_EQ("name", metadata->methodName());
         EXPECT_EQ(MessageType::Call, metadata->messageType());
         EXPECT_EQ(100U, metadata->sequenceId());
-        return FilterStatus::Continue;
+        return ThriftFilters::FilterStatus::Continue;
       }));
 
-  expectContainerStart(proto_, handler_, FieldType::Struct, outer_field_type);
+  expectContainerStart(proto_, filter_, FieldType::Struct, outer_field_type);
 
-  expectContainerStart(proto_, handler_, outer_field_type, inner_type);
+  expectContainerStart(proto_, filter_, outer_field_type, inner_type);
 
   int outer_reps = outer_field_type == FieldType::Map ? 2 : 1;
   for (int i = 0; i < outer_reps; i++) {
-    expectContainerStart(proto_, handler_, inner_type, value_type);
+    expectContainerStart(proto_, filter_, inner_type, value_type);
 
     int inner_reps = inner_type == FieldType::Map ? 2 : 1;
     for (int j = 0; j < inner_reps; j++) {
-      expectValue(proto_, handler_, value_type);
+      expectValue(proto_, filter_, value_type);
     }
 
-    expectContainerEnd(proto_, handler_, inner_type);
+    expectContainerEnd(proto_, filter_, inner_type);
   }
 
-  expectContainerEnd(proto_, handler_, outer_field_type);
+  expectContainerEnd(proto_, filter_, outer_field_type);
 
   // end of message and outermost struct
-  expectContainerEnd(proto_, handler_, FieldType::Struct);
+  expectContainerEnd(proto_, filter_, FieldType::Struct);
 
   EXPECT_CALL(proto_, readMessageEnd(Ref(buffer))).WillOnce(Return(true));
-  EXPECT_CALL(handler_, messageEnd()).WillOnce(Return(FilterStatus::Continue));
+  EXPECT_CALL(filter_, messageEnd()).WillOnce(Return(ThriftFilters::FilterStatus::Continue));
 
-  DecoderStateMachine dsm(proto_, metadata_, handler_);
+  DecoderStateMachine dsm(proto_, metadata_, filter_);
 
   EXPECT_EQ(dsm.run(buffer), ProtocolState::Done);
   EXPECT_EQ(dsm.currentState(), ProtocolState::Done);
 }
 
 TEST(DecoderTest, OnData) {
-  NiceMock<MockTransport> transport;
-  NiceMock<MockProtocol> proto;
+  NiceMock<MockTransport>* transport = new NiceMock<MockTransport>();
+  NiceMock<MockProtocol>* proto = new NiceMock<MockProtocol>();
   NiceMock<MockDecoderCallbacks> callbacks;
-  StrictMock<MockDecoderEventHandler> handler;
-  ON_CALL(callbacks, newDecoderEventHandler()).WillByDefault(ReturnRef(handler));
+  StrictMock<ThriftFilters::MockDecoderFilter> filter;
+  ON_CALL(callbacks, newDecoderFilter()).WillByDefault(ReturnRef(filter));
 
   InSequence dummy;
-  Decoder decoder(transport, proto, callbacks);
+  Decoder decoder(TransportPtr{transport}, ProtocolPtr{proto}, callbacks);
   Buffer::OwnedImpl buffer;
 
-  EXPECT_CALL(transport, decodeFrameStart(Ref(buffer), _))
+  EXPECT_CALL(*transport, decodeFrameStart(Ref(buffer), _))
       .WillOnce(Invoke([&](Buffer::Instance&, MessageMetadata& metadata) -> bool {
         metadata.setFrameSize(100);
         return true;
       }));
-  EXPECT_CALL(handler, transportBegin(_))
-      .WillOnce(Invoke([&](MessageMetadataSharedPtr metadata) -> FilterStatus {
+  EXPECT_CALL(filter, transportBegin(_))
+      .WillOnce(Invoke([&](MessageMetadataSharedPtr metadata) -> ThriftFilters::FilterStatus {
         EXPECT_TRUE(metadata->hasFrameSize());
         EXPECT_EQ(100U, metadata->frameSize());
-        return FilterStatus::Continue;
+        return ThriftFilters::FilterStatus::Continue;
       }));
 
-  EXPECT_CALL(proto, readMessageBegin(Ref(buffer), _))
+  EXPECT_CALL(*proto, readMessageBegin(Ref(buffer), _))
       .WillOnce(Invoke([&](Buffer::Instance&, MessageMetadata& metadata) -> bool {
         metadata.setMethodName("name");
         metadata.setMessageType(MessageType::Call);
         metadata.setSequenceId(100);
         return true;
       }));
-  EXPECT_CALL(handler, messageBegin(_))
-      .WillOnce(Invoke([&](MessageMetadataSharedPtr metadata) -> FilterStatus {
+  EXPECT_CALL(filter, messageBegin(_))
+      .WillOnce(Invoke([&](MessageMetadataSharedPtr metadata) -> ThriftFilters::FilterStatus {
         EXPECT_TRUE(metadata->hasMethodName());
         EXPECT_TRUE(metadata->hasMessageType());
         EXPECT_TRUE(metadata->hasSequenceId());
         EXPECT_EQ("name", metadata->methodName());
         EXPECT_EQ(MessageType::Call, metadata->messageType());
         EXPECT_EQ(100U, metadata->sequenceId());
-        return FilterStatus::Continue;
+        return ThriftFilters::FilterStatus::Continue;
       }));
 
-  EXPECT_CALL(proto, readStructBegin(Ref(buffer), _)).WillOnce(Return(true));
-  EXPECT_CALL(handler, structBegin(absl::string_view())).WillOnce(Return(FilterStatus::Continue));
+  EXPECT_CALL(*proto, readStructBegin(Ref(buffer), _)).WillOnce(Return(true));
+  EXPECT_CALL(filter, structBegin(absl::string_view()))
+      .WillOnce(Return(ThriftFilters::FilterStatus::Continue));
 
-  EXPECT_CALL(proto, readFieldBegin(Ref(buffer), _, _, _))
+  EXPECT_CALL(*proto, readFieldBegin(Ref(buffer), _, _, _))
       .WillOnce(DoAll(SetArgReferee<2>(FieldType::Stop), Return(true)));
-  EXPECT_CALL(proto, readStructEnd(Ref(buffer))).WillOnce(Return(true));
-  EXPECT_CALL(handler, structEnd()).WillOnce(Return(FilterStatus::Continue));
+  EXPECT_CALL(*proto, readStructEnd(Ref(buffer))).WillOnce(Return(true));
+  EXPECT_CALL(filter, structEnd()).WillOnce(Return(ThriftFilters::FilterStatus::Continue));
 
-  EXPECT_CALL(proto, readMessageEnd(Ref(buffer))).WillOnce(Return(true));
-  EXPECT_CALL(handler, messageEnd()).WillOnce(Return(FilterStatus::Continue));
+  EXPECT_CALL(*proto, readMessageEnd(Ref(buffer))).WillOnce(Return(true));
+  EXPECT_CALL(filter, messageEnd()).WillOnce(Return(ThriftFilters::FilterStatus::Continue));
 
-  EXPECT_CALL(transport, decodeFrameEnd(Ref(buffer))).WillOnce(Return(true));
-  EXPECT_CALL(handler, transportEnd()).WillOnce(Return(FilterStatus::Continue));
+  EXPECT_CALL(*transport, decodeFrameEnd(Ref(buffer))).WillOnce(Return(true));
+  EXPECT_CALL(filter, transportEnd()).WillOnce(Return(ThriftFilters::FilterStatus::Continue));
 
   bool underflow = false;
-  EXPECT_EQ(FilterStatus::Continue, decoder.onData(buffer, underflow));
+  EXPECT_EQ(ThriftFilters::FilterStatus::Continue, decoder.onData(buffer, underflow));
   EXPECT_TRUE(underflow);
 }
 
 TEST(DecoderTest, OnDataWithProtocolHint) {
-  NiceMock<MockTransport> transport;
-  NiceMock<MockProtocol> proto;
+  NiceMock<MockTransport>* transport = new NiceMock<MockTransport>();
+  NiceMock<MockProtocol>* proto = new NiceMock<MockProtocol>();
   NiceMock<MockDecoderCallbacks> callbacks;
-  StrictMock<MockDecoderEventHandler> handler;
-  ON_CALL(callbacks, newDecoderEventHandler()).WillByDefault(ReturnRef(handler));
+  StrictMock<ThriftFilters::MockDecoderFilter> filter;
+  ON_CALL(callbacks, newDecoderFilter()).WillByDefault(ReturnRef(filter));
 
   InSequence dummy;
-  Decoder decoder(transport, proto, callbacks);
+  Decoder decoder(TransportPtr{transport}, ProtocolPtr{proto}, callbacks);
   Buffer::OwnedImpl buffer;
 
-  EXPECT_CALL(transport, decodeFrameStart(Ref(buffer), _))
+  EXPECT_CALL(*transport, decodeFrameStart(Ref(buffer), _))
       .WillOnce(Invoke([&](Buffer::Instance&, MessageMetadata& metadata) -> bool {
         metadata.setFrameSize(100);
         metadata.setProtocol(ProtocolType::Binary);
         return true;
       }));
-  EXPECT_CALL(proto, type()).WillOnce(Return(ProtocolType::Auto));
-  EXPECT_CALL(proto, setType(ProtocolType::Binary));
-  EXPECT_CALL(handler, transportBegin(_))
-      .WillOnce(Invoke([&](MessageMetadataSharedPtr metadata) -> FilterStatus {
+  EXPECT_CALL(*proto, type()).WillOnce(Return(ProtocolType::Auto));
+  EXPECT_CALL(*proto, setType(ProtocolType::Binary));
+  EXPECT_CALL(filter, transportBegin(_))
+      .WillOnce(Invoke([&](MessageMetadataSharedPtr metadata) -> ThriftFilters::FilterStatus {
         EXPECT_TRUE(metadata->hasFrameSize());
         EXPECT_EQ(100U, metadata->frameSize());
 
         EXPECT_TRUE(metadata->hasProtocol());
         EXPECT_EQ(ProtocolType::Binary, metadata->protocol());
 
-        return FilterStatus::Continue;
+        return ThriftFilters::FilterStatus::Continue;
       }));
 
-  EXPECT_CALL(proto, readMessageBegin(Ref(buffer), _))
+  EXPECT_CALL(*proto, readMessageBegin(Ref(buffer), _))
       .WillOnce(Invoke([&](Buffer::Instance&, MessageMetadata& metadata) -> bool {
         metadata.setMethodName("name");
         metadata.setMessageType(MessageType::Call);
         metadata.setSequenceId(100);
         return true;
       }));
-  EXPECT_CALL(handler, messageBegin(_))
-      .WillOnce(Invoke([&](MessageMetadataSharedPtr metadata) -> FilterStatus {
+  EXPECT_CALL(filter, messageBegin(_))
+      .WillOnce(Invoke([&](MessageMetadataSharedPtr metadata) -> ThriftFilters::FilterStatus {
         EXPECT_TRUE(metadata->hasMethodName());
         EXPECT_TRUE(metadata->hasMessageType());
         EXPECT_TRUE(metadata->hasSequenceId());
         EXPECT_EQ("name", metadata->methodName());
         EXPECT_EQ(MessageType::Call, metadata->messageType());
         EXPECT_EQ(100U, metadata->sequenceId());
-        return FilterStatus::Continue;
+        return ThriftFilters::FilterStatus::Continue;
       }));
 
-  EXPECT_CALL(proto, readStructBegin(Ref(buffer), _)).WillOnce(Return(true));
-  EXPECT_CALL(handler, structBegin(absl::string_view())).WillOnce(Return(FilterStatus::Continue));
+  EXPECT_CALL(*proto, readStructBegin(Ref(buffer), _)).WillOnce(Return(true));
+  EXPECT_CALL(filter, structBegin(absl::string_view()))
+      .WillOnce(Return(ThriftFilters::FilterStatus::Continue));
 
-  EXPECT_CALL(proto, readFieldBegin(Ref(buffer), _, _, _))
+  EXPECT_CALL(*proto, readFieldBegin(Ref(buffer), _, _, _))
       .WillOnce(DoAll(SetArgReferee<2>(FieldType::Stop), Return(true)));
-  EXPECT_CALL(proto, readStructEnd(Ref(buffer))).WillOnce(Return(true));
-  EXPECT_CALL(handler, structEnd()).WillOnce(Return(FilterStatus::Continue));
+  EXPECT_CALL(*proto, readStructEnd(Ref(buffer))).WillOnce(Return(true));
+  EXPECT_CALL(filter, structEnd()).WillOnce(Return(ThriftFilters::FilterStatus::Continue));
 
-  EXPECT_CALL(proto, readMessageEnd(Ref(buffer))).WillOnce(Return(true));
-  EXPECT_CALL(handler, messageEnd()).WillOnce(Return(FilterStatus::Continue));
+  EXPECT_CALL(*proto, readMessageEnd(Ref(buffer))).WillOnce(Return(true));
+  EXPECT_CALL(filter, messageEnd()).WillOnce(Return(ThriftFilters::FilterStatus::Continue));
 
-  EXPECT_CALL(transport, decodeFrameEnd(Ref(buffer))).WillOnce(Return(true));
-  EXPECT_CALL(handler, transportEnd()).WillOnce(Return(FilterStatus::Continue));
+  EXPECT_CALL(*transport, decodeFrameEnd(Ref(buffer))).WillOnce(Return(true));
+  EXPECT_CALL(filter, transportEnd()).WillOnce(Return(ThriftFilters::FilterStatus::Continue));
 
   bool underflow = false;
-  EXPECT_EQ(FilterStatus::Continue, decoder.onData(buffer, underflow));
+  EXPECT_EQ(ThriftFilters::FilterStatus::Continue, decoder.onData(buffer, underflow));
   EXPECT_TRUE(underflow);
 }
 
 TEST(DecoderTest, OnDataWithInconsistentProtocolHint) {
-  NiceMock<MockTransport> transport;
-  NiceMock<MockProtocol> proto;
+  NiceMock<MockTransport>* transport = new NiceMock<MockTransport>();
+  NiceMock<MockProtocol>* proto = new NiceMock<MockProtocol>();
   NiceMock<MockDecoderCallbacks> callbacks;
-  StrictMock<MockDecoderEventHandler> handler;
-  ON_CALL(callbacks, newDecoderEventHandler()).WillByDefault(ReturnRef(handler));
+  StrictMock<ThriftFilters::MockDecoderFilter> filter;
+  ON_CALL(callbacks, newDecoderFilter()).WillByDefault(ReturnRef(filter));
 
   InSequence dummy;
-  Decoder decoder(transport, proto, callbacks);
+  Decoder decoder(TransportPtr{transport}, ProtocolPtr{proto}, callbacks);
   Buffer::OwnedImpl buffer;
 
-  EXPECT_CALL(transport, decodeFrameStart(Ref(buffer), _))
+  EXPECT_CALL(*transport, decodeFrameStart(Ref(buffer), _))
       .WillOnce(Invoke([&](Buffer::Instance&, MessageMetadata& metadata) -> bool {
         metadata.setFrameSize(100);
         metadata.setProtocol(ProtocolType::Binary);
         return true;
       }));
-  EXPECT_CALL(proto, type()).WillRepeatedly(Return(ProtocolType::Compact));
+  EXPECT_CALL(*proto, type()).WillRepeatedly(Return(ProtocolType::Compact));
 
   bool underflow = false;
   EXPECT_THROW_WITH_MESSAGE(decoder.onData(buffer, underflow), EnvoyException,
@@ -892,17 +874,17 @@ TEST(DecoderTest, OnDataWithInconsistentProtocolHint) {
 }
 
 TEST(DecoderTest, OnDataThrowsTransportAppException) {
-  NiceMock<MockTransport> transport;
-  NiceMock<MockProtocol> proto;
+  NiceMock<MockTransport>* transport = new NiceMock<MockTransport>();
+  NiceMock<MockProtocol>* proto = new NiceMock<MockProtocol>();
   NiceMock<MockDecoderCallbacks> callbacks;
-  StrictMock<MockDecoderEventHandler> handler;
-  ON_CALL(callbacks, newDecoderEventHandler()).WillByDefault(ReturnRef(handler));
+  StrictMock<ThriftFilters::MockDecoderFilter> filter;
+  ON_CALL(callbacks, newDecoderFilter()).WillByDefault(ReturnRef(filter));
 
   InSequence dummy;
-  Decoder decoder(transport, proto, callbacks);
+  Decoder decoder(TransportPtr{transport}, ProtocolPtr{proto}, callbacks);
   Buffer::OwnedImpl buffer;
 
-  EXPECT_CALL(transport, decodeFrameStart(Ref(buffer), _))
+  EXPECT_CALL(*transport, decodeFrameStart(Ref(buffer), _))
       .WillOnce(Invoke([&](Buffer::Instance&, MessageMetadata& metadata) -> bool {
         metadata.setAppException(AppExceptionType::InvalidTransform, "unknown xform");
         return true;
@@ -913,232 +895,229 @@ TEST(DecoderTest, OnDataThrowsTransportAppException) {
 }
 
 TEST(DecoderTest, OnDataResumes) {
-  NiceMock<MockTransport> transport;
-  NiceMock<MockProtocol> proto;
+  NiceMock<MockTransport>* transport = new NiceMock<MockTransport>();
+  NiceMock<MockProtocol>* proto = new NiceMock<MockProtocol>();
   NiceMock<MockDecoderCallbacks> callbacks;
-  NiceMock<MockDecoderEventHandler> handler;
-  ON_CALL(callbacks, newDecoderEventHandler()).WillByDefault(ReturnRef(handler));
+  NiceMock<ThriftFilters::MockDecoderFilter> filter;
+  ON_CALL(callbacks, newDecoderFilter()).WillByDefault(ReturnRef(filter));
 
   InSequence dummy;
 
-  Decoder decoder(transport, proto, callbacks);
+  Decoder decoder(TransportPtr{transport}, ProtocolPtr{proto}, callbacks);
   Buffer::OwnedImpl buffer;
   buffer.add("x");
 
-  EXPECT_CALL(transport, decodeFrameStart(Ref(buffer), _))
+  EXPECT_CALL(*transport, decodeFrameStart(Ref(buffer), _))
       .WillOnce(Invoke([&](Buffer::Instance&, MessageMetadata& metadata) -> bool {
         metadata.setFrameSize(100);
         return true;
       }));
-  EXPECT_CALL(proto, readMessageBegin(_, _))
+  EXPECT_CALL(*proto, readMessageBegin(_, _))
       .WillOnce(Invoke([&](Buffer::Instance&, MessageMetadata& metadata) -> bool {
         metadata.setMethodName("name");
         metadata.setMessageType(MessageType::Call);
         metadata.setSequenceId(100);
         return true;
       }));
-  EXPECT_CALL(proto, readStructBegin(_, _)).WillOnce(Return(false));
+  EXPECT_CALL(*proto, readStructBegin(_, _)).WillOnce(Return(false));
 
   bool underflow = false;
-  EXPECT_EQ(FilterStatus::Continue, decoder.onData(buffer, underflow));
+  EXPECT_EQ(ThriftFilters::FilterStatus::Continue, decoder.onData(buffer, underflow));
   EXPECT_TRUE(underflow);
 
-  EXPECT_CALL(proto, readStructBegin(_, _)).WillOnce(Return(true));
-  EXPECT_CALL(proto, readFieldBegin(_, _, _, _))
+  EXPECT_CALL(*proto, readStructBegin(_, _)).WillOnce(Return(true));
+  EXPECT_CALL(*proto, readFieldBegin(_, _, _, _))
       .WillOnce(DoAll(SetArgReferee<2>(FieldType::Stop), Return(true)));
-  EXPECT_CALL(proto, readStructEnd(_)).WillOnce(Return(true));
-  EXPECT_CALL(proto, readMessageEnd(_)).WillOnce(Return(true));
-  EXPECT_CALL(transport, decodeFrameEnd(_)).WillOnce(Return(true));
+  EXPECT_CALL(*proto, readStructEnd(_)).WillOnce(Return(true));
+  EXPECT_CALL(*proto, readMessageEnd(_)).WillOnce(Return(true));
+  EXPECT_CALL(*transport, decodeFrameEnd(_)).WillOnce(Return(true));
 
-  EXPECT_EQ(FilterStatus::Continue, decoder.onData(buffer, underflow));
+  EXPECT_EQ(ThriftFilters::FilterStatus::Continue, decoder.onData(buffer, underflow));
   EXPECT_FALSE(underflow); // buffer.length() == 1
 }
 
 TEST(DecoderTest, OnDataResumesTransportFrameStart) {
-  StrictMock<MockTransport> transport;
-  StrictMock<MockProtocol> proto;
+  StrictMock<MockTransport>* transport = new StrictMock<MockTransport>();
+  StrictMock<MockProtocol>* proto = new StrictMock<MockProtocol>();
   NiceMock<MockDecoderCallbacks> callbacks;
-  NiceMock<MockDecoderEventHandler> handler;
-  ON_CALL(callbacks, newDecoderEventHandler()).WillByDefault(ReturnRef(handler));
+  NiceMock<ThriftFilters::MockDecoderFilter> filter;
+  ON_CALL(callbacks, newDecoderFilter()).WillByDefault(ReturnRef(filter));
 
-  EXPECT_CALL(transport, name()).Times(AnyNumber());
-  EXPECT_CALL(proto, name()).Times(AnyNumber());
+  EXPECT_CALL(*transport, name()).Times(AnyNumber());
+  EXPECT_CALL(*proto, name()).Times(AnyNumber());
 
   InSequence dummy;
 
-  Decoder decoder(transport, proto, callbacks);
+  Decoder decoder(TransportPtr{transport}, ProtocolPtr{proto}, callbacks);
   Buffer::OwnedImpl buffer;
   bool underflow = false;
 
-  EXPECT_CALL(transport, decodeFrameStart(Ref(buffer), _)).WillOnce(Return(false));
-  EXPECT_EQ(FilterStatus::Continue, decoder.onData(buffer, underflow));
+  EXPECT_CALL(*transport, decodeFrameStart(Ref(buffer), _)).WillOnce(Return(false));
+  EXPECT_EQ(ThriftFilters::FilterStatus::Continue, decoder.onData(buffer, underflow));
   EXPECT_TRUE(underflow);
 
-  EXPECT_CALL(transport, decodeFrameStart(Ref(buffer), _))
+  EXPECT_CALL(*transport, decodeFrameStart(Ref(buffer), _))
       .WillOnce(Invoke([&](Buffer::Instance&, MessageMetadata& metadata) -> bool {
         metadata.setFrameSize(100);
         return true;
       }));
-  EXPECT_CALL(proto, readMessageBegin(_, _))
+  EXPECT_CALL(*proto, readMessageBegin(_, _))
       .WillOnce(Invoke([&](Buffer::Instance&, MessageMetadata& metadata) -> bool {
         metadata.setMethodName("name");
         metadata.setMessageType(MessageType::Call);
         metadata.setSequenceId(100);
         return true;
       }));
-  EXPECT_CALL(proto, readStructBegin(_, _)).WillOnce(Return(true));
-  EXPECT_CALL(proto, readFieldBegin(_, _, _, _))
+  EXPECT_CALL(*proto, readStructBegin(_, _)).WillOnce(Return(true));
+  EXPECT_CALL(*proto, readFieldBegin(_, _, _, _))
       .WillOnce(DoAll(SetArgReferee<2>(FieldType::Stop), Return(true)));
-  EXPECT_CALL(proto, readStructEnd(_)).WillOnce(Return(true));
-  EXPECT_CALL(proto, readMessageEnd(_)).WillOnce(Return(true));
-  EXPECT_CALL(transport, decodeFrameEnd(_)).WillOnce(Return(true));
+  EXPECT_CALL(*proto, readStructEnd(_)).WillOnce(Return(true));
+  EXPECT_CALL(*proto, readMessageEnd(_)).WillOnce(Return(true));
+  EXPECT_CALL(*transport, decodeFrameEnd(_)).WillOnce(Return(true));
 
   underflow = false;
-  EXPECT_EQ(FilterStatus::Continue, decoder.onData(buffer, underflow));
+  EXPECT_EQ(ThriftFilters::FilterStatus::Continue, decoder.onData(buffer, underflow));
   EXPECT_TRUE(underflow); // buffer.length() == 0
 }
 
 TEST(DecoderTest, OnDataResumesTransportFrameEnd) {
-  StrictMock<MockTransport> transport;
-  StrictMock<MockProtocol> proto;
+  StrictMock<MockTransport>* transport = new StrictMock<MockTransport>();
+  StrictMock<MockProtocol>* proto = new StrictMock<MockProtocol>();
   NiceMock<MockDecoderCallbacks> callbacks;
-  NiceMock<MockDecoderEventHandler> handler;
-  ON_CALL(callbacks, newDecoderEventHandler()).WillByDefault(ReturnRef(handler));
+  NiceMock<ThriftFilters::MockDecoderFilter> filter;
+  ON_CALL(callbacks, newDecoderFilter()).WillByDefault(ReturnRef(filter));
 
-  EXPECT_CALL(transport, name()).Times(AnyNumber());
-  EXPECT_CALL(proto, name()).Times(AnyNumber());
+  EXPECT_CALL(*transport, name()).Times(AnyNumber());
+  EXPECT_CALL(*proto, name()).Times(AnyNumber());
 
   InSequence dummy;
 
-  Decoder decoder(transport, proto, callbacks);
+  Decoder decoder(TransportPtr{transport}, ProtocolPtr{proto}, callbacks);
   Buffer::OwnedImpl buffer;
 
-  EXPECT_CALL(transport, decodeFrameStart(Ref(buffer), _))
+  EXPECT_CALL(*transport, decodeFrameStart(Ref(buffer), _))
       .WillOnce(Invoke([&](Buffer::Instance&, MessageMetadata& metadata) -> bool {
         metadata.setFrameSize(100);
         return true;
       }));
-  EXPECT_CALL(proto, readMessageBegin(_, _))
+  EXPECT_CALL(*proto, readMessageBegin(_, _))
       .WillOnce(Invoke([&](Buffer::Instance&, MessageMetadata& metadata) -> bool {
         metadata.setMethodName("name");
         metadata.setMessageType(MessageType::Call);
         metadata.setSequenceId(100);
         return true;
       }));
-  EXPECT_CALL(proto, readStructBegin(_, _)).WillOnce(Return(true));
-  EXPECT_CALL(proto, readFieldBegin(_, _, _, _))
+  EXPECT_CALL(*proto, readStructBegin(_, _)).WillOnce(Return(true));
+  EXPECT_CALL(*proto, readFieldBegin(_, _, _, _))
       .WillOnce(DoAll(SetArgReferee<2>(FieldType::Stop), Return(true)));
-  EXPECT_CALL(proto, readStructEnd(_)).WillOnce(Return(true));
-  EXPECT_CALL(proto, readMessageEnd(_)).WillOnce(Return(true));
-  EXPECT_CALL(transport, decodeFrameEnd(_)).WillOnce(Return(false));
+  EXPECT_CALL(*proto, readStructEnd(_)).WillOnce(Return(true));
+  EXPECT_CALL(*proto, readMessageEnd(_)).WillOnce(Return(true));
+  EXPECT_CALL(*transport, decodeFrameEnd(_)).WillOnce(Return(false));
 
   bool underflow = false;
-  EXPECT_EQ(FilterStatus::Continue, decoder.onData(buffer, underflow));
+  EXPECT_EQ(ThriftFilters::FilterStatus::Continue, decoder.onData(buffer, underflow));
   EXPECT_TRUE(underflow);
 
-  EXPECT_CALL(transport, decodeFrameEnd(_)).WillOnce(Return(true));
-  EXPECT_EQ(FilterStatus::Continue, decoder.onData(buffer, underflow));
+  EXPECT_CALL(*transport, decodeFrameEnd(_)).WillOnce(Return(true));
+  EXPECT_EQ(ThriftFilters::FilterStatus::Continue, decoder.onData(buffer, underflow));
   EXPECT_TRUE(underflow); // buffer.length() == 0
 }
 
 TEST(DecoderTest, OnDataHandlesStopIterationAndResumes) {
-  StrictMock<MockTransport> transport;
-  EXPECT_CALL(transport, name()).WillRepeatedly(ReturnRef(transport.name_));
 
-  StrictMock<MockProtocol> proto;
-  EXPECT_CALL(proto, name()).WillRepeatedly(ReturnRef(proto.name_));
+  StrictMock<MockTransport>* transport = new StrictMock<MockTransport>();
+  EXPECT_CALL(*transport, name()).WillRepeatedly(ReturnRef(transport->name_));
+
+  StrictMock<MockProtocol>* proto = new StrictMock<MockProtocol>();
+  EXPECT_CALL(*proto, name()).WillRepeatedly(ReturnRef(proto->name_));
 
   NiceMock<MockDecoderCallbacks> callbacks;
-  StrictMock<MockDecoderEventHandler> handler;
-  ON_CALL(callbacks, newDecoderEventHandler()).WillByDefault(ReturnRef(handler));
+  StrictMock<ThriftFilters::MockDecoderFilter> filter;
+  ON_CALL(callbacks, newDecoderFilter()).WillByDefault(ReturnRef(filter));
 
   InSequence dummy;
-  Decoder decoder(transport, proto, callbacks);
+  Decoder decoder(TransportPtr{transport}, ProtocolPtr{proto}, callbacks);
   Buffer::OwnedImpl buffer;
   bool underflow = true;
 
-  EXPECT_CALL(transport, decodeFrameStart(Ref(buffer), _))
+  HeaderMap headers{{"test", "header"}};
+
+  EXPECT_CALL(*transport, decodeFrameStart(Ref(buffer), _))
       .WillOnce(Invoke([&](Buffer::Instance&, MessageMetadata& metadata) -> bool {
         metadata.setFrameSize(100);
         return true;
       }));
-  EXPECT_CALL(handler, transportBegin(_))
-      .WillOnce(Invoke([&](MessageMetadataSharedPtr metadata) -> FilterStatus {
+  EXPECT_CALL(filter, transportBegin(_))
+      .WillOnce(Invoke([&](MessageMetadataSharedPtr metadata) -> ThriftFilters::FilterStatus {
         EXPECT_TRUE(metadata->hasFrameSize());
         EXPECT_EQ(100U, metadata->frameSize());
 
-        return FilterStatus::StopIteration;
+        return ThriftFilters::FilterStatus::StopIteration;
       }));
-  EXPECT_EQ(FilterStatus::StopIteration, decoder.onData(buffer, underflow));
+  EXPECT_EQ(ThriftFilters::FilterStatus::StopIteration, decoder.onData(buffer, underflow));
   EXPECT_FALSE(underflow);
 
-  EXPECT_CALL(proto, readMessageBegin(Ref(buffer), _))
+  EXPECT_CALL(*proto, readMessageBegin(Ref(buffer), _))
       .WillOnce(Invoke([&](Buffer::Instance&, MessageMetadata& metadata) -> bool {
         metadata.setMethodName("name");
         metadata.setMessageType(MessageType::Call);
         metadata.setSequenceId(100);
         return true;
       }));
-  EXPECT_CALL(handler, messageBegin(_))
-      .WillOnce(Invoke([&](MessageMetadataSharedPtr metadata) -> FilterStatus {
+  EXPECT_CALL(filter, messageBegin(_))
+      .WillOnce(Invoke([&](MessageMetadataSharedPtr metadata) -> ThriftFilters::FilterStatus {
         EXPECT_TRUE(metadata->hasMethodName());
         EXPECT_TRUE(metadata->hasMessageType());
         EXPECT_TRUE(metadata->hasSequenceId());
         EXPECT_EQ("name", metadata->methodName());
         EXPECT_EQ(MessageType::Call, metadata->messageType());
         EXPECT_EQ(100U, metadata->sequenceId());
-        return FilterStatus::StopIteration;
+        return ThriftFilters::FilterStatus::StopIteration;
       }));
-  EXPECT_EQ(FilterStatus::StopIteration, decoder.onData(buffer, underflow));
+  EXPECT_EQ(ThriftFilters::FilterStatus::StopIteration, decoder.onData(buffer, underflow));
   EXPECT_FALSE(underflow);
 
-  EXPECT_CALL(proto, readStructBegin(Ref(buffer), _)).WillOnce(Return(true));
-  EXPECT_CALL(handler, structBegin(absl::string_view()))
-      .WillOnce(Return(FilterStatus::StopIteration));
-  EXPECT_EQ(FilterStatus::StopIteration, decoder.onData(buffer, underflow));
+  EXPECT_CALL(*proto, readStructBegin(Ref(buffer), _)).WillOnce(Return(true));
+  EXPECT_CALL(filter, structBegin(absl::string_view()))
+      .WillOnce(Return(ThriftFilters::FilterStatus::StopIteration));
+  EXPECT_EQ(ThriftFilters::FilterStatus::StopIteration, decoder.onData(buffer, underflow));
   EXPECT_FALSE(underflow);
 
-  FieldType field_type = FieldType::I32;
-  int16_t field_id = 1;
-  EXPECT_CALL(proto, readFieldBegin(Ref(buffer), _, _, _))
-      .WillOnce(DoAll(SetArgReferee<2>(field_type), SetArgReferee<3>(field_id), Return(true)));
-  EXPECT_CALL(handler, fieldBegin(absl::string_view(), _, _))
-      .WillOnce(Invoke([&](absl::string_view, FieldType& ft, int16_t& id) -> FilterStatus {
-        EXPECT_EQ(field_type, ft);
-        EXPECT_EQ(field_id, id);
-        return FilterStatus::StopIteration;
-      }));
-  EXPECT_EQ(FilterStatus::StopIteration, decoder.onData(buffer, underflow));
+  EXPECT_CALL(*proto, readFieldBegin(Ref(buffer), _, _, _))
+      .WillOnce(DoAll(SetArgReferee<2>(FieldType::I32), SetArgReferee<3>(1), Return(true)));
+  EXPECT_CALL(filter, fieldBegin(absl::string_view(), FieldType::I32, 1))
+      .WillOnce(Return(ThriftFilters::FilterStatus::StopIteration));
+  EXPECT_EQ(ThriftFilters::FilterStatus::StopIteration, decoder.onData(buffer, underflow));
   EXPECT_FALSE(underflow);
 
-  EXPECT_CALL(proto, readInt32(_, _)).WillOnce(Return(true));
-  EXPECT_CALL(handler, int32Value(_)).WillOnce(Return(FilterStatus::StopIteration));
-  EXPECT_EQ(FilterStatus::StopIteration, decoder.onData(buffer, underflow));
+  EXPECT_CALL(*proto, readInt32(_, _)).WillOnce(Return(true));
+  EXPECT_CALL(filter, int32Value(_)).WillOnce(Return(ThriftFilters::FilterStatus::StopIteration));
+  EXPECT_EQ(ThriftFilters::FilterStatus::StopIteration, decoder.onData(buffer, underflow));
   EXPECT_FALSE(underflow);
 
-  EXPECT_CALL(proto, readFieldEnd(Ref(buffer))).WillOnce(Return(true));
-  EXPECT_CALL(handler, fieldEnd()).WillOnce(Return(FilterStatus::StopIteration));
-  EXPECT_EQ(FilterStatus::StopIteration, decoder.onData(buffer, underflow));
+  EXPECT_CALL(*proto, readFieldEnd(Ref(buffer))).WillOnce(Return(true));
+  EXPECT_CALL(filter, fieldEnd()).WillOnce(Return(ThriftFilters::FilterStatus::StopIteration));
+  EXPECT_EQ(ThriftFilters::FilterStatus::StopIteration, decoder.onData(buffer, underflow));
   EXPECT_FALSE(underflow);
 
-  EXPECT_CALL(proto, readFieldBegin(Ref(buffer), _, _, _))
+  EXPECT_CALL(*proto, readFieldBegin(Ref(buffer), _, _, _))
       .WillOnce(DoAll(SetArgReferee<2>(FieldType::Stop), Return(true)));
-  EXPECT_CALL(proto, readStructEnd(Ref(buffer))).WillOnce(Return(true));
-  EXPECT_CALL(handler, structEnd()).WillOnce(Return(FilterStatus::StopIteration));
-  EXPECT_EQ(FilterStatus::StopIteration, decoder.onData(buffer, underflow));
+  EXPECT_CALL(*proto, readStructEnd(Ref(buffer))).WillOnce(Return(true));
+  EXPECT_CALL(filter, structEnd()).WillOnce(Return(ThriftFilters::FilterStatus::StopIteration));
+  EXPECT_EQ(ThriftFilters::FilterStatus::StopIteration, decoder.onData(buffer, underflow));
   EXPECT_FALSE(underflow);
 
-  EXPECT_CALL(proto, readMessageEnd(Ref(buffer))).WillOnce(Return(true));
-  EXPECT_CALL(handler, messageEnd()).WillOnce(Return(FilterStatus::StopIteration));
-  EXPECT_EQ(FilterStatus::StopIteration, decoder.onData(buffer, underflow));
+  EXPECT_CALL(*proto, readMessageEnd(Ref(buffer))).WillOnce(Return(true));
+  EXPECT_CALL(filter, messageEnd()).WillOnce(Return(ThriftFilters::FilterStatus::StopIteration));
+  EXPECT_EQ(ThriftFilters::FilterStatus::StopIteration, decoder.onData(buffer, underflow));
   EXPECT_FALSE(underflow);
 
-  EXPECT_CALL(transport, decodeFrameEnd(Ref(buffer))).WillOnce(Return(true));
-  EXPECT_CALL(handler, transportEnd()).WillOnce(Return(FilterStatus::StopIteration));
-  EXPECT_EQ(FilterStatus::StopIteration, decoder.onData(buffer, underflow));
+  EXPECT_CALL(*transport, decodeFrameEnd(Ref(buffer))).WillOnce(Return(true));
+  EXPECT_CALL(filter, transportEnd()).WillOnce(Return(ThriftFilters::FilterStatus::StopIteration));
+  EXPECT_EQ(ThriftFilters::FilterStatus::StopIteration, decoder.onData(buffer, underflow));
   EXPECT_FALSE(underflow);
 
-  EXPECT_EQ(FilterStatus::Continue, decoder.onData(buffer, underflow));
+  EXPECT_EQ(ThriftFilters::FilterStatus::Continue, decoder.onData(buffer, underflow));
   EXPECT_TRUE(underflow);
 }
 

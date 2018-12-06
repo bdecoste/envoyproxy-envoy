@@ -88,6 +88,13 @@ Network::FilterStatus Filter::onAccept(Network::ListenerFilterCallbacks& cb) {
       },
       Event::FileTriggerType::Edge, Event::FileReadyType::Read | Event::FileReadyType::Closed);
 
+  // TODO(PiotrSikora): make this configurable.
+  timer_ = cb.dispatcher().createTimer([this]() -> void { onTimeout(); });
+  timer_->enableTimer(std::chrono::milliseconds(15000));
+
+  // TODO(ggreenway): Move timeout and close-detection to the filter manager
+  // so that it applies to all listener filters.
+
   cb_ = &cb;
   return Network::FilterStatus::StopIteration;
 }
@@ -116,7 +123,6 @@ void Filter::onServername(absl::string_view name) {
   if (!name.empty()) {
     config_->stats().sni_found_.inc();
     cb_->socket().setRequestedServerName(name);
-    ENVOY_LOG(debug, "tls:onServerName(), requestedServerName: {}", name);
   } else {
     config_->stats().sni_not_found_.inc();
   }
@@ -132,7 +138,7 @@ void Filter::onRead() {
   // even if previous data has not been read, which is always the case due to MSG_PEEK. When
   // the TlsInspector completes and passes the socket along, a new FileEvent is created for the
   // socket, so that new event is immediately signalled as readable because it is new and the socket
-  // is readable, even though no new events have occurred.
+  // is readable, even though no new events have ocurred.
   //
   // TODO(ggreenway): write an integration test to ensure the events work as expected on all
   // platforms.
@@ -159,8 +165,15 @@ void Filter::onRead() {
   }
 }
 
+void Filter::onTimeout() {
+  ENVOY_LOG(trace, "tls inspector: timeout");
+  config_->stats().read_timeout_.inc();
+  done(false);
+}
+
 void Filter::done(bool success) {
   ENVOY_LOG(trace, "tls inspector: done: {}", success);
+  timer_.reset();
   file_event_.reset();
   cb_->continueFilterChain(success);
 }

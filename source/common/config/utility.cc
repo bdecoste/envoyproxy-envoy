@@ -16,7 +16,6 @@
 #include "common/json/config_schemas.h"
 #include "common/protobuf/protobuf.h"
 #include "common/protobuf/utility.h"
-#include "common/stats/stats_matcher_impl.h"
 #include "common/stats/tag_producer_impl.h"
 
 namespace Envoy {
@@ -70,9 +69,7 @@ void Utility::checkLocalInfo(const std::string& error_prefix,
                              const LocalInfo::LocalInfo& local_info) {
   if (local_info.clusterName().empty() || local_info.nodeName().empty()) {
     throw EnvoyException(
-        fmt::format("{}: node 'id' and 'cluster' are required. Set it either in 'node' config or "
-                    "via --service-node and --service-cluster options.",
-                    error_prefix, local_info.node().DebugString()));
+        fmt::format("{}: setting --service-cluster and --service-node is required", error_prefix));
   }
 }
 
@@ -217,29 +214,9 @@ void Utility::translateLdsConfig(const Json::Object& json_lds,
                            *lds_config.mutable_api_config_source());
 }
 
-RateLimitSettings
-Utility::parseRateLimitSettings(const envoy::api::v2::core::ApiConfigSource& api_config_source) {
-  RateLimitSettings rate_limit_settings;
-  if (api_config_source.has_rate_limit_settings()) {
-    rate_limit_settings.enabled_ = true;
-    rate_limit_settings.max_tokens_ =
-        PROTOBUF_GET_WRAPPED_OR_DEFAULT(api_config_source.rate_limit_settings(), max_tokens,
-                                        Envoy::Config::RateLimitSettings::DefaultMaxTokens);
-    rate_limit_settings.fill_rate_ =
-        PROTOBUF_GET_WRAPPED_OR_DEFAULT(api_config_source.rate_limit_settings(), fill_rate,
-                                        Envoy::Config::RateLimitSettings::DefaultFillRate);
-  }
-  return rate_limit_settings;
-}
-
 Stats::TagProducerPtr
 Utility::createTagProducer(const envoy::config::bootstrap::v2::Bootstrap& bootstrap) {
   return std::make_unique<Stats::TagProducerImpl>(bootstrap.stats_config());
-}
-
-Stats::StatsMatcherPtr
-Utility::createStatsMatcher(const envoy::config::bootstrap::v2::Bootstrap& bootstrap) {
-  return std::make_unique<Stats::StatsMatcherImpl>(bootstrap.stats_config());
 }
 
 void Utility::checkObjNameLength(const std::string& error_prefix, const std::string& name,

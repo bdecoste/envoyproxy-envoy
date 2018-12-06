@@ -18,7 +18,6 @@ envoy_cc_library(
         "//source/common/common:hash_lib",
         "//source/common/common:thread_annotations",
         "//source/common/common:thread_lib",
-        "//source/common/common:utility_lib",
     ],
 )
 
@@ -67,9 +66,7 @@ envoy_cc_library(
         ":stat_data_allocator_lib",
         "//include/envoy/stats:stats_interface",
         "//source/common/common:assert_lib",
-        "//source/common/common:block_memory_hash_set_lib",
         "//source/common/common:hash_lib",
-        "//source/common/common:thread_lib",
     ],
 )
 
@@ -103,7 +100,6 @@ envoy_cc_library(
         ":raw_stat_data_lib",
         ":source_impl_lib",
         ":stats_options_lib",
-        ":symbol_table_lib",
         ":tag_extractor_lib",
         ":utility_lib",
         "//include/envoy/common:time_interface",
@@ -118,19 +114,6 @@ envoy_cc_library(
         "//source/common/protobuf",
         "//source/common/singleton:const_singleton",
         "@envoy_api//envoy/config/metrics/v2:stats_cc",
-    ],
-)
-
-envoy_cc_library(
-    name = "symbol_table_lib",
-    srcs = ["symbol_table_impl.cc"],
-    hdrs = ["symbol_table_impl.h"],
-    external_deps = ["abseil_base"],
-    deps = [
-        "//include/envoy/stats:symbol_table_interface",
-        "//source/common/common:assert_lib",
-        "//source/common/common:thread_lib",
-        "//source/common/common:utility_lib",
     ],
 )
 
@@ -167,25 +150,12 @@ envoy_cc_library(
 )
 
 envoy_cc_library(
-    name = "stats_matcher_lib",
-    srcs = ["stats_matcher_impl.cc"],
-    hdrs = ["stats_matcher_impl.h"],
-    deps = [
-        "//include/envoy/stats:stats_interface",
-        "//source/common/common:matchers_lib",
-        "//source/common/protobuf",
-        "@envoy_api//envoy/config/metrics/v2:stats_cc",
-    ],
-)
-
-envoy_cc_library(
     name = "thread_local_store_lib",
     srcs = ["thread_local_store.cc"],
     hdrs = ["thread_local_store.h"],
     deps = [
         ":heap_stat_data_lib",
         ":stats_lib",
-        ":stats_matcher_lib",
         ":tag_producer_lib",
         "//include/envoy/thread_local:thread_local_interface",
     ],

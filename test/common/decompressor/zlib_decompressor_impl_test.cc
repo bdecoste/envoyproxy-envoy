@@ -66,10 +66,10 @@ protected:
 
   static void unitializedDecompressorTestHelper() {
     Buffer::OwnedImpl input_buffer;
-    Buffer::OwnedImpl output_buffer;
+    Buffer::OwnedImpl ouput_buffer;
     ZlibDecompressorImpl decompressor;
     TestUtility::feedBufferWithRandomCharacters(input_buffer, 100);
-    decompressor.decompress(input_buffer, output_buffer);
+    decompressor.decompress(input_buffer, ouput_buffer);
   }
 };
 

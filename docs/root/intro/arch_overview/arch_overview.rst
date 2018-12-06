@@ -11,7 +11,6 @@ Architecture overview
   network_filters
   http_connection_management
   http_filters
-  data_sharing_between_filters
   http_routing
   grpc
   websocket

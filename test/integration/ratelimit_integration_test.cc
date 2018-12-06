@@ -12,29 +12,34 @@
 namespace Envoy {
 namespace {
 
-class RatelimitIntegrationTest : public HttpIntegrationTest,
-                                 public Grpc::GrpcClientIntegrationParamTest {
+// TODO(junr03): legacy rate limit is deprecated. Go back to having only one
+// GrpcClientIntegrationParamTest after 1.7.0.
+class RatelimitGrpcClientIntegrationParamTest
+    : public Grpc::BaseGrpcClientIntegrationParamTest,
+      public testing::TestWithParam<
+          std::tuple<Network::Address::IpVersion, Grpc::ClientType, bool>> {
 public:
-  RatelimitIntegrationTest()
-      : HttpIntegrationTest(Http::CodecClient::Type::HTTP1, ipVersion(), realTime()) {}
+  ~RatelimitGrpcClientIntegrationParamTest() {}
+  Network::Address::IpVersion ipVersion() const override { return std::get<0>(GetParam()); }
+  Grpc::ClientType clientType() const override { return std::get<1>(GetParam()); }
+  bool useDataPlaneProto() const { return std::get<2>(GetParam()); }
+};
+
+class RatelimitIntegrationTest : public HttpIntegrationTest,
+                                 public RatelimitGrpcClientIntegrationParamTest {
+public:
+  RatelimitIntegrationTest() : HttpIntegrationTest(Http::CodecClient::Type::HTTP1, ipVersion()) {}
 
   void SetUp() override { initialize(); }
 
   void createUpstreams() override {
     HttpIntegrationTest::createUpstreams();
-    fake_upstreams_.emplace_back(
-        new FakeUpstream(0, FakeHttpConnection::Type::HTTP2, version_, timeSystem()));
+    fake_upstreams_.emplace_back(new FakeUpstream(0, FakeHttpConnection::Type::HTTP2, version_));
   }
 
   void initialize() override {
-    if (failure_mode_deny_) {
-      config_helper_.addFilter("{ name: envoy.rate_limit, config: { domain: some_domain, "
-                               "failure_mode_deny: true, timeout: 0.5s } }");
-
-    } else {
-      config_helper_.addFilter(
-          "{ name: envoy.rate_limit, config: { domain: some_domain, timeout: 0.5s } }");
-    }
+    config_helper_.addFilter(
+        "{ name: envoy.rate_limit, config: { domain: some_domain, timeout: 0.5s } }");
     config_helper_.addConfigModifier([this](envoy::config::bootstrap::v2::Bootstrap& bootstrap) {
       auto* ratelimit_cluster = bootstrap.mutable_static_resources()->add_clusters();
       ratelimit_cluster->MergeFrom(bootstrap.static_resources().clusters()[0]);
@@ -53,6 +58,9 @@ public:
                                  ->add_rate_limits();
           rate_limit->add_actions()->mutable_destination_cluster();
         });
+    config_helper_.addConfigModifier([this](envoy::config::bootstrap::v2::Bootstrap& bootstrap) {
+      bootstrap.mutable_rate_limit_service()->set_use_data_plane_proto(useDataPlaneProto());
+    });
     HttpIntegrationTest::initialize();
   }
 
@@ -77,8 +85,13 @@ public:
     result = ratelimit_request_->waitForEndStream(*dispatcher_);
     RELEASE_ASSERT(result, result.message());
     EXPECT_STREQ("POST", ratelimit_request_->headers().Method()->value().c_str());
-    EXPECT_STREQ("/envoy.service.ratelimit.v2.RateLimitService/ShouldRateLimit",
-                 ratelimit_request_->headers().Path()->value().c_str());
+    if (useDataPlaneProto()) {
+      EXPECT_STREQ("/envoy.service.ratelimit.v2.RateLimitService/ShouldRateLimit",
+                   ratelimit_request_->headers().Path()->value().c_str());
+    } else {
+      EXPECT_STREQ("/pb.lyft.ratelimit.RateLimitService/ShouldRateLimit",
+                   ratelimit_request_->headers().Path()->value().c_str());
+    }
     EXPECT_STREQ("application/grpc", ratelimit_request_->headers().ContentType()->value().c_str());
 
     envoy::service::ratelimit::v2::RateLimitRequest expected_request_msg;
@@ -157,19 +170,10 @@ public:
 
   const uint64_t request_size_ = 1024;
   const uint64_t response_size_ = 512;
-  bool failure_mode_deny_ = false;
-};
-
-// Test that verifies failure mode cases.
-class RatelimitFailureModeIntegrationTest : public RatelimitIntegrationTest {
-public:
-  RatelimitFailureModeIntegrationTest() { failure_mode_deny_ = true; }
 };
 
 INSTANTIATE_TEST_CASE_P(IpVersionsClientType, RatelimitIntegrationTest,
-                        GRPC_CLIENT_INTEGRATION_PARAMS);
-INSTANTIATE_TEST_CASE_P(IpVersionsClientType, RatelimitFailureModeIntegrationTest,
-                        GRPC_CLIENT_INTEGRATION_PARAMS);
+                        RATELIMIT_GRPC_CLIENT_INTEGRATION_PARAMS);
 
 TEST_P(RatelimitIntegrationTest, Ok) {
   initiateClientConnection();
@@ -258,7 +262,6 @@ TEST_P(RatelimitIntegrationTest, Error) {
   EXPECT_EQ(nullptr, test_server_->counter("cluster.cluster_0.ratelimit.ok"));
   EXPECT_EQ(nullptr, test_server_->counter("cluster.cluster_0.ratelimit.over_limit"));
   EXPECT_EQ(1, test_server_->counter("cluster.cluster_0.ratelimit.error")->value());
-  EXPECT_EQ(1, test_server_->counter("cluster.cluster_0.ratelimit.failure_mode_allowed")->value());
 }
 
 TEST_P(RatelimitIntegrationTest, Timeout) {
@@ -305,20 +308,6 @@ TEST_P(RatelimitIntegrationTest, FailedConnect) {
   // Rate limiter fails open
   waitForSuccessfulUpstreamResponse();
   cleanup();
-}
-
-TEST_P(RatelimitFailureModeIntegrationTest, ErrorWithFailureModeOff) {
-  initiateClientConnection();
-  waitForRatelimitRequest();
-  ratelimit_request_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "503"}}, true);
-  // Rate limiter fail closed
-  waitForFailedUpstreamResponse(500);
-  cleanup();
-
-  EXPECT_EQ(nullptr, test_server_->counter("cluster.cluster_0.ratelimit.ok"));
-  EXPECT_EQ(nullptr, test_server_->counter("cluster.cluster_0.ratelimit.over_limit"));
-  EXPECT_EQ(1, test_server_->counter("cluster.cluster_0.ratelimit.error")->value());
-  EXPECT_EQ(nullptr, test_server_->counter("cluster.cluster_0.ratelimit.failure_mode_allowed"));
 }
 
 } // namespace

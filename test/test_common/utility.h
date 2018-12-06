@@ -7,16 +7,13 @@
 #include <string>
 #include <vector>
 
-#include "envoy/api/api.h"
 #include "envoy/buffer/buffer.h"
 #include "envoy/config/bootstrap/v2/bootstrap.pb.h"
 #include "envoy/network/address.h"
 #include "envoy/stats/stats.h"
 #include "envoy/stats/store.h"
-#include "envoy/thread/thread.h"
 
 #include "common/buffer/buffer_impl.h"
-#include "common/common/block_memory_hash_set.h"
 #include "common/common/c_smart_ptr.h"
 #include "common/common/thread.h"
 #include "common/http/header_map_impl.h"
@@ -101,20 +98,10 @@ public:
 private:
   const int32_t seed_;
   std::ranlux48 generator_;
-  RealTimeSource real_time_source_;
 };
 
 class TestUtility {
 public:
-  /**
-   * Compare 2 HeaderMaps.
-   * @param lhs supplies HeaderMaps 1.
-   * @param rhs supplies HeaderMaps 2.
-   * @return TRUE if the HeaderMapss are equal, ignoring the order of the
-   * headers, false if not.
-   */
-  static bool headerMapEqualIgnoreOrder(const Http::HeaderMap& lhs, const Http::HeaderMap& rhs);
-
   /**
    * Compare 2 buffers.
    * @param lhs supplies buffer 1.
@@ -131,21 +118,6 @@ public:
    */
   static void feedBufferWithRandomCharacters(Buffer::Instance& buffer, uint64_t n_char,
                                              uint64_t seed = 0);
-
-  /**
-   * Finds a stat in a vector with the given name.
-   * @param name the stat name to look for.
-   * @param v the vector of stats.
-   * @return the stat
-   */
-  template <typename T> static T findByName(const std::vector<T>& v, const std::string& name) {
-    auto pos = std::find_if(v.begin(), v.end(),
-                            [&name](const T& stat) -> bool { return stat->name() == name; });
-    if (pos == v.end()) {
-      return nullptr;
-    }
-    return *pos;
-  }
 
   /**
    * Find a counter in a stats store.
@@ -305,10 +277,6 @@ public:
   }
 
   static constexpr std::chrono::milliseconds DefaultTimeout = std::chrono::milliseconds(10000);
-
-  static void renameFile(const std::string& old_name, const std::string& new_name);
-  static void createDirectory(const std::string& name);
-  static void createSymlink(const std::string& target, const std::string& link);
 };
 
 /**
@@ -341,23 +309,6 @@ public:
 
 private:
   int fd_;
-};
-
-/**
- * A utility class for atomically updating a file using symbolic link swap.
- */
-class AtomicFileUpdater {
-public:
-  AtomicFileUpdater(const std::string& filename);
-
-  void update(const std::string& contents);
-
-private:
-  const std::string link_;
-  const std::string new_link_;
-  const std::string target1_;
-  const std::string target2_;
-  bool use_target1_;
 };
 
 namespace Http {
@@ -399,70 +350,60 @@ public:
   bool has(const LowerCaseString& key);
 };
 
-// Helper method to create a header map from an initializer list. Useful due to make_unique's
-// inability to infer the initializer list type.
-inline HeaderMapPtr
-makeHeaderMap(const std::initializer_list<std::pair<std::string, std::string>>& values) {
-  return std::make_unique<TestHeaderMapImpl,
-                          const std::initializer_list<std::pair<std::string, std::string>>&>(
-      values);
-}
-
 } // namespace Http
 
 namespace Stats {
 
 /**
- * Implements a RawStatDataAllocator using a contiguous block of heap-allocated
- * memory, but is otherwise identical to the shared memory allocator in terms of
- * reference counting, data structures, etc.
+ * This is a heap test allocator that works similar to how the shared memory allocator works in
+ * terms of reference counting, etc.
  */
 class TestAllocator : public RawStatDataAllocator {
 public:
-  struct TestBlockMemoryHashSetOptions : public BlockMemoryHashSetOptions {
-    TestBlockMemoryHashSetOptions() {
-      capacity = 200;
-      num_slots = 131;
-    }
-  };
+  TestAllocator(const StatsOptions& stats_options) : stats_options_(stats_options) {}
+  ~TestAllocator() { EXPECT_TRUE(stats_.empty()); }
 
-  explicit TestAllocator(const StatsOptions& stats_options)
-      : RawStatDataAllocator(mutex_, hash_set_, stats_options),
-        block_memory_(std::make_unique<uint8_t[]>(
-            RawStatDataSet::numBytes(block_hash_options_, stats_options))),
-        hash_set_(block_hash_options_, true /* init */, block_memory_.get(), stats_options) {}
-  ~TestAllocator() { EXPECT_EQ(0, hash_set_.size()); }
+  RawStatData* alloc(absl::string_view name) override {
+    CSmartPtr<RawStatData, freeAdapter>& stat_ref = stats_[std::string(name)];
+    if (!stat_ref) {
+      stat_ref.reset(static_cast<RawStatData*>(
+          ::calloc(RawStatData::structSizeWithOptions(stats_options_), 1)));
+      stat_ref->initialize(name, stats_options_);
+    } else {
+      stat_ref->ref_count_++;
+    }
+
+    return stat_ref.get();
+  }
+
+  void free(RawStatData& data) override {
+    if (--data.ref_count_ > 0) {
+      return;
+    }
+
+    if (stats_.erase(std::string(data.name_)) == 0) {
+      FAIL();
+    }
+  }
 
 private:
-  Thread::MutexBasicLockable mutex_;
-  TestBlockMemoryHashSetOptions block_hash_options_;
-  std::unique_ptr<uint8_t[]> block_memory_;
-  RawStatDataSet hash_set_;
+  static void freeAdapter(RawStatData* data) { ::free(data); }
+  std::unordered_map<std::string, CSmartPtr<RawStatData, freeAdapter>> stats_;
+  const StatsOptions& stats_options_;
 };
 
-class MockedTestAllocator : public TestAllocator {
+class MockedTestAllocator : public RawStatDataAllocator {
 public:
   MockedTestAllocator(const StatsOptions& stats_options);
   virtual ~MockedTestAllocator();
 
   MOCK_METHOD1(alloc, RawStatData*(absl::string_view name));
   MOCK_METHOD1(free, void(RawStatData& data));
+
+  TestAllocator alloc_;
 };
 
 } // namespace Stats
-
-namespace Thread {
-ThreadFactory& threadFactoryForTest();
-} // namespace Thread
-
-namespace Api {
-ApiPtr createApiForTest(Stats::Store& stat_store);
-} // namespace Api
-
-MATCHER_P(HeaderMapEqualIgnoreOrder, rhs, "") {
-  *result_listener << *rhs << " is not equal to " << *arg;
-  return TestUtility::headerMapEqualIgnoreOrder(*arg, *rhs);
-}
 
 MATCHER_P(ProtoEq, rhs, "") { return TestUtility::protoEqual(arg, rhs); }
 

@@ -9,6 +9,7 @@
 #include "common/common/enum_to_int.h"
 #include "common/common/utility.h"
 #include "common/grpc/common.h"
+#include "common/http/filter_utility.h"
 #include "common/http/headers.h"
 #include "common/http/http1/codec_impl.h"
 
@@ -29,7 +30,7 @@ Http::FilterHeadersStatus Http1BridgeFilter::decodeHeaders(Http::HeaderMap& head
     setupStatTracking(headers);
   }
 
-  const absl::optional<Http::Protocol>& protocol = decoder_callbacks_->streamInfo().protocol();
+  const absl::optional<Http::Protocol>& protocol = decoder_callbacks_->requestInfo().protocol();
   ASSERT(protocol);
   if (protocol.value() != Http::Protocol::Http2 && grpc_request) {
     do_bridging_ = true;
@@ -97,7 +98,7 @@ Http::FilterTrailersStatus Http1BridgeFilter::encodeTrailers(Http::HeaderMap& tr
 }
 
 void Http1BridgeFilter::setupStatTracking(const Http::HeaderMap& headers) {
-  cluster_ = decoder_callbacks_->clusterInfo();
+  cluster_ = Http::FilterUtility::resolveClusterInfo(decoder_callbacks_, cm_);
   if (!cluster_) {
     return;
   }

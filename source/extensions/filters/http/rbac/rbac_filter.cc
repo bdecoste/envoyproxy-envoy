@@ -11,6 +11,11 @@ namespace Extensions {
 namespace HttpFilters {
 namespace RBACFilter {
 
+static const std::string resp_code_200 = "200";
+static const std::string resp_code_403 = "403";
+static const std::string shadow_policy_id_field = "shadow_effective_policyID";
+static const std::string shadow_resp_code_field = "shadow_response_code";
+
 RoleBasedAccessControlFilterConfig::RoleBasedAccessControlFilterConfig(
     const envoy::config::filter::http::rbac::v2::RBAC& proto_config,
     const std::string& stats_prefix, Stats::Scope& scope)
@@ -27,12 +32,10 @@ RoleBasedAccessControlFilterConfig::engine(const Router::RouteConstSharedPtr rou
 
   const std::string& name = HttpFilterNames::get().Rbac;
   const auto* entry = route->routeEntry();
-  const auto* tmp =
-      entry->perFilterConfigTyped<RoleBasedAccessControlRouteSpecificFilterConfig>(name);
   const auto* route_local =
-      tmp ? tmp
-          : entry->virtualHost()
-                .perFilterConfigTyped<RoleBasedAccessControlRouteSpecificFilterConfig>(name);
+      entry->perFilterConfigTyped<RoleBasedAccessControlRouteSpecificFilterConfig>(name)
+          ?: entry->virtualHost()
+                 .perFilterConfigTyped<RoleBasedAccessControlRouteSpecificFilterConfig>(name);
 
   if (route_local) {
     return route_local->engine(mode);
@@ -59,53 +62,55 @@ Http::FilterHeadersStatus RoleBasedAccessControlFilter::decodeHeaders(Http::Head
                 ", subjectPeerCertificate: " +
                 callbacks_->connection()->ssl()->subjectPeerCertificate()
           : "none",
-      headers, callbacks_->streamInfo().dynamicMetadata().DebugString());
+      headers, callbacks_->requestInfo().dynamicMetadata().DebugString());
 
   std::string effective_policy_id;
   const auto& shadow_engine =
       config_->engine(callbacks_->route(), Filters::Common::RBAC::EnforcementMode::Shadow);
 
   if (shadow_engine.has_value()) {
-    std::string shadow_resp_code =
-        Filters::Common::RBAC::DynamicMetadataKeysSingleton::get().EngineResultAllowed;
+    std::string shadow_resp_code = resp_code_200;
     if (shadow_engine->allowed(*callbacks_->connection(), headers,
-                               callbacks_->streamInfo().dynamicMetadata(), &effective_policy_id)) {
+                               callbacks_->requestInfo().dynamicMetadata(), &effective_policy_id)) {
       ENVOY_LOG(debug, "shadow allowed");
       config_->stats().shadow_allowed_.inc();
     } else {
       ENVOY_LOG(debug, "shadow denied");
       config_->stats().shadow_denied_.inc();
-      shadow_resp_code =
-          Filters::Common::RBAC::DynamicMetadataKeysSingleton::get().EngineResultDenied;
+      shadow_resp_code = resp_code_403;
     }
 
-    ProtobufWkt::Struct metrics;
+    const auto& filter_metadata = callbacks_->requestInfo().dynamicMetadata().filter_metadata();
+    const auto filter_it = filter_metadata.find(HttpFilterNames::get().Rbac);
+    if (filter_it != filter_metadata.end()) {
+      ProtobufWkt::Struct metrics;
 
-    auto& fields = *metrics.mutable_fields();
-    if (!effective_policy_id.empty()) {
-      *fields[Filters::Common::RBAC::DynamicMetadataKeysSingleton::get()
-                  .ShadowEffectivePolicyIdField]
-           .mutable_string_value() = effective_policy_id;
+      if (!effective_policy_id.empty()) {
+        ProtobufWkt::Value policy_id;
+        policy_id.set_string_value(effective_policy_id);
+        (*metrics.mutable_fields())[shadow_policy_id_field] = policy_id;
+      }
+
+      ProtobufWkt::Value resp_code;
+      resp_code.set_string_value(shadow_resp_code);
+      (*metrics.mutable_fields())[shadow_resp_code_field] = resp_code;
+
+      auto filter_meta = filter_metadata.at(HttpFilterNames::get().Rbac);
+      filter_meta.MergeFrom(metrics);
     }
-
-    *fields[Filters::Common::RBAC::DynamicMetadataKeysSingleton::get().ShadowEngineResultField]
-         .mutable_string_value() = shadow_resp_code;
-
-    callbacks_->streamInfo().setDynamicMetadata(HttpFilterNames::get().Rbac, metrics);
   }
 
   const auto& engine =
       config_->engine(callbacks_->route(), Filters::Common::RBAC::EnforcementMode::Enforced);
   if (engine.has_value()) {
     if (engine->allowed(*callbacks_->connection(), headers,
-                        callbacks_->streamInfo().dynamicMetadata(), nullptr)) {
+                        callbacks_->requestInfo().dynamicMetadata(), nullptr)) {
       ENVOY_LOG(debug, "enforced allowed");
       config_->stats().allowed_.inc();
       return Http::FilterHeadersStatus::Continue;
     } else {
       ENVOY_LOG(debug, "enforced denied");
-      callbacks_->sendLocalReply(Http::Code::Forbidden, "RBAC: access denied", nullptr,
-                                 absl::nullopt);
+      callbacks_->sendLocalReply(Http::Code::Forbidden, "RBAC: access denied", nullptr);
       config_->stats().denied_.inc();
       return Http::FilterHeadersStatus::StopIteration;
     }

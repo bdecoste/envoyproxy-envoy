@@ -43,7 +43,6 @@ envoy_cc_library(
         "//include/envoy/buffer:buffer_interface",
         "//source/common/buffer:buffer_lib",
         "//source/common/common:minimal_logger_lib",
-        "//source/common/common:stack_array",
     ],
 )
 
@@ -51,7 +50,6 @@ envoy_cc_library(
     name = "status_lib",
     srcs = ["status.cc"],
     hdrs = ["status.h"],
-    external_deps = ["abseil_optional"],
     deps = [
         "//include/envoy/grpc:status",
     ],
@@ -75,6 +73,7 @@ envoy_cc_library(
         "//source/common/common:macros",
         "//source/common/common:utility_lib",
         "//source/common/grpc:status_lib",
+        "//source/common/http:filter_utility_lib",
         "//source/common/http:headers_lib",
         "//source/common/http:message_lib",
         "//source/common/http:utility_lib",
@@ -92,13 +91,12 @@ envoy_cc_library(
     ],
     deps = [
         ":google_grpc_creds_lib",
-        "//include/envoy/api:api_interface",
         "//include/envoy/grpc:google_grpc_creds_interface",
-        "//include/envoy/thread:thread_interface",
         "//include/envoy/thread_local:thread_local_interface",
         "//source/common/common:empty_string",
         "//source/common/common:linked_object",
         "//source/common/common:thread_annotations",
+        "//source/common/common:thread_lib",
         "//source/common/tracing:http_tracer_lib",
     ],
 )

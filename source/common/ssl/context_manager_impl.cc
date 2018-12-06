@@ -1,6 +1,7 @@
 #include "common/ssl/context_manager_impl.h"
 
 #include <functional>
+#include <shared_mutex>
 
 #include "envoy/stats/scope.h"
 
@@ -21,11 +22,7 @@ void ContextManagerImpl::removeEmptyContexts() {
 
 ClientContextSharedPtr
 ContextManagerImpl::createSslClientContext(Stats::Scope& scope, const ClientContextConfig& config) {
-  if (!config.isReady()) {
-    return nullptr;
-  }
-
-  ClientContextSharedPtr context = std::make_shared<ClientContextImpl>(scope, config, time_source_);
+  ClientContextSharedPtr context = std::make_shared<ClientContextImpl>(scope, config);
   removeEmptyContexts();
   contexts_.emplace_back(context);
   return context;
@@ -34,12 +31,8 @@ ContextManagerImpl::createSslClientContext(Stats::Scope& scope, const ClientCont
 ServerContextSharedPtr
 ContextManagerImpl::createSslServerContext(Stats::Scope& scope, const ServerContextConfig& config,
                                            const std::vector<std::string>& server_names) {
-  if (!config.isReady()) {
-    return nullptr;
-  }
-
   ServerContextSharedPtr context =
-      std::make_shared<ServerContextImpl>(scope, config, server_names, time_source_);
+      std::make_shared<ServerContextImpl>(scope, config, server_names, runtime_);
   removeEmptyContexts();
   contexts_.emplace_back(context);
   return context;

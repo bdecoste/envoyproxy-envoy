@@ -8,10 +8,8 @@
 #include "common/config/resources.h"
 #include "common/protobuf/utility.h"
 
-#include "test/config/integration/certs/clientcert_hash.h"
 #include "test/test_common/environment.h"
 #include "test/test_common/network_utility.h"
-#include "test/test_common/utility.h"
 
 #include "absl/strings/str_replace.h"
 #include "gtest/gtest.h"
@@ -184,23 +182,7 @@ void ConfigHelper::finalize(const std::vector<uint32_t>& ports) {
           host_socket_addr->set_port_value(ports[port_idx++]);
         }
       }
-
-      // Assign ports to statically defined load_assignment hosts.
-      for (int j = 0; j < cluster->load_assignment().endpoints_size(); ++j) {
-        auto locality_lb = cluster->mutable_load_assignment()->mutable_endpoints(j);
-        for (int k = 0; k < locality_lb->lb_endpoints_size(); ++k) {
-          auto lb_endpoint = locality_lb->mutable_lb_endpoints(k);
-          if (lb_endpoint->endpoint().address().has_socket_address()) {
-            RELEASE_ASSERT(ports.size() > port_idx, "");
-            lb_endpoint->mutable_endpoint()
-                ->mutable_address()
-                ->mutable_socket_address()
-                ->set_port_value(ports[port_idx++]);
-          }
-        }
-      }
     }
-
     if (capture_path) {
       const bool has_tls = cluster->has_tls_context();
       absl::optional<ProtobufWkt::Struct> tls_config;
@@ -239,7 +221,7 @@ void ConfigHelper::setCaptureTransportSocket(
     RELEASE_ASSERT(!tls_config, "");
     inner_transport_socket.MergeFrom(transport_socket);
   } else if (tls_config.has_value()) {
-    inner_transport_socket.set_name("tls");
+    inner_transport_socket.set_name("ssl");
     inner_transport_socket.mutable_config()->MergeFrom(tls_config.value());
   } else {
     inner_transport_socket.set_name("raw_buffer");
@@ -329,9 +311,7 @@ void ConfigHelper::setConnectTimeout(std::chrono::milliseconds timeout) {
 void ConfigHelper::addRoute(const std::string& domains, const std::string& prefix,
                             const std::string& cluster, bool validate_clusters,
                             envoy::api::v2::route::RouteAction::ClusterNotFoundResponseCode code,
-                            envoy::api::v2::route::VirtualHost::TlsRequirementType type,
-                            envoy::api::v2::route::RouteAction::RetryPolicy retry_policy,
-                            bool include_attempt_count_header, const absl::string_view upgrade) {
+                            envoy::api::v2::route::VirtualHost::TlsRequirementType type) {
   RELEASE_ASSERT(!finalized_, "");
   envoy::config::filter::network::http_connection_manager::v2::HttpConnectionManager hcm_config;
   loadHttpConnectionManager(hcm_config);
@@ -340,16 +320,10 @@ void ConfigHelper::addRoute(const std::string& domains, const std::string& prefi
   route_config->mutable_validate_clusters()->set_value(validate_clusters);
   auto* virtual_host = route_config->add_virtual_hosts();
   virtual_host->set_name(domains);
-  virtual_host->set_include_request_attempt_count(include_attempt_count_header);
   virtual_host->add_domains(domains);
   virtual_host->add_routes()->mutable_match()->set_prefix(prefix);
-  auto* route = virtual_host->mutable_routes(0)->mutable_route();
-  route->set_cluster(cluster);
-  route->set_cluster_not_found_response_code(code);
-  route->mutable_retry_policy()->Swap(&retry_policy);
-  if (!upgrade.empty()) {
-    route->add_upgrade_configs()->set_upgrade_type(std::string(upgrade));
-  }
+  virtual_host->mutable_routes(0)->mutable_route()->set_cluster(cluster);
+  virtual_host->mutable_routes(0)->mutable_route()->set_cluster_not_found_response_code(code);
   virtual_host->set_require_tls(type);
 
   storeHttpConnectionManager(hcm_config);
@@ -382,36 +356,29 @@ void ConfigHelper::setClientCodec(
   }
 }
 
-void ConfigHelper::addSslConfig(bool ecdsa_cert) {
+void ConfigHelper::addSslConfig() {
   RELEASE_ASSERT(!finalized_, "");
 
   auto* filter_chain =
       bootstrap_.mutable_static_resources()->mutable_listeners(0)->mutable_filter_chains(0);
-  initializeTls(ecdsa_cert, *filter_chain->mutable_tls_context()->mutable_common_tls_context());
-}
 
-void ConfigHelper::initializeTls(bool ecdsa_cert,
-                                 envoy::api::v2::auth::CommonTlsContext& common_tls_context) {
-  common_tls_context.add_alpn_protocols("h2");
-  common_tls_context.add_alpn_protocols("http/1.1");
+  auto* common_tls_context = filter_chain->mutable_tls_context()->mutable_common_tls_context();
+  common_tls_context->add_alpn_protocols("h2");
+  common_tls_context->add_alpn_protocols("http/1.1");
+  common_tls_context->mutable_deprecated_v1()->set_alt_alpn_protocols("http/1.1");
 
-  auto* validation_context = common_tls_context.mutable_validation_context();
+  auto* validation_context = common_tls_context->mutable_validation_context();
   validation_context->mutable_trusted_ca()->set_filename(
       TestEnvironment::runfilesPath("test/config/integration/certs/cacert.pem"));
-  validation_context->add_verify_certificate_hash(TEST_CLIENT_CERT_HASH);
+  validation_context->add_verify_certificate_hash(
+      "E0:F3:C8:CE:5E:2E:A3:05:F0:70:1F:F5:12:E3:6E:2E:"
+      "97:92:82:84:A2:28:BC:F7:73:32:D3:39:30:A1:B6:FD");
 
-  auto* tls_certificate = common_tls_context.add_tls_certificates();
-  if (ecdsa_cert) {
-    tls_certificate->mutable_certificate_chain()->set_filename(
-        TestEnvironment::runfilesPath("/test/config/integration/certs/server_ecdsacert.pem"));
-    tls_certificate->mutable_private_key()->set_filename(
-        TestEnvironment::runfilesPath("/test/config/integration/certs/server_ecdsakey.pem"));
-  } else {
-    tls_certificate->mutable_certificate_chain()->set_filename(
-        TestEnvironment::runfilesPath("/test/config/integration/certs/servercert.pem"));
-    tls_certificate->mutable_private_key()->set_filename(
-        TestEnvironment::runfilesPath("/test/config/integration/certs/serverkey.pem"));
-  }
+  auto* tls_certificate = common_tls_context->add_tls_certificates();
+  tls_certificate->mutable_certificate_chain()->set_filename(
+      TestEnvironment::runfilesPath("/test/config/integration/certs/servercert.pem"));
+  tls_certificate->mutable_private_key()->set_filename(
+      TestEnvironment::runfilesPath("/test/config/integration/certs/serverkey.pem"));
 }
 
 void ConfigHelper::renameListener(const std::string& name) {
@@ -493,7 +460,7 @@ void EdsHelper::setEds(
   // FilesystemSubscriptionImpl is subscribed to.
   std::string path =
       TestEnvironment::writeStringToFileForTest("eds.update.pb_text", eds_response.DebugString());
-  TestUtility::renameFile(path, eds_path_);
+  RELEASE_ASSERT(::rename(path.c_str(), eds_path_.c_str()) == 0, "");
   // Make sure Envoy has consumed the update now that it is running.
   server_stats.waitForCounterGe("cluster.cluster_0.update_success", ++update_successes_);
   RELEASE_ASSERT(

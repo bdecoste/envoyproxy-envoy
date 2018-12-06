@@ -5,7 +5,6 @@
 #include "envoy/common/pure.h"
 
 namespace Envoy {
-
 /**
  * Less typing for common system time and steady time type.
  *
@@ -16,21 +15,28 @@ typedef std::chrono::time_point<std::chrono::system_clock> SystemTime;
 typedef std::chrono::time_point<std::chrono::steady_clock> MonotonicTime;
 
 /**
- * Captures a system-time source, capable of computing both monotonically increasing
- * and real time.
+ * Abstraction for getting the current system time. Useful for testing.
  */
-class TimeSource {
+class SystemTimeSource {
 public:
-  virtual ~TimeSource() {}
+  virtual ~SystemTimeSource() {}
 
   /**
-   * @return the current system time; not guaranteed to be monotonically increasing.
+   * @return the current system time.
    */
-  virtual SystemTime systemTime() PURE;
+  virtual SystemTime currentTime() PURE;
+};
+
+/**
+ * Abstraction for getting the current monotonically increasing time. Useful for testing.
+ */
+class MonotonicTimeSource {
+public:
+  virtual ~MonotonicTimeSource() {}
+
   /**
    * @return the current monotonic time.
    */
-  virtual MonotonicTime monotonicTime() PURE;
+  virtual MonotonicTime currentTime() PURE;
 };
-
 } // namespace Envoy

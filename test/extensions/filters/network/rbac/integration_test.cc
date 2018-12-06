@@ -19,7 +19,7 @@ class RoleBasedAccessControlNetworkFilterIntegrationTest
       public testing::TestWithParam<Network::Address::IpVersion> {
 public:
   RoleBasedAccessControlNetworkFilterIntegrationTest()
-      : BaseIntegrationTest(GetParam(), realTime(), rbac_config) {}
+      : BaseIntegrationTest(GetParam(), rbac_config) {}
 
   static void SetUpTestCase() {
     rbac_config = ConfigHelper::BASE_CONFIG + R"EOF(

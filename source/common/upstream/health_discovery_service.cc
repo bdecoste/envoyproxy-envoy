@@ -81,16 +81,7 @@ HdsDelegate::sendResponse() {
         if (host->healthy()) {
           endpoint->set_health_status(envoy::api::v2::core::HealthStatus::HEALTHY);
         } else {
-          if (host->getActiveHealthFailureType() == Host::ActiveHealthFailureType::TIMEOUT) {
-            endpoint->set_health_status(envoy::api::v2::core::HealthStatus::TIMEOUT);
-          } else if (host->getActiveHealthFailureType() ==
-                     Host::ActiveHealthFailureType::UNHEALTHY) {
-            endpoint->set_health_status(envoy::api::v2::core::HealthStatus::UNHEALTHY);
-          } else if (host->getActiveHealthFailureType() == Host::ActiveHealthFailureType::UNKNOWN) {
-            endpoint->set_health_status(envoy::api::v2::core::HealthStatus::UNHEALTHY);
-          } else {
-            NOT_REACHED_GCOVR_EXCL_LINE;
-          }
+          endpoint->set_health_status(envoy::api::v2::core::HealthStatus::UNHEALTHY);
         }
       }
     }
@@ -160,12 +151,11 @@ void HdsDelegate::onReceiveMessage(
   // Reset
   hds_clusters_.clear();
 
-  // Set response
-  server_response_ms_ = PROTOBUF_GET_MS_REQUIRED(*message, interval);
-
   // Process the HealthCheckSpecifier message
   processMessage(std::move(message));
 
+  // Set response
+  server_response_ms_ = PROTOBUF_GET_MS_REQUIRED(*message, interval);
   setHdsStreamResponseTimer();
 }
 
@@ -197,11 +187,11 @@ HdsCluster::HdsCluster(Runtime::Loader& runtime, const envoy::api::v2::Cluster& 
                                      added_via_api_, cm, local_info, dispatcher, random);
 
   for (const auto& host : cluster.hosts()) {
-    initial_hosts_->emplace_back(new HostImpl(
-        info_, "", Network::Address::resolveProtoAddress(host),
-        envoy::api::v2::core::Metadata::default_instance(), 1,
-        envoy::api::v2::core::Locality().default_instance(),
-        envoy::api::v2::endpoint::Endpoint::HealthCheckConfig().default_instance(), 0));
+    initial_hosts_->emplace_back(
+        new HostImpl(info_, "", Network::Address::resolveProtoAddress(host),
+                     envoy::api::v2::core::Metadata::default_instance(), 1,
+                     envoy::api::v2::core::Locality().default_instance(),
+                     envoy::api::v2::endpoint::Endpoint::HealthCheckConfig().default_instance()));
   }
   initialize([] {});
 }
@@ -230,7 +220,6 @@ ClusterInfoConstSharedPtr ProdClusterInfoFactory::createClusterInfo(
   Envoy::Server::Configuration::TransportSocketFactoryContextImpl factory_context(
       ssl_context_manager, *scope, cm, local_info, dispatcher, random, stats);
 
-  // TODO(JimmyCYJ): Support SDS for HDS cluster.
   Network::TransportSocketFactoryPtr socket_factory =
       Upstream::createTransportSocketFactory(cluster, factory_context);
 

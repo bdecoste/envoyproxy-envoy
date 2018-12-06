@@ -4,19 +4,20 @@
 
 #include "envoy/event/timer.h"
 
+#include "common/event/dispatcher_impl.h"
 #include "common/event/event_impl_base.h"
 
 namespace Envoy {
 namespace Event {
 
 /**
- * libevent implementation of Timer.
+ * libevent implementation of Event::Timer.
  */
 class TimerImpl : public Timer, ImplBase {
 public:
-  TimerImpl(Libevent::BasePtr& libevent, TimerCb cb);
+  TimerImpl(DispatcherImpl& dispatcher, TimerCb cb);
 
-  // Timer
+  // Event::Timer
   void disableTimer() override;
   void enableTimer(const std::chrono::milliseconds& d) override;
 

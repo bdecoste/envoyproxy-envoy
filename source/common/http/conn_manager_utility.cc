@@ -19,13 +19,13 @@ namespace Envoy {
 namespace Http {
 
 Network::Address::InstanceConstSharedPtr ConnectionManagerUtility::mutateRequestHeaders(
-    Http::HeaderMap& request_headers, Network::Connection& connection,
+    Http::HeaderMap& request_headers, Protocol protocol, Network::Connection& connection,
     ConnectionManagerConfig& config, const Router::Config& route_config,
     Runtime::RandomGenerator& random, Runtime::Loader& runtime,
     const LocalInfo::LocalInfo& local_info) {
   // If this is a Upgrade request, do not remove the Connection and Upgrade headers,
   // as we forward them verbatim to the upstream hosts.
-  if (Utility::isUpgrade(request_headers)) {
+  if (protocol == Protocol::Http11 && Utility::isUpgrade(request_headers)) {
     // The current WebSocket implementation re-uses the HTTP1 codec to send upgrade headers to
     // the upstream host. This adds the "transfer-encoding: chunked" request header if the stream
     // has not ended and content-length does not exist. In HTTP1.1, if transfer-encoding and
@@ -102,9 +102,8 @@ Network::Address::InstanceConstSharedPtr ConnectionManagerUtility::mutateRequest
   // HUGE WARNING: The way we do this is not optimal but is how it worked "from the beginning" so
   //               we can't change it at this point. In the future we will likely need to add
   //               additional inference modes and make this mode legacy.
-  const bool internal_request =
-      single_xff_address && final_remote_address != nullptr &&
-      config.internalAddressConfig().isInternalAddress(*final_remote_address);
+  const bool internal_request = single_xff_address && final_remote_address != nullptr &&
+                                Network::Utility::isInternalAddress(*final_remote_address);
 
   // After determining internal request status, if there is no final remote address, due to no XFF,
   // busted XFF, etc., use the direct connection remote address for logging.
@@ -127,7 +126,6 @@ Network::Address::InstanceConstSharedPtr ConnectionManagerUtility::mutateRequest
       request_headers.removeEnvoyDownstreamServiceNode();
     }
 
-    request_headers.removeEnvoyRetriableStatusCodes();
     request_headers.removeEnvoyRetryOn();
     request_headers.removeEnvoyRetryGrpcOn();
     request_headers.removeEnvoyMaxRetries();

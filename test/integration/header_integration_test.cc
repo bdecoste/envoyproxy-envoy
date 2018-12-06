@@ -51,7 +51,6 @@ route_config:
         - header:
             key: "x-vhost-request"
             value: "vhost"
-      request_headers_to_remove: ["x-vhost-request-remove"]
       response_headers_to_add:
         - header:
             key: "x-vhost-response"
@@ -61,30 +60,28 @@ route_config:
         - match: { prefix: "/vhost-only" }
           route: { cluster: "cluster_0" }
         - match: { prefix: "/vhost-and-route" }
-          request_headers_to_add:
-            - header:
-                key: "x-route-request"
-                value: "route"
-          request_headers_to_remove: ["x-route-request-remove"]
-          response_headers_to_add:
-            - header:
-                key: "x-route-response"
-                value: "route"
-          response_headers_to_remove: ["x-route-response-remove"]
           route:
             cluster: cluster_0
+            request_headers_to_add:
+              - header:
+                  key: "x-route-request"
+                  value: "route"
+            response_headers_to_add:
+              - header:
+                  key: "x-route-response"
+                  value: "route"
+            response_headers_to_remove: ["x-route-response-remove"]
         - match: { prefix: "/vhost-route-and-weighted-clusters" }
-          request_headers_to_add:
-            - header:
-                key: "x-route-request"
-                value: "route"
-          request_headers_to_remove: ["x-route-request-remove"]
-          response_headers_to_add:
-            - header:
-                key: "x-route-response"
-                value: "route"
-          response_headers_to_remove: ["x-route-response-remove"]
           route:
+            request_headers_to_add:
+              - header:
+                  key: "x-route-request"
+                  value: "route"
+            response_headers_to_add:
+              - header:
+                  key: "x-route-response"
+                  value: "route"
+            response_headers_to_remove: ["x-route-response-remove"]
             weighted_clusters:
               clusters:
                 - name: cluster_0
@@ -93,7 +90,6 @@ route_config:
                     - header:
                         key: "x-weighted-cluster-request"
                         value: "weighted-cluster-1"
-                  request_headers_to_remove: ["x-weighted-cluster-request-remove"]
                   response_headers_to_add:
                     - header:
                         key: "x-weighted-cluster-response"
@@ -103,18 +99,17 @@ route_config:
       domains: ["route-headers.com"]
       routes:
         - match: { prefix: "/route-only" }
-          request_headers_to_add:
-            - header:
-                key: "x-route-request"
-                value: "route"
-          request_headers_to_remove: ["x-route-request-remove"]
-          response_headers_to_add:
-            - header:
-                key: "x-route-response"
-                value: "route"
-          response_headers_to_remove: ["x-route-response-remove"]
           route:
             cluster: cluster_0
+            request_headers_to_add:
+              - header:
+                  key: "x-route-request"
+                  value: "route"
+            response_headers_to_add:
+              - header:
+                  key: "x-route-response"
+                  value: "route"
+            response_headers_to_remove: ["x-route-response-remove"]
     - name: xff-headers
       domains: ["xff-headers.com"]
       routes:
@@ -125,26 +120,6 @@ route_config:
               - header:
                   key: "x-real-ip"
                   value: "%DOWNSTREAM_REMOTE_ADDRESS_WITHOUT_PORT%"
-    - name: append-same-headers
-      domains: ["append-same-headers.com"]
-      request_headers_to_add:
-        - header:
-            key: "x-foo"
-            value: "value1"
-        - header:
-            key: "authorization"
-            value: "token1"
-      routes:
-        - match: { prefix: "/test" }
-          route:
-            cluster: cluster_0
-            request_headers_to_add:
-              - header:
-                  key: "x-foo"
-                  value: "value2"
-              - header:
-                  key: "authorization"
-                  value: "token2"
 )EOF";
 
 } // namespace
@@ -154,7 +129,7 @@ class HeaderIntegrationTest
       public testing::TestWithParam<std::tuple<Network::Address::IpVersion, bool>> {
 public:
   HeaderIntegrationTest()
-      : HttpIntegrationTest(Http::CodecClient::Type::HTTP1, std::get<0>(GetParam()), realTime()) {}
+      : HttpIntegrationTest(Http::CodecClient::Type::HTTP1, std::get<0>(GetParam())) {}
 
   bool routerSuppressEnvoyHeaders() const { return std::get<1>(GetParam()); }
 
@@ -264,7 +239,6 @@ public:
             route_config->add_response_headers_to_remove("x-routeconfig-response-remove");
             addHeader(route_config->mutable_request_headers_to_add(), "x-routeconfig-request",
                       "routeconfig", append);
-            route_config->add_request_headers_to_remove("x-routeconfig-request-remove");
           }
 
           if (use_eds_) {
@@ -277,14 +251,14 @@ public:
               addHeader(vhost.mutable_response_headers_to_add(), "x-vhost-dynamic",
                         "vhost:%UPSTREAM_METADATA([\"test.namespace\", \"key\"])%", append);
 
-              for (auto& route : *vhost.mutable_routes()) {
-                addHeader(route.mutable_response_headers_to_add(), "x-route-dynamic",
-                          "route:%UPSTREAM_METADATA([\"test.namespace\", \"key\"])%", append);
+              for (auto& rte : *vhost.mutable_routes()) {
+                if (rte.has_route()) {
+                  auto* mutable_rte = rte.mutable_route();
+                  addHeader(mutable_rte->mutable_response_headers_to_add(), "x-route-dynamic",
+                            "route:%UPSTREAM_METADATA([\"test.namespace\", \"key\"])%", append);
 
-                if (route.has_route()) {
-                  auto* route_action = route.mutable_route();
-                  if (route_action->has_weighted_clusters()) {
-                    for (auto& c : *route_action->mutable_weighted_clusters()->mutable_clusters()) {
+                  if (mutable_rte->has_weighted_clusters()) {
+                    for (auto& c : *mutable_rte->mutable_weighted_clusters()->mutable_clusters()) {
                       addHeader(c.mutable_response_headers_to_add(), "x-weighted-cluster-dynamic",
                                 "weighted:%UPSTREAM_METADATA([\"test.namespace\", \"key\"])%",
                                 append);
@@ -305,18 +279,15 @@ public:
             disableHeaderValueOptionAppend(*vhost.mutable_request_headers_to_add());
             disableHeaderValueOptionAppend(*vhost.mutable_response_headers_to_add());
 
-            for (auto& route : *vhost.mutable_routes()) {
-              disableHeaderValueOptionAppend(*route.mutable_request_headers_to_add());
-              disableHeaderValueOptionAppend(*route.mutable_response_headers_to_add());
+            for (auto& rte : *vhost.mutable_routes()) {
+              if (rte.has_route()) {
+                auto* mutable_rte = rte.mutable_route();
 
-              if (route.has_route()) {
-                auto* route_action = route.mutable_route();
+                disableHeaderValueOptionAppend(*mutable_rte->mutable_request_headers_to_add());
+                disableHeaderValueOptionAppend(*mutable_rte->mutable_response_headers_to_add());
 
-                disableHeaderValueOptionAppend(*route_action->mutable_request_headers_to_add());
-                disableHeaderValueOptionAppend(*route_action->mutable_response_headers_to_add());
-
-                if (route_action->has_weighted_clusters()) {
-                  for (auto& c : *route_action->mutable_weighted_clusters()->mutable_clusters()) {
+                if (mutable_rte->has_weighted_clusters()) {
+                  for (auto& c : *mutable_rte->mutable_weighted_clusters()->mutable_clusters()) {
                     disableHeaderValueOptionAppend(*c.mutable_request_headers_to_add());
                     disableHeaderValueOptionAppend(*c.mutable_response_headers_to_add());
                   }
@@ -333,8 +304,7 @@ public:
     HttpIntegrationTest::createUpstreams();
 
     if (use_eds_) {
-      fake_upstreams_.emplace_back(
-          new FakeUpstream(0, FakeHttpConnection::Type::HTTP2, version_, timeSystem()));
+      fake_upstreams_.emplace_back(new FakeUpstream(0, FakeHttpConnection::Type::HTTP2, version_));
     }
   }
 
@@ -467,7 +437,6 @@ TEST_P(HeaderIntegrationTest, TestVirtualHostAppendHeaderManipulation) {
           {":scheme", "http"},
           {":authority", "vhost-headers.com"},
           {"x-vhost-request", "downstream"},
-          {"x-vhost-request-remove", "downstream"},
       },
       Http::TestHeaderMapImpl{
           {":authority", "vhost-headers.com"},
@@ -535,7 +504,6 @@ TEST_P(HeaderIntegrationTest, TestRouteAppendHeaderManipulation) {
           {":scheme", "http"},
           {":authority", "route-headers.com"},
           {"x-route-request", "downstream"},
-          {"x-route-request-remove", "downstream"},
       },
       Http::TestHeaderMapImpl{
           {":authority", "route-headers.com"},
@@ -569,7 +537,6 @@ TEST_P(HeaderIntegrationTest, TestRouteReplaceHeaderManipulation) {
           {":scheme", "http"},
           {":authority", "route-headers.com"},
           {"x-route-request", "downstream"},
-          {"x-route-request-remove", "downstream"},
           {"x-unmodified", "downstream"},
       },
       Http::TestHeaderMapImpl{
@@ -605,9 +572,7 @@ TEST_P(HeaderIntegrationTest, TestVirtualHostAndRouteAppendHeaderManipulation) {
           {":scheme", "http"},
           {":authority", "vhost-headers.com"},
           {"x-vhost-request", "downstream"},
-          {"x-vhost-request-remove", "downstream"},
           {"x-route-request", "downstream"},
-          {"x-route-request-remove", "downstream"},
       },
       Http::TestHeaderMapImpl{
           {":authority", "vhost-headers.com"},
@@ -686,11 +651,8 @@ TEST_P(HeaderIntegrationTest, TestRouteConfigVirtualHostAndRouteAppendHeaderMani
           {":scheme", "http"},
           {":authority", "vhost-headers.com"},
           {"x-routeconfig-request", "downstream"},
-          {"x-routeconfig-request-remove", "downstream"},
           {"x-vhost-request", "downstream"},
-          {"x-vhost-request-remove", "downstream"},
           {"x-route-request", "downstream"},
-          {"x-route-request-remove", "downstream"},
       },
       Http::TestHeaderMapImpl{
           {":authority", "vhost-headers.com"},
@@ -780,13 +742,9 @@ TEST_P(HeaderIntegrationTest, TestRouteConfigVirtualHostRouteAndClusterAppendHea
           {":scheme", "http"},
           {":authority", "vhost-headers.com"},
           {"x-routeconfig-request", "downstream"},
-          {"x-routeconfig-request-remove", "downstream"},
           {"x-vhost-request", "downstream"},
-          {"x-vhost-request-remove", "downstream"},
           {"x-route-request", "downstream"},
-          {"x-route-request-remove", "downstream"},
           {"x-weighted-cluster-request", "downstream"},
-          {"x-weighted-cluster-request-remove", "downstream"},
       },
       Http::TestHeaderMapImpl{
           {":authority", "vhost-headers.com"},
@@ -943,41 +901,6 @@ TEST_P(HeaderIntegrationTest, TestXFFParsing) {
           {"x-real-ip", "5.6.7.8"},
           {":path", "/test"},
           {":method", "GET"},
-      },
-      Http::TestHeaderMapImpl{
-          {"server", "envoy"},
-          {"content-length", "0"},
-          {":status", "200"},
-          {"x-unmodified", "response"},
-      },
-      Http::TestHeaderMapImpl{
-          {"server", "envoy"},
-          {"x-unmodified", "response"},
-          {":status", "200"},
-      });
-}
-
-// Validates behavior around same header appending (both predefined headers and
-// other).
-TEST_P(HeaderIntegrationTest, TestAppendSameHeaders) {
-  initializeFilter(HeaderMode::Append, false);
-  performRequest(
-      Http::TestHeaderMapImpl{
-          {":method", "GET"},
-          {":path", "/test"},
-          {":scheme", "http"},
-          {":authority", "append-same-headers.com"},
-          {"authorization", "token3"},
-          {"x-foo", "value3"},
-      },
-      Http::TestHeaderMapImpl{
-          {":authority", "append-same-headers.com"},
-          {":path", "/test"},
-          {":method", "GET"},
-          {"authorization", "token3,token2,token1"},
-          {"x-foo", "value3"},
-          {"x-foo", "value2"},
-          {"x-foo", "value1"},
       },
       Http::TestHeaderMapImpl{
           {"server", "envoy"},

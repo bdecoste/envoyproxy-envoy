@@ -12,6 +12,8 @@ namespace GrpcHttp1Bridge {
  */
 class Http1BridgeFilter : public Http::StreamFilter {
 public:
+  Http1BridgeFilter(Upstream::ClusterManager& cm) : cm_(cm) {}
+
   // Http::StreamFilterBase
   void onDestroy() override {}
 
@@ -42,6 +44,7 @@ private:
   void chargeStat(const Http::HeaderMap& headers);
   void setupStatTracking(const Http::HeaderMap& headers);
 
+  Upstream::ClusterManager& cm_;
   Http::StreamDecoderFilterCallbacks* decoder_callbacks_{};
   Http::StreamEncoderFilterCallbacks* encoder_callbacks_{};
   Http::HeaderMap* response_headers_{};

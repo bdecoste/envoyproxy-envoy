@@ -29,16 +29,15 @@ public:
                    const std::string& request_vcluster_name = EMPTY_STRING,
                    const std::string& from_az = EMPTY_STRING,
                    const std::string& to_az = EMPTY_STRING) {
-    Http::CodeStats::ResponseStatInfo info{
+    CodeUtility::ResponseStatInfo info{
         global_store_,      cluster_scope_,        "prefix.", code,  internal_request,
         request_vhost_name, request_vcluster_name, from_az,   to_az, canary};
 
-    code_stats_.chargeResponseStat(info);
+    CodeUtility::chargeResponseStat(info);
   }
 
   Stats::IsolatedStoreImpl global_store_;
   Stats::IsolatedStoreImpl cluster_scope_;
-  Http::CodeStatsImpl code_stats_;
 };
 
 TEST_F(CodeUtilityTest, GroupStrings) {
@@ -201,7 +200,7 @@ TEST(CodeUtilityResponseTimingTest, All) {
   Stats::MockStore global_store;
   Stats::MockStore cluster_scope;
 
-  Http::CodeStats::ResponseTimingInfo info{
+  CodeUtility::ResponseTimingInfo info{
       global_store, cluster_scope, "prefix.",    std::chrono::milliseconds(5),
       true,         true,          "vhost_name", "req_vcluster_name",
       "from_az",    "to_az"};
@@ -231,34 +230,7 @@ TEST(CodeUtilityResponseTimingTest, All) {
   EXPECT_CALL(cluster_scope,
               deliverHistogramToSinks(
                   Property(&Stats::Metric::name, "prefix.zone.from_az.to_az.upstream_rq_time"), 5));
-  Http::CodeStatsImpl code_stats;
-  code_stats.chargeResponseTiming(info);
-}
-
-class CodeStatsTest : public testing::Test {
-protected:
-  absl::string_view stripTrailingDot(absl::string_view prefix) {
-    return CodeStatsImpl::stripTrailingDot(prefix);
-  }
-
-  std::string join(const std::vector<absl::string_view>& v) { return CodeStatsImpl::join(v); }
-
-  CodeStatsImpl code_stats_;
-};
-
-TEST_F(CodeStatsTest, StripTrailingDot) {
-  EXPECT_EQ("", stripTrailingDot(""));
-  EXPECT_EQ("foo", stripTrailingDot("foo."));
-  EXPECT_EQ(".foo", stripTrailingDot(".foo"));  // no change
-  EXPECT_EQ("foo.", stripTrailingDot("foo..")); // only one dot gets stripped.
-}
-
-TEST_F(CodeStatsTest, Join) {
-  EXPECT_EQ("hello.world", join({"hello", "world"}));
-  EXPECT_EQ("hello.world", join({"", "hello", "world"})); // leading empty token ignored.
-  EXPECT_EQ("hello.", join({"hello", ""}));               // trailign empty token not ignored.
-  EXPECT_EQ("hello", join({"hello"}));
-  EXPECT_EQ("", join({""}));
+  CodeUtility::chargeResponseTiming(info);
 }
 
 } // namespace Http

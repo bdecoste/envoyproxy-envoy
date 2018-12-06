@@ -7,10 +7,8 @@ virtual_hosts:
   routes:
   - match:
       prefix: "/foo/bar"
-      runtime_fraction:
-        default_value:
-          numerator: 0
-          denominator: HUNDRED
+      runtime:
+        default_value: 0
         runtime_key: routing.www.use_service_2
     route:
       {{ helper.make_route('service2')|indent(4) }}

@@ -4,16 +4,14 @@
 
 #include "envoy/access_log/access_log.h"
 #include "envoy/api/v2/core/base.pb.h"
-#include "envoy/http/codes.h"
-#include "envoy/http/context.h"
 #include "envoy/http/filter.h"
 #include "envoy/init/init.h"
 #include "envoy/json/json_object.h"
 #include "envoy/network/drain_decision.h"
 #include "envoy/network/filter.h"
+#include "envoy/ratelimit/ratelimit.h"
 #include "envoy/runtime/runtime.h"
 #include "envoy/server/admin.h"
-#include "envoy/server/overload_manager.h"
 #include "envoy/singleton/manager.h"
 #include "envoy/stats/scope.h"
 #include "envoy/thread_local/thread_local.h"
@@ -90,6 +88,12 @@ public:
   virtual Envoy::Runtime::RandomGenerator& random() PURE;
 
   /**
+   * @return a new ratelimit client. The implementation depends on the configuration of the server.
+   */
+  virtual RateLimit::ClientPtr
+  rateLimitClient(const absl::optional<std::chrono::milliseconds>& timeout) PURE;
+
+  /**
    * @return Runtime::Loader& the singleton runtime loader for the server.
    */
   virtual Envoy::Runtime::Loader& runtime() PURE;
@@ -127,19 +131,9 @@ public:
   virtual const envoy::api::v2::core::Metadata& listenerMetadata() const PURE;
 
   /**
-   * @return TimeSource& a reference to the time source.
+   * @return SystemTimeSource& a reference to the top-level SystemTime source.
    */
-  virtual TimeSource& timeSource() PURE;
-
-  /**
-   * @return OverloadManager& the overload manager for the server.
-   */
-  virtual OverloadManager& overloadManager() PURE;
-
-  /**
-   * @return Http::Context& a reference to the http context.
-   */
-  virtual Http::Context& httpContext() PURE;
+  virtual SystemTimeSource& systemTimeSource() PURE;
 };
 
 class ListenerFactoryContext : public FactoryContext {
@@ -188,38 +182,10 @@ public:
 };
 
 /**
- * Implemented by filter factories that require more options to process the protocol used by the
- * upstream cluster.
- */
-class ProtocolOptionsFactory {
-public:
-  virtual ~ProtocolOptionsFactory() {}
-
-  /**
-   * Create a particular filter's protocol specific options implementation. If the factory
-   * implementation is unable to produce a factory with the provided parameters, it should throw an
-   * EnvoyException.
-   * @param config supplies the protobuf configuration for the filter
-   * @return Upstream::ProtocoOptionsConfigConstSharedPtr the protocol options
-   */
-  virtual Upstream::ProtocolOptionsConfigConstSharedPtr
-  createProtocolOptionsConfig(const Protobuf::Message& config) {
-    UNREFERENCED_PARAMETER(config);
-    return nullptr;
-  }
-
-  /**
-   * @return ProtobufTypes::MessagePtr a newly created empty protocol specific options message or
-   *         nullptr if protocol specific options are not available.
-   */
-  virtual ProtobufTypes::MessagePtr createEmptyProtocolOptionsProto() { return nullptr; }
-};
-
-/**
  * Implemented by each network filter and registered via Registry::registerFactory()
  * or the convenience class RegisterFactory.
  */
-class NamedNetworkFilterConfigFactory : public ProtocolOptionsFactory {
+class NamedNetworkFilterConfigFactory {
 public:
   virtual ~NamedNetworkFilterConfigFactory() {}
 
@@ -255,6 +221,25 @@ public:
   virtual ProtobufTypes::MessagePtr createEmptyConfigProto() { return nullptr; }
 
   /**
+   * Create a particular network filter's protocol specific options implementation. If the factory
+   * implementation is unable to produce a factory with the provided parameters, it should throw an
+   * EnvoyException.
+   * @param config supplies the protobuf configuration for the filter
+   * @return Upstream::ProtocoOptionsConfigConstSharedPtr the protocol options
+   */
+  virtual Upstream::ProtocolOptionsConfigConstSharedPtr
+  createProtocolOptionsConfig(const Protobuf::Message& config) {
+    UNREFERENCED_PARAMETER(config);
+    return nullptr;
+  }
+
+  /**
+   * @return ProtobufTypes::MessagePtr a newly created empty protocol specific options message or
+   *         nullptr if protocol specific options are not available.
+   */
+  virtual ProtobufTypes::MessagePtr createEmptyProtocolOptionsProto() { return nullptr; }
+
+  /**
    * @return std::string the identifying name for a particular implementation of a network filter
    * produced by the factory.
    */
@@ -265,7 +250,7 @@ public:
  * Implemented by each HTTP filter and registered via Registry::registerFactory or the
  * convenience class RegisterFactory.
  */
-class NamedHttpFilterConfigFactory : public ProtocolOptionsFactory {
+class NamedHttpFilterConfigFactory {
 public:
   virtual ~NamedHttpFilterConfigFactory() {}
 

@@ -1,13 +1,10 @@
 #include "extensions/filters/http/squash/squash_filter.h"
 
-#include <memory>
-
 #include "envoy/http/codes.h"
 
 #include "common/common/empty_string.h"
 #include "common/common/enum_to_int.h"
 #include "common/common/logger.h"
-#include "common/common/stack_array.h"
 #include "common/http/headers.h"
 #include "common/http/message_impl.h"
 #include "common/http/utility.h"
@@ -148,13 +145,12 @@ Http::FilterHeadersStatus SquashFilter::decodeHeaders(Http::HeaderMap& headers, 
   request->headers().insertPath().value().setReference(POST_ATTACHMENT_PATH);
   request->headers().insertHost().value().setReference(SERVER_AUTHORITY);
   request->headers().insertMethod().value().setReference(Http::Headers::get().MethodValues.Post);
-  request->body() = std::make_unique<Buffer::OwnedImpl>(config_->attachmentJson());
+  request->body().reset(new Buffer::OwnedImpl(config_->attachmentJson()));
 
   is_squashing_ = true;
   in_flight_request_ =
       cm_.httpAsyncClientForCluster(config_->clusterName())
-          .send(std::move(request), create_attachment_callback_,
-                Http::AsyncClient::RequestOptions().setTimeout(config_->requestTimeout()));
+          .send(std::move(request), create_attachment_callback_, config_->requestTimeout());
 
   if (in_flight_request_ == nullptr) {
     ENVOY_LOG(debug, "Squash: can't create request for squash server");
@@ -273,8 +269,7 @@ void SquashFilter::pollForAttachment() {
 
   in_flight_request_ =
       cm_.httpAsyncClientForCluster(config_->clusterName())
-          .send(std::move(request), check_attachment_callback_,
-                Http::AsyncClient::RequestOptions().setTimeout(config_->requestTimeout()));
+          .send(std::move(request), check_attachment_callback_, config_->requestTimeout());
   // No need to check if in_flight_request_ is null as onFailure will take care of
   // cleanup.
 }
@@ -308,10 +303,10 @@ void SquashFilter::cleanup() {
 Json::ObjectSharedPtr SquashFilter::getJsonBody(Http::MessagePtr&& m) {
   Buffer::InstancePtr& data = m->body();
   uint64_t num_slices = data->getRawSlices(nullptr, 0);
-  STACK_ARRAY(slices, Buffer::RawSlice, num_slices);
-  data->getRawSlices(slices.begin(), num_slices);
+  Buffer::RawSlice slices[num_slices];
+  data->getRawSlices(slices, num_slices);
   std::string jsonbody;
-  for (const Buffer::RawSlice& slice : slices) {
+  for (Buffer::RawSlice& slice : slices) {
     jsonbody += std::string(static_cast<const char*>(slice.mem_), slice.len_);
   }
 

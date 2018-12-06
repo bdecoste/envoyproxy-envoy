@@ -78,8 +78,6 @@ public:
     }
   }
 
-  bool match(const absl::string_view value) const;
-
   bool match(const ProtobufWkt::Value& value) const override;
 
 private:

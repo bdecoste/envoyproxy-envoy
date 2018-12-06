@@ -6,12 +6,10 @@
 
 #include "envoy/access_log/access_log.h"
 #include "envoy/api/api.h"
-#include "envoy/common/mutex_tracer.h"
-#include "envoy/event/timer.h"
-#include "envoy/http/context.h"
 #include "envoy/init/init.h"
 #include "envoy/local_info/local_info.h"
 #include "envoy/network/listen_socket.h"
+#include "envoy/ratelimit/ratelimit.h"
 #include "envoy/runtime/runtime.h"
 #include "envoy/secret/secret_manager.h"
 #include "envoy/server/admin.h"
@@ -118,11 +116,6 @@ public:
   virtual ListenerManager& listenerManager() PURE;
 
   /**
-   * @return the server's global mutex tracer, if it was instantiated. Nullptr otherwise.
-   */
-  virtual Envoy::MutexTracer* mutexTracer() PURE;
-
-  /**
    * @return the server's overload manager.
    */
   virtual OverloadManager& overloadManager() PURE;
@@ -143,6 +136,12 @@ public:
   virtual Runtime::RandomGenerator& random() PURE;
 
   /**
+   * @return a new ratelimit client. The implementation depends on the configuration of the server.
+   */
+  virtual RateLimit::ClientPtr
+  rateLimitClient(const absl::optional<std::chrono::milliseconds>& timeout) PURE;
+
+  /**
    * @return Runtime::Loader& the singleton runtime loader for the server.
    */
   virtual Runtime::Loader& runtime() PURE;
@@ -151,11 +150,6 @@ public:
    * Shutdown the server gracefully.
    */
   virtual void shutdown() PURE;
-
-  /**
-   * @return whether the shutdown method has been called.
-   */
-  virtual bool isShutdown() PURE;
 
   /**
    * Shutdown the server's admin processing. This includes the admin API, stat flushing, etc.
@@ -183,9 +177,9 @@ public:
   virtual Stats::Store& stats() PURE;
 
   /**
-   * @return the server-wide http context.
+   * @return the server-wide http tracer.
    */
-  virtual Http::Context& httpContext() PURE;
+  virtual Tracing::HttpTracer& httpTracer() PURE;
 
   /**
    * @return ThreadLocal::Instance& the thread local storage engine for the server. This is used to
@@ -197,11 +191,6 @@ public:
    * @return information about the local environment the server is running in.
    */
   virtual const LocalInfo::LocalInfo& localInfo() PURE;
-
-  /**
-   * @return the time system used for the server.
-   */
-  virtual Event::TimeSystem& timeSystem() PURE;
 
   /**
    * @return the flush interval of stats sinks.

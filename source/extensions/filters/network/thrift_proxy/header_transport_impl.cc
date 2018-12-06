@@ -7,6 +7,7 @@
 #include "common/buffer/buffer_impl.h"
 
 #include "extensions/filters/network/thrift_proxy/buffer_helper.h"
+#include "extensions/filters/network/thrift_proxy/transport_impl.h"
 
 namespace Envoy {
 namespace Extensions {
@@ -49,7 +50,7 @@ bool HeaderTransportImpl::decodeFrameStart(Buffer::Instance& buffer, MessageMeta
   }
 
   // Size of frame, not including the length bytes.
-  const int32_t frame_size = buffer.peekBEInt<int32_t>();
+  const int32_t frame_size = BufferHelper::peekI32(buffer);
 
   // Minimum header frame size is 18 bytes (4 bytes of frame size + 10 bytes of fixed header +
   // minimum 4 bytes of variable header data), so frame_size must be at least 14.
@@ -57,17 +58,17 @@ bool HeaderTransportImpl::decodeFrameStart(Buffer::Instance& buffer, MessageMeta
     throw EnvoyException(fmt::format("invalid thrift header transport frame size {}", frame_size));
   }
 
-  int16_t magic = buffer.peekBEInt<uint16_t>(4);
+  int16_t magic = BufferHelper::peekU16(buffer, 4);
   if (!isMagic(magic)) {
     throw EnvoyException(fmt::format("invalid thrift header transport magic {:04x}", magic));
   }
 
   // offset 6: 16 bit flags field, unused
   // offset 8: 32 bit sequence number field
-  int32_t seq_id = buffer.peekBEInt<int32_t>(8);
+  int32_t seq_id = BufferHelper::peekI32(buffer, 8);
 
   // offset 12: 16 bit (remaining) header size / 4 (spec erroneously claims / 32).
-  int16_t raw_header_size = buffer.peekBEInt<int16_t>(12);
+  int16_t raw_header_size = BufferHelper::peekI16(buffer, 12);
   int32_t header_size = static_cast<int32_t>(raw_header_size) * 4;
   if (header_size < 0 || header_size > MaxHeadersSize) {
     throw EnvoyException(fmt::format("invalid thrift header transport header size {} ({:04x})",
@@ -143,10 +144,9 @@ bool HeaderTransportImpl::decodeFrameStart(Buffer::Instance& buffer, MessageMeta
     }
 
     while (num_headers-- > 0) {
-      const Http::LowerCaseString key =
-          Http::LowerCaseString(drainVarString(buffer, header_size, "header key"));
-      const std::string value = drainVarString(buffer, header_size, "header value");
-      metadata.headers().addCopy(key, value);
+      std::string key = drainVarString(buffer, header_size, "header key");
+      std::string value = drainVarString(buffer, header_size, "header value");
+      metadata.addHeader(Header(key, value));
     }
   }
 
@@ -172,7 +172,7 @@ void HeaderTransportImpl::encodeFrame(Buffer::Instance& buffer, const MessageMet
     throw EnvoyException(fmt::format("invalid thrift header transport message size {}", msg_size));
   }
 
-  const Http::HeaderMap& headers = metadata.headers();
+  const HeaderMap& headers = metadata.headers();
   if (headers.size() > MaxHeadersSize / 2) {
     // Each header takes a minimum of 2 bytes, yielding this limit.
     throw EnvoyException(
@@ -200,19 +200,15 @@ void HeaderTransportImpl::encodeFrame(Buffer::Instance& buffer, const MessageMet
   BufferHelper::writeVarIntI32(header_buffer, 0); // num transforms
   if (headers.size() > 0) {
     // Info ID 1
-    header_buffer.writeByte(1);
+    BufferHelper::writeI8(header_buffer, 1);
 
     // Num headers
     BufferHelper::writeVarIntI32(header_buffer, static_cast<int32_t>(headers.size()));
 
-    headers.iterate(
-        [](const Http::HeaderEntry& header, void* context) -> Http::HeaderMap::Iterate {
-          Buffer::Instance* hb = static_cast<Buffer::Instance*>(context);
-          writeVarString(*hb, header.key().getStringView());
-          writeVarString(*hb, header.value().getStringView());
-          return Http::HeaderMap::Iterate::Continue;
-        },
-        &header_buffer);
+    for (const Header& header : headers) {
+      writeVarString(header_buffer, header.key());
+      writeVarString(header_buffer, header.value());
+    }
   }
 
   uint64_t header_size = header_buffer.length();
@@ -238,12 +234,11 @@ void HeaderTransportImpl::encodeFrame(Buffer::Instance& buffer, const MessageMet
     seq_id = metadata.sequenceId();
   }
 
-  buffer.writeBEInt<uint32_t>(static_cast<uint32_t>(size));
-  buffer.writeBEInt<uint16_t>(Magic);
-  buffer.writeBEInt<uint16_t>(0); // flags
-  buffer.writeBEInt<int32_t>(seq_id);
-  buffer.writeBEInt<uint16_t>(static_cast<uint16_t>(header_size / 4));
-
+  BufferHelper::writeU32(buffer, static_cast<uint32_t>(size));
+  BufferHelper::writeU16(buffer, Magic);
+  BufferHelper::writeU16(buffer, 0); // flags
+  BufferHelper::writeI32(buffer, seq_id);
+  BufferHelper::writeU16(buffer, static_cast<uint16_t>(header_size / 4));
   buffer.move(header_buffer);
   buffer.move(message);
 }
@@ -291,7 +286,7 @@ std::string HeaderTransportImpl::drainVarString(Buffer::Instance& buffer, int32_
   return value;
 }
 
-void HeaderTransportImpl::writeVarString(Buffer::Instance& buffer, const absl::string_view str) {
+void HeaderTransportImpl::writeVarString(Buffer::Instance& buffer, const std::string& str) {
   std::string::size_type len = str.length();
   if (len > static_cast<uint32_t>(std::numeric_limits<int16_t>::max())) {
     throw EnvoyException(fmt::format("header string too long: {}", len));
@@ -301,7 +296,7 @@ void HeaderTransportImpl::writeVarString(Buffer::Instance& buffer, const absl::s
   if (len == 0) {
     return;
   }
-  buffer.add(str.data(), len);
+  buffer.add(str);
 }
 
 class HeaderTransportConfigFactory : public TransportFactoryBase<HeaderTransportImpl> {

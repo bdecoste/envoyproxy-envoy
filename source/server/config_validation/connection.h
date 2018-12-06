@@ -1,8 +1,4 @@
-#pragma once
-
 #include "common/network/connection_impl.h"
-
-#include "server/config_validation/dispatcher.h"
 
 namespace Envoy {
 namespace Network {

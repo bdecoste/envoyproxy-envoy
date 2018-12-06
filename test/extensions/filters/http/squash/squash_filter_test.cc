@@ -10,7 +10,6 @@
 
 #include "test/mocks/server/mocks.h"
 #include "test/mocks/upstream/mocks.h"
-#include "test/test_common/environment.h"
 #include "test/test_common/utility.h"
 
 #include "fmt/format.h"
@@ -109,7 +108,7 @@ TEST(SoloFilterConfigTest, ParsesEnvironment) {
 }
 
 TEST(SoloFilterConfigTest, ParsesAndEscapesEnvironment) {
-  TestEnvironment::setEnvVar("ESCAPE_ENV", "\"", 1);
+  ::setenv("ESCAPE_ENV", "\"", 1);
 
   std::string json = R"EOF(
     {
@@ -127,8 +126,8 @@ TEST(SoloFilterConfigTest, ParsesAndEscapesEnvironment) {
   EXPECT_JSON_EQ(expected_json, config.attachmentJson());
 }
 TEST(SoloFilterConfigTest, TwoEnvironmentVariables) {
-  TestEnvironment::setEnvVar("ENV1", "1", 1);
-  TestEnvironment::setEnvVar("ENV2", "2", 1);
+  ::setenv("ENV1", "1", 1);
+  ::setenv("ENV2", "2", 1);
 
   std::string json = R"EOF(
     {
@@ -146,7 +145,7 @@ TEST(SoloFilterConfigTest, TwoEnvironmentVariables) {
 }
 
 TEST(SoloFilterConfigTest, ParsesEnvironmentInComplexTemplate) {
-  TestEnvironment::setEnvVar("CONF_ENV", "some-config-value", 1);
+  ::setenv("CONF_ENV", "some-config-value", 1);
 
   std::string json = R"EOF(
     {
@@ -218,18 +217,18 @@ protected:
 
   void expectAsyncClientSend() {
     EXPECT_CALL(cm_.async_client_, send_(_, _, _))
-        .WillOnce(Invoke(
-            [&](Envoy::Http::MessagePtr&, Envoy::Http::AsyncClient::Callbacks& cb,
-                const Http::AsyncClient::RequestOptions&) -> Envoy::Http::AsyncClient::Request* {
-              callbacks_.push_back(&cb);
-              return &request_;
-            }));
+        .WillOnce(Invoke([&](Envoy::Http::MessagePtr&, Envoy::Http::AsyncClient::Callbacks& cb,
+                             const absl::optional<std::chrono::milliseconds>&)
+                             -> Envoy::Http::AsyncClient::Request* {
+          callbacks_.push_back(&cb);
+          return &request_;
+        }));
   }
 
   void completeRequest(const std::string& status, const std::string& body) {
     Http::MessagePtr msg(new Http::ResponseMessageImpl(
         Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", status}}}));
-    msg->body() = std::make_unique<Buffer::OwnedImpl>(body);
+    msg->body().reset(new Buffer::OwnedImpl(body));
     popPendingCallback()->onSuccess(std::move(msg));
   }
 
@@ -269,12 +268,12 @@ TEST_F(SquashFilterTest, DecodeHeaderContinuesOnClientFail) {
   EXPECT_CALL(cm_, httpAsyncClientForCluster("squash")).WillOnce(ReturnRef(cm_.async_client_));
 
   EXPECT_CALL(cm_.async_client_, send_(_, _, _))
-      .WillOnce(Invoke(
-          [&](Envoy::Http::MessagePtr&, Envoy::Http::AsyncClient::Callbacks& callbacks,
-              const Http::AsyncClient::RequestOptions&) -> Envoy::Http::AsyncClient::Request* {
-            callbacks.onFailure(Envoy::Http::AsyncClient::FailureReason::Reset);
-            return nullptr;
-          }));
+      .WillOnce(Invoke([&](Envoy::Http::MessagePtr&, Envoy::Http::AsyncClient::Callbacks& callbacks,
+                           const absl::optional<std::chrono::milliseconds>&)
+                           -> Envoy::Http::AsyncClient::Request* {
+        callbacks.onFailure(Envoy::Http::AsyncClient::FailureReason::Reset);
+        return nullptr;
+      }));
 
   Envoy::Http::TestHeaderMapImpl headers{{":method", "GET"},
                                          {":authority", "www.solo.io"},
@@ -435,7 +434,7 @@ TEST_F(SquashFilterTest, TimerExpiresInline) {
 
   EXPECT_CALL(cm_.async_client_, send_(_, _, _))
       .WillOnce(Invoke([&](Envoy::Http::MessagePtr&, Envoy::Http::AsyncClient::Callbacks&,
-                           const Http::AsyncClient::RequestOptions&)
+                           const absl::optional<std::chrono::milliseconds>&)
                            -> Envoy::Http::AsyncClient::Request* { return &request_; }));
 
   EXPECT_CALL(request_, cancel());

@@ -7,6 +7,7 @@
 #include "common/common/empty_string.h"
 #include "common/common/utility.h"
 #include "common/grpc/common.h"
+#include "common/http/filter_utility.h"
 #include "common/http/headers.h"
 #include "common/http/utility.h"
 
@@ -59,7 +60,7 @@ Http::FilterHeadersStatus GrpcWebFilter::decodeHeaders(Http::HeaderMap& headers,
   }
   headers.insertContentType().value().setReference(Http::Headers::get().ContentTypeValues.Grpc);
 
-  const Http::HeaderEntry* accept = headers.Accept();
+  const Http::HeaderEntry* accept = headers.get(Http::Headers::get().Accept);
   if (accept != nullptr &&
       (Http::Headers::get().ContentTypeValues.GrpcWebText == accept->value().c_str() ||
        Http::Headers::get().ContentTypeValues.GrpcWebTextProto == accept->value().c_str())) {
@@ -94,8 +95,7 @@ Http::FilterDataStatus GrpcWebFilter::decodeData(Buffer::Instance& data, bool en
     if (available % 4 != 0) {
       // Client end stream with invalid base64. Note, base64 padding is mandatory.
       decoder_callbacks_->sendLocalReply(Http::Code::BadRequest,
-                                         "Bad gRPC-web request, invalid base64 data.", nullptr,
-                                         absl::nullopt);
+                                         "Bad gRPC-web request, invalid base64 data.", nullptr);
       return Http::FilterDataStatus::StopIterationNoBuffer;
     }
   } else if (available < 4) {
@@ -111,8 +111,7 @@ Http::FilterDataStatus GrpcWebFilter::decodeData(Buffer::Instance& data, bool en
   if (decoded.empty()) {
     // Error happened when decoding base64.
     decoder_callbacks_->sendLocalReply(Http::Code::BadRequest,
-                                       "Bad gRPC-web request, invalid base64 data.", nullptr,
-                                       absl::nullopt);
+                                       "Bad gRPC-web request, invalid base64 data.", nullptr);
     return Http::FilterDataStatus::StopIterationNoBuffer;
   }
 
@@ -216,7 +215,7 @@ Http::FilterTrailersStatus GrpcWebFilter::encodeTrailers(Http::HeaderMap& traile
 }
 
 void GrpcWebFilter::setupStatTracking(const Http::HeaderMap& headers) {
-  cluster_ = decoder_callbacks_->clusterInfo();
+  cluster_ = Http::FilterUtility::resolveClusterInfo(decoder_callbacks_, cm_);
   if (!cluster_) {
     return;
   }

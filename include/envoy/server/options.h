@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <string>
 
-#include "envoy/admin/v2alpha/server_info.pb.h"
 #include "envoy/common/pure.h"
 #include "envoy/network/address.h"
 #include "envoy/stats/stats_options.h"
@@ -40,8 +39,6 @@ enum class Mode {
   // etc. Validation will pass even if those files are malformed or don't exist, allowing the config
   // to be validated in a non-prod environment.
 };
-
-typedef std::unique_ptr<envoy::admin::v2alpha::CommandLineOptions> CommandLineOptionsPtr;
 
 /**
  * General options for the server.
@@ -99,13 +96,6 @@ public:
    * @return spdlog::level::level_enum the default log level for the server.
    */
   virtual spdlog::level::level_enum logLevel() const PURE;
-
-  /**
-   * @return const std::vector<std::pair<std::string, spdlog::level::level_enum>>& pair of
-   * component,log level for all configured components.
-   */
-  virtual const std::vector<std::pair<std::string, spdlog::level::level_enum>>&
-  componentLogLevels() const PURE;
 
   /**
    * @return const std::string& the log format string.
@@ -169,22 +159,6 @@ public:
    * @return bool indicating whether the hot restart functionality has been disabled via cli flags.
    */
   virtual bool hotRestartDisabled() const PURE;
-
-  /**
-   * @return bool indicating whether system signal listeners are enabled.
-   */
-  virtual bool signalHandlingEnabled() const PURE;
-
-  /**
-   * @return bool indicating whether mutex tracing functionality has been enabled.
-   */
-  virtual bool mutexTracingEnabled() const PURE;
-
-  /**
-   * Converts the Options in to CommandLineOptions proto message defined in server_info.proto.
-   * @return CommandLineOptionsPtr the protobuf representation of the options.
-   */
-  virtual CommandLineOptionsPtr toCommandLineOptions() const PURE;
 };
 
 } // namespace Server

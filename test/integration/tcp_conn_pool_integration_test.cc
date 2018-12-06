@@ -26,7 +26,7 @@ public:
     UNREFERENCED_PARAMETER(end_stream);
 
     Tcp::ConnectionPool::Instance* pool = cluster_manager_.tcpConnPoolForCluster(
-        "cluster_0", Upstream::ResourcePriority::Default, nullptr, nullptr);
+        "cluster_0", Upstream::ResourcePriority::Default, nullptr);
     ASSERT(pool != nullptr);
 
     requests_.emplace_back(*this, data);
@@ -52,9 +52,9 @@ private:
       ASSERT(false);
     }
 
-    void onPoolReady(Tcp::ConnectionPool::ConnectionDataPtr&& conn,
+    void onPoolReady(Tcp::ConnectionPool::ConnectionData& conn,
                      Upstream::HostDescriptionConstSharedPtr) override {
-      upstream_ = std::move(conn);
+      upstream_ = &conn;
 
       upstream_->addUpstreamCallbacks(*this);
       upstream_->connection().write(data_, false);
@@ -67,7 +67,7 @@ private:
       Network::Connection& downstream = parent_.read_callbacks_->connection();
       downstream.write(data, false);
 
-      upstream_.reset();
+      upstream_->release();
     }
     void onEvent(Network::ConnectionEvent) override {}
     void onAboveWriteBufferHighWatermark() override {}
@@ -75,7 +75,7 @@ private:
 
     TestFilter& parent_;
     Buffer::OwnedImpl data_;
-    Tcp::ConnectionPool::ConnectionDataPtr upstream_;
+    Tcp::ConnectionPool::ConnectionData* upstream_;
   };
 
   Upstream::ClusterManager& cluster_manager_;
@@ -115,8 +115,7 @@ class TcpConnPoolIntegrationTest : public BaseIntegrationTest,
                                    public testing::TestWithParam<Network::Address::IpVersion> {
 public:
   TcpConnPoolIntegrationTest()
-      : BaseIntegrationTest(GetParam(), realTime(), tcp_conn_pool_config),
-        filter_resolver_(config_factory_) {}
+      : BaseIntegrationTest(GetParam(), tcp_conn_pool_config), filter_resolver_(config_factory_) {}
 
   // Called once by the gtest framework before any tests are run.
   static void SetUpTestCase() {

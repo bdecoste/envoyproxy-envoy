@@ -9,7 +9,8 @@ static_resources:
         config:
           value:
             filters:
-            - name: router
+            - type: decoder
+              name: router
               config: {}
             codec_type: auto
             stat_prefix: router
@@ -23,6 +24,8 @@ static_resources:
                 - prefix: "/"
                   cluster: cluster_0
           deprecated_v1: true
+        deprecated_v1:
+          type: read
   clusters:
   - name: cluster_0
     connect_timeout: 5s

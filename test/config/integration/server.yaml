@@ -35,20 +35,24 @@ static_resources:
                 - prefix: "/websocket/test"
                   prefix_rewrite: "/websocket"
                   cluster: cluster_1
+                  use_websocket: true
                 domains:
                 - "*"
                 name: integration
             codec_type: http1
             stat_prefix: router
             filters:
-            - name: health_check
+            - type: both
+              name: health_check
               config:
                 endpoint: "/healthcheck"
                 pass_through_mode: false
-            - name: rate_limit
+            - type: decoder
+              name: rate_limit
               config:
                 domain: foo
-            - name: router
+            - type: decoder
+              name: router
               config: {}
             access_log:
             - format: '[%START_TIME%] "%REQ(:METHOD)% %REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%
@@ -68,6 +72,8 @@ static_resources:
                 type: logical_or
             - path: "/dev/null"
           deprecated_v1: true
+        deprecated_v1:
+          type: read
   - address:
       socket_address:
         address: {{ ip_loopback_address }}
@@ -78,14 +84,17 @@ static_resources:
         config:
           value:
             filters:
-            - name: health_check
+            - type: both
+              name: health_check
               config:
                 endpoint: "/healthcheck"
                 pass_through_mode: false
             - name: rate_limit
               config:
                 domain: foo
-            - name: router
+              type: decoder
+            - type: decoder
+              name: router
               config: {}
             access_log:
             - filter:
@@ -135,6 +144,7 @@ static_resources:
                 - prefix: "/test/"
                   cluster: cluster_2
                 - cluster: cluster_1
+                  use_websocket: true
                   prefix: "/websocket/test"
                   prefix_rewrite: "/websocket"
                 domains:
@@ -145,6 +155,8 @@ static_resources:
             http1_settings:
               allow_absolute_url: true
           deprecated_v1: true
+        deprecated_v1:
+          type: read
   - address:
       socket_address:
         address: {{ ip_loopback_address }}
@@ -165,9 +177,12 @@ static_resources:
             filters:
             - name: router
               config: {}
+              type: decoder
             codec_type: http1
             stat_prefix: router
           deprecated_v1: true
+        deprecated_v1:
+          type: read
     per_connection_buffer_limit_bytes: 1024
   - address:
       socket_address:
@@ -179,10 +194,12 @@ static_resources:
         config:
           value:
             filters:
-            - name: http_dynamo_filter
+            - type: both
+              name: http_dynamo_filter
               config: {}
             - name: router
               config: {}
+              type: decoder
             codec_type: http1
             stat_prefix: router
             route_config:
@@ -194,6 +211,8 @@ static_resources:
                 - "*"
                 name: integration
           deprecated_v1: true
+        deprecated_v1:
+          type: read
     per_connection_buffer_limit_bytes: 1024
   - address:
       socket_address:
@@ -213,13 +232,17 @@ static_resources:
                 - prefix: "/test/long/url"
                   cluster: cluster_3
             filters:
-            - name: grpc_http1_bridge
+            - type: both
+              name: grpc_http1_bridge
               config: {}
-            - name: router
+            - type: decoder
+              name: router
               config: {}
             codec_type: http1
             stat_prefix: router
           deprecated_v1: true
+        deprecated_v1:
+          type: read
     per_connection_buffer_limit_bytes: 1024
   - address:
       socket_address:
@@ -256,24 +279,29 @@ static_resources:
                 - prefix: "/websocket/test"
                   prefix_rewrite: "/websocket"
                   cluster: cluster_1
+                  use_websocket: true
                 domains:
                 - "*"
                 name: integration
             codec_type: http1
             stat_prefix: router
             filters:
-            - name: health_check
+            - type: both
+              name: health_check
               config:
                 endpoint: "/healthcheck"
                 pass_through_mode: false
             - name: rate_limit
               config:
                 domain: foo
+              type: decoder
             - name: buffer
               config:
                 max_request_time_s: 120
                 max_request_bytes: 5242880
+              type: decoder
             - config: {}
+              type: decoder
               name: router
             access_log:
             - filter:
@@ -293,6 +321,8 @@ static_resources:
               path: "/dev/null"
             - path: "/dev/null"
           deprecated_v1: true
+        deprecated_v1:
+          type: read
   - address:
       socket_address:
         address: {{ ip_loopback_address }}
@@ -303,7 +333,8 @@ static_resources:
         config:
           value:
             filters:
-            - name: router
+            - type: decoder
+              name: router
               config: {}
             codec_type: http1
             stat_prefix: rds_dummy
@@ -311,6 +342,8 @@ static_resources:
               route_config_name: foo
               cluster: rds
           deprecated_v1: true
+        deprecated_v1:
+          type: read
   - address:
       socket_address:
         address: {{ ip_loopback_address }}
@@ -325,6 +358,8 @@ static_resources:
             stat_prefix: redis
             cluster_name: redis
           deprecated_v1: true
+        deprecated_v1:
+          type: read
   clusters:
   - name: cds
     connect_timeout: 5s

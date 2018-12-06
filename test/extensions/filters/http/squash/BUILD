@@ -24,7 +24,6 @@ envoy_extension_cc_test(
         "//test/mocks/http:http_mocks",
         "//test/mocks/server:server_mocks",
         "//test/mocks/upstream:upstream_mocks",
-        "//test/test_common:environment_lib",
     ],
 )
 

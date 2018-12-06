@@ -13,21 +13,6 @@ namespace Tcp {
 namespace ConnectionPool {
 
 /**
- * Controls the behavior of a canceled connection request.
- */
-enum class CancelPolicy {
-  // By default, canceled connection requests allow a pending connection to complete and become
-  // available for a future connection request.
-  Default,
-  // When a connection request is canceled, closes a pending connection if there are more pending
-  // connections than pending connection requests. CloseExcess is useful for callers that never
-  // re-use connections (e.g. by closing rather than releasing connections). Using CloseExcess in
-  // this situation guarantees that no idle connections will be held open by the conn pool awaiting
-  // a connection request.
-  CloseExcess,
-};
-
-/**
  * Handle that allows a pending connection request to be canceled before it is completed.
  */
 class Cancellable {
@@ -35,11 +20,9 @@ public:
   virtual ~Cancellable() {}
 
   /**
-   * Cancel the pending connection request.
-   * @param cancel_policy a CancelPolicy that controls the behavior of this connection request
-   *        cancellation.
+   * Cancel the pending request.
    */
-  virtual void cancel(CancelPolicy cancel_policy) PURE;
+  virtual void cancel() PURE;
 };
 
 /**
@@ -91,8 +74,7 @@ public:
 typedef std::unique_ptr<ConnectionState> ConnectionStatePtr;
 
 /*
- * ConnectionData wraps a ClientConnection allocated to a caller. Open ClientConnections are
- * released back to the pool for re-use when their containing ConnectionData is destroyed.
+ * ConnectionData wraps a ClientConnection allocated to a caller.
  */
 class ConnectionData {
 public:
@@ -123,14 +105,18 @@ public:
    */
   virtual void addUpstreamCallbacks(ConnectionPool::UpstreamCallbacks& callback) PURE;
 
+  /**
+   * Release the connection after use. The connection should be closed first only if it is
+   * not viable for future use.
+   */
+  virtual void release() PURE;
+
 protected:
   /**
    * @return ConnectionState* pointer to the current ConnectionState or nullptr if not set
    */
   virtual ConnectionState* connectionState() PURE;
 };
-
-typedef std::unique_ptr<ConnectionData> ConnectionDataPtr;
 
 /**
  * Pool callbacks invoked in the context of a newConnection() call, either synchronously or
@@ -150,17 +136,14 @@ public:
                              Upstream::HostDescriptionConstSharedPtr host) PURE;
 
   /**
-   * Called when a connection is available to process a request/response. Connections may be
-   * released back to the pool for re-use by resetting the ConnectionDataPtr. If the connection is
-   * no longer viable for reuse (e.g. due to some kind of protocol error), the underlying
-   * ClientConnection should be closed to prevent its reuse.
-   *
+   * Called when a connection is available to process a request/response. Recipients of connections
+   * must release the connection after use. They should only close the underlying ClientConnection
+   * if it is no longer viable for future requests.
    * @param conn supplies the connection data to use.
    * @param host supplies the description of the host that will carry the request. For logical
    *             connection pools the description may be different each time this is called.
    */
-  virtual void onPoolReady(ConnectionDataPtr&& conn,
-                           Upstream::HostDescriptionConstSharedPtr host) PURE;
+  virtual void onPoolReady(ConnectionData& conn, Upstream::HostDescriptionConstSharedPtr host) PURE;
 };
 
 /**

@@ -12,7 +12,8 @@ envoy_package()
 envoy_proto_library(
     name = "common_proto",
     srcs = ["common.proto"],
-    deps = ["@envoy_api//envoy/api/v2/core:base_export"],
+    generate_python = 0,
+    deps = ["@envoy_api//envoy/api/v2/core:base_cc_proto"],
 )
 
 envoy_cc_test_library(
@@ -36,7 +37,6 @@ envoy_cc_test_library(
     deps = [
         "//source/common/common:minimal_logger_lib",
         "//source/common/common:thread_lib",
-        "//source/common/common:utility_lib",
         "//source/common/event:libevent_lib",
         "//test/test_common:environment_lib",
     ],
@@ -46,9 +46,9 @@ envoy_cc_test_library(
     name = "utility_lib",
     hdrs = ["utility.h"],
     deps = [
-        ":common_proto_cc",
+        ":common_proto",
         "//source/common/network:utility_lib",
-        "//test/common/stream_info:test_util",
+        "//test/common/access_log:test_util",
         "//test/mocks/upstream:upstream_mocks",
         "//test/test_common:utility_lib",
     ],

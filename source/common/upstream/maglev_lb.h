@@ -58,13 +58,13 @@ public:
 
 private:
   // ThreadAwareLoadBalancerBase
-  HashingLoadBalancerSharedPtr createLoadBalancer(const HostSet& host_set, bool in_panic) override {
+  HashingLoadBalancerSharedPtr createLoadBalancer(const HostSet& host_set) override {
     // Note that we only compute global panic on host set refresh. Given that the runtime setting
     // will rarely change, this is a reasonable compromise to avoid creating extra LBs when we only
     // need to create one per priority level.
     const bool has_locality =
         host_set.localityWeights() != nullptr && !host_set.localityWeights()->empty();
-    if (in_panic) {
+    if (isGlobalPanic(host_set)) {
       if (!has_locality) {
         return std::make_shared<MaglevTable>(HostsPerLocalityImpl(host_set.hosts(), false), nullptr,
                                              table_size_);

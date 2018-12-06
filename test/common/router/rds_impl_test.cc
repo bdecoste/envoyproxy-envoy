@@ -1,5 +1,4 @@
 #include <chrono>
-#include <memory>
 #include <string>
 
 #include "envoy/admin/v2alpha/config_dump.pb.h"
@@ -53,9 +52,9 @@ public:
   void expectRequest() {
     EXPECT_CALL(factory_context_.cluster_manager_, httpAsyncClientForCluster("foo_cluster"));
     EXPECT_CALL(factory_context_.cluster_manager_.async_client_, send_(_, _, _))
-        .WillOnce(
-            Invoke([&](Http::MessagePtr& request, Http::AsyncClient::Callbacks& callbacks,
-                       const Http::AsyncClient::RequestOptions&) -> Http::AsyncClient::Request* {
+        .WillOnce(Invoke(
+            [&](Http::MessagePtr& request, Http::AsyncClient::Callbacks& callbacks,
+                const absl::optional<std::chrono::milliseconds>&) -> Http::AsyncClient::Request* {
               EXPECT_EQ((Http::TestHeaderMapImpl{
                             {":method", "GET"},
                             {":path", "/v1/routes/foo_route_config/cluster_name/node_name"},
@@ -66,20 +65,19 @@ public:
             }));
   }
 
-  Event::SimulatedTimeSystem& timeSystem() { return factory_context_.timeSystem(); }
-
   NiceMock<Server::Configuration::MockFactoryContext> factory_context_;
   Http::MockAsyncClientRequest request_;
   Http::AsyncClient::Callbacks* callbacks_{};
   Event::MockTimer* interval_timer_{};
+  NiceMock<MockSystemTimeSource> system_time_source_;
 };
 
 class RdsImplTest : public RdsTestBase {
 public:
   RdsImplTest() {
     EXPECT_CALL(factory_context_.admin_.config_tracker_, add_("routes", _));
-    route_config_provider_manager_ =
-        std::make_unique<RouteConfigProviderManagerImpl>(factory_context_.admin_);
+    route_config_provider_manager_.reset(
+        new RouteConfigProviderManagerImpl(factory_context_.admin_));
   }
   ~RdsImplTest() { factory_context_.thread_local_.shutdownThread(); }
 
@@ -219,7 +217,7 @@ TEST_F(RdsImplTest, Basic) {
 
   Http::MessagePtr message(new Http::ResponseMessageImpl(
       Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "200"}}}));
-  message->body() = std::make_unique<Buffer::OwnedImpl>(response1_json);
+  message->body().reset(new Buffer::OwnedImpl(response1_json));
 
   EXPECT_CALL(factory_context_.init_manager_.initialized_, ready());
   EXPECT_CALL(*interval_timer_, enableTimer(_));
@@ -232,9 +230,9 @@ TEST_F(RdsImplTest, Basic) {
   interval_timer_->callback_();
 
   // 2nd request with same response. Based on hash should not reload config.
-  message = std::make_unique<Http::ResponseMessageImpl>(
-      Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "200"}}});
-  message->body() = std::make_unique<Buffer::OwnedImpl>(response1_json);
+  message.reset(new Http::ResponseMessageImpl(
+      Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "200"}}}));
+  message->body().reset(new Buffer::OwnedImpl(response1_json));
 
   EXPECT_CALL(*interval_timer_, enableTimer(_));
   callbacks_->onSuccess(std::move(message));
@@ -272,9 +270,9 @@ TEST_F(RdsImplTest, Basic) {
   }
   )EOF";
 
-  message = std::make_unique<Http::ResponseMessageImpl>(
-      Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "200"}}});
-  message->body() = std::make_unique<Buffer::OwnedImpl>(response2_json);
+  message.reset(new Http::ResponseMessageImpl(
+      Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "200"}}}));
+  message->body().reset(new Buffer::OwnedImpl(response2_json));
 
   // Make sure we don't lookup/verify clusters.
   EXPECT_CALL(factory_context_.cluster_manager_, get("bar")).Times(0);
@@ -313,7 +311,7 @@ TEST_F(RdsImplTest, Failure) {
 
   Http::MessagePtr message(new Http::ResponseMessageImpl(
       Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "200"}}}));
-  message->body() = std::make_unique<Buffer::OwnedImpl>(response_json);
+  message->body().reset(new Buffer::OwnedImpl(response_json));
 
   EXPECT_CALL(factory_context_.init_manager_.initialized_, ready());
   EXPECT_CALL(*interval_timer_, enableTimer(_));
@@ -327,11 +325,8 @@ TEST_F(RdsImplTest, Failure) {
 
   EXPECT_EQ(2UL,
             factory_context_.scope_.counter("foo.rds.foo_route_config.update_attempt").value());
-  EXPECT_EQ(1UL,
+  EXPECT_EQ(2UL,
             factory_context_.scope_.counter("foo.rds.foo_route_config.update_failure").value());
-  // Validate that the schema error increments update_rejected stat.
-  EXPECT_EQ(1UL,
-            factory_context_.scope_.counter("foo.rds.foo_route_config.update_rejected").value());
 }
 
 TEST_F(RdsImplTest, FailureArray) {
@@ -345,7 +340,7 @@ TEST_F(RdsImplTest, FailureArray) {
 
   Http::MessagePtr message(new Http::ResponseMessageImpl(
       Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "200"}}}));
-  message->body() = std::make_unique<Buffer::OwnedImpl>(response_json);
+  message->body().reset(new Buffer::OwnedImpl(response_json));
 
   EXPECT_CALL(factory_context_.init_manager_.initialized_, ready());
   EXPECT_CALL(*interval_timer_, enableTimer(_));
@@ -354,7 +349,7 @@ TEST_F(RdsImplTest, FailureArray) {
   EXPECT_EQ(1UL,
             factory_context_.scope_.counter("foo.rds.foo_route_config.update_attempt").value());
   EXPECT_EQ(1UL,
-            factory_context_.scope_.counter("foo.rds.foo_route_config.update_rejected").value());
+            factory_context_.scope_.counter("foo.rds.foo_route_config.update_failure").value());
 }
 
 class RouteConfigProviderManagerImplTest : public RdsTestBase {
@@ -375,6 +370,7 @@ public:
     Upstream::ClusterManager::ClusterInfoMap cluster_map;
     Upstream::MockCluster cluster;
     cluster_map.emplace("foo_cluster", cluster);
+    ON_CALL(factory_context_, systemTimeSource()).WillByDefault(ReturnRef(system_time_source_));
     EXPECT_CALL(factory_context_.cluster_manager_, clusters()).WillOnce(Return(cluster_map));
     EXPECT_CALL(cluster, info()).Times(2);
     EXPECT_CALL(*cluster.info_, addedViaApi());
@@ -386,8 +382,8 @@ public:
 
   RouteConfigProviderManagerImplTest() {
     EXPECT_CALL(factory_context_.admin_.config_tracker_, add_("routes", _));
-    route_config_provider_manager_ =
-        std::make_unique<RouteConfigProviderManagerImpl>(factory_context_.admin_);
+    route_config_provider_manager_.reset(
+        new RouteConfigProviderManagerImpl(factory_context_.admin_));
   }
 
   ~RouteConfigProviderManagerImplTest() { factory_context_.thread_local_.shutdownThread(); }
@@ -429,7 +425,9 @@ virtual_hosts:
         route: { cluster: baz }
 )EOF";
 
-  timeSystem().setSystemTime(std::chrono::milliseconds(1234567891234));
+  EXPECT_CALL(system_time_source_, currentTime())
+      .WillRepeatedly(Return(SystemTime(std::chrono::milliseconds(1234567891234))));
+  EXPECT_CALL(factory_context_, systemTimeSource()).WillRepeatedly(ReturnRef(system_time_source_));
 
   // Only static route.
   RouteConfigProviderPtr static_config =
@@ -469,7 +467,7 @@ dynamic_route_configs:
 
   Http::MessagePtr message(new Http::ResponseMessageImpl(
       Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "200"}}}));
-  message->body() = std::make_unique<Buffer::OwnedImpl>(response1_json);
+  message->body().reset(new Buffer::OwnedImpl(response1_json));
   EXPECT_CALL(factory_context_.init_manager_.initialized_, ready());
   EXPECT_CALL(*interval_timer_, enableTimer(_));
   callbacks_->onSuccess(std::move(message));

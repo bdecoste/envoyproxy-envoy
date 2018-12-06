@@ -1,5 +1,3 @@
-#pragma once
-
 #include "envoy/registry/registry.h"
 
 #include "gtest/gtest.h"

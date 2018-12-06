@@ -37,7 +37,6 @@ public:
   void encodeHeaders(const HeaderMap& headers, bool end_stream) override;
   void encodeData(Buffer::Instance& data, bool end_stream) override;
   void encodeTrailers(const HeaderMap& trailers) override;
-  void encodeMetadata(const MetadataMap&) override { NOT_IMPLEMENTED_GCOVR_EXCL_LINE; }
   Stream& getStream() override { return *this; }
 
   // Http::Stream
@@ -50,7 +49,7 @@ public:
   void isResponseToHeadRequest(bool value) { is_response_to_head_request_ = value; }
 
 protected:
-  StreamEncoderImpl(ConnectionImpl& connection);
+  StreamEncoderImpl(ConnectionImpl& connection) : connection_(connection) {}
 
   static const std::string CRLF;
   static const std::string LAST_CHUNK;
@@ -99,6 +98,7 @@ private:
 class RequestStreamEncoderImpl : public StreamEncoderImpl {
 public:
   RequestStreamEncoderImpl(ConnectionImpl& connection) : StreamEncoderImpl(connection) {}
+
   bool headRequest() { return head_request_; }
 
   // Http::StreamEncoder
@@ -122,11 +122,6 @@ public:
    * Called when the active encoder has completed encoding the outbound half of the stream.
    */
   virtual void onEncodeComplete() PURE;
-
-  /**
-   * Called when headers are encoded.
-   */
-  virtual void onEncodeHeaders(const HeaderMap& headers) PURE;
 
   /**
    * Called when resetStream() has been called on an active stream. In HTTP/1.1 the only
@@ -184,7 +179,7 @@ private:
   /**
    * Dispatch a memory span.
    * @param slice supplies the start address.
-   * @len supplies the length of the span.
+   * @len supplies the lenght of the span.
    */
   size_t dispatchSlice(const char* slice, size_t len);
 
@@ -298,7 +293,7 @@ private:
 
   /**
    * Manipulate the request's first line, parsing the url and converting to a relative path if
-   * necessary. Compute Host / :authority headers based on 7230#5.7 and 7230#6
+   * neccessary. Compute Host / :authority headers based on 7230#5.7 and 7230#6
    *
    * @param is_connect true if the request has the CONNECT method
    * @param headers the request's headers
@@ -308,7 +303,6 @@ private:
 
   // ConnectionImpl
   void onEncodeComplete() override;
-  void onEncodeHeaders(const HeaderMap&) override {}
   void onMessageBegin() override;
   void onUrl(const char* data, size_t length) override;
   int onHeadersComplete(HeaderMapImplPtr&& headers) override;
@@ -345,8 +339,7 @@ private:
   bool cannotHaveBody();
 
   // ConnectionImpl
-  void onEncodeComplete() override {}
-  void onEncodeHeaders(const HeaderMap& headers) override;
+  void onEncodeComplete() override;
   void onMessageBegin() override {}
   void onUrl(const char*, size_t) override { NOT_IMPLEMENTED_GCOVR_EXCL_LINE; }
   int onHeadersComplete(HeaderMapImplPtr&& headers) override;

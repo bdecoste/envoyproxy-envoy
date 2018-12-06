@@ -5,7 +5,7 @@
 
 #include "test/integration/http_integration.h"
 #include "test/integration/server.h"
-#include "test/integration/ssl_utility.h"
+#include "test/mocks/runtime/mocks.h"
 #include "test/mocks/secret/mocks.h"
 
 #include "gmock/gmock.h"
@@ -19,25 +19,25 @@ namespace Ssl {
 class SslIntegrationTest : public HttpIntegrationTest,
                            public testing::TestWithParam<Network::Address::IpVersion> {
 public:
-  SslIntegrationTest()
-      : HttpIntegrationTest(Http::CodecClient::Type::HTTP1, GetParam(), realTime()) {}
+  SslIntegrationTest() : HttpIntegrationTest(Http::CodecClient::Type::HTTP1, GetParam()) {}
 
   void initialize() override;
 
   void TearDown() override;
 
-  Network::ClientConnectionPtr makeSslConn() { return makeSslClientConnection({}); }
-  Network::ClientConnectionPtr makeSslClientConnection(const ClientSslTransportOptions& options);
+  Network::ClientConnectionPtr makeSslConn() { return makeSslClientConnection(false, false); }
+  Network::ClientConnectionPtr makeSslClientConnection(bool alpn, bool san);
   void checkStats();
 
-protected:
-  bool server_ecdsa_cert_{false};
-  // Set this true to debug SSL handshake issues with openssl s_client. The
-  // verbose trace will be in the logs, openssl must be installed separately.
-  bool debug_with_s_client_{false};
-
 private:
+  std::unique_ptr<Runtime::Loader> runtime_;
   std::unique_ptr<ContextManager> context_manager_;
+  NiceMock<Secret::MockSecretManager> secret_manager_;
+
+  Network::TransportSocketFactoryPtr client_ssl_ctx_plain_;
+  Network::TransportSocketFactoryPtr client_ssl_ctx_alpn_;
+  Network::TransportSocketFactoryPtr client_ssl_ctx_san_;
+  Network::TransportSocketFactoryPtr client_ssl_ctx_alpn_san_;
 };
 
 } // namespace Ssl

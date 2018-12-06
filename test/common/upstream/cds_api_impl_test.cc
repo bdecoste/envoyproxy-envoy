@@ -1,5 +1,4 @@
 #include <chrono>
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -75,9 +74,9 @@ public:
   void expectRequest() {
     EXPECT_CALL(cm_, httpAsyncClientForCluster("foo_cluster"));
     EXPECT_CALL(cm_.async_client_, send_(_, _, _))
-        .WillOnce(
-            Invoke([&](Http::MessagePtr& request, Http::AsyncClient::Callbacks& callbacks,
-                       const Http::AsyncClient::RequestOptions&) -> Http::AsyncClient::Request* {
+        .WillOnce(Invoke(
+            [&](Http::MessagePtr& request, Http::AsyncClient::Callbacks& callbacks,
+                const absl::optional<std::chrono::milliseconds>&) -> Http::AsyncClient::Request* {
               EXPECT_EQ(
                   (Http::TestHeaderMapImpl{
                       {":method", v2_rest_ ? "POST" : "GET"},
@@ -86,7 +85,7 @@ public:
                       {":authority", "foo_cluster"},
                       {"content-type", "application/json"},
                       {"content-length",
-                       request->body() ? fmt::format_int(request->body()->length()).str() : "0"}}),
+                       request->body() ? fmt::FormatInt(request->body()->length()).str() : "0"}}),
                   request->headers());
               callbacks_ = &callbacks;
               return &request_;
@@ -178,7 +177,7 @@ TEST_F(CdsApiImplTest, Basic) {
 
   Http::MessagePtr message(new Http::ResponseMessageImpl(
       Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "200"}}}));
-  message->body() = std::make_unique<Buffer::OwnedImpl>(response1_json);
+  message->body().reset(new Buffer::OwnedImpl(response1_json));
 
   EXPECT_CALL(cm_, clusters()).WillOnce(Return(ClusterManager::ClusterInfoMap{}));
   expectAdd("cluster1", "hash_3845eb3523492899");
@@ -198,9 +197,9 @@ TEST_F(CdsApiImplTest, Basic) {
       "{%s}",
       clustersJson({defaultStaticClusterJson("cluster1"), defaultStaticClusterJson("cluster3")}));
 
-  message = std::make_unique<Http::ResponseMessageImpl>(
-      Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "200"}}});
-  message->body() = std::make_unique<Buffer::OwnedImpl>(response2_json);
+  message.reset(new Http::ResponseMessageImpl(
+      Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "200"}}}));
+  message->body().reset(new Buffer::OwnedImpl(response2_json));
 
   EXPECT_CALL(cm_, clusters()).WillOnce(Return(makeClusterMap({"cluster1", "cluster2"})));
   expectAdd("cluster1", "hash_19fd657104a2cd34");
@@ -229,7 +228,7 @@ TEST_F(CdsApiImplTest, Failure) {
 
   Http::MessagePtr message(new Http::ResponseMessageImpl(
       Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "200"}}}));
-  message->body() = std::make_unique<Buffer::OwnedImpl>(response_json);
+  message->body().reset(new Buffer::OwnedImpl(response_json));
 
   EXPECT_CALL(initialized_, ready());
   EXPECT_CALL(*interval_timer_, enableTimer(_));
@@ -243,9 +242,7 @@ TEST_F(CdsApiImplTest, Failure) {
 
   EXPECT_EQ("", cds_->versionInfo());
   EXPECT_EQ(2UL, store_.counter("cluster_manager.cds.update_attempt").value());
-  EXPECT_EQ(1UL, store_.counter("cluster_manager.cds.update_failure").value());
-  // Validate that the schema error increments update_rejected stat.
-  EXPECT_EQ(1UL, store_.counter("cluster_manager.cds.update_rejected").value());
+  EXPECT_EQ(2UL, store_.counter("cluster_manager.cds.update_failure").value());
   EXPECT_EQ(0UL, store_.gauge("cluster_manager.cds.version").value());
 }
 
@@ -261,7 +258,7 @@ TEST_F(CdsApiImplTest, FailureArray) {
 
   Http::MessagePtr message(new Http::ResponseMessageImpl(
       Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "200"}}}));
-  message->body() = std::make_unique<Buffer::OwnedImpl>(response_json);
+  message->body().reset(new Buffer::OwnedImpl(response_json));
 
   EXPECT_CALL(initialized_, ready());
   EXPECT_CALL(*interval_timer_, enableTimer(_));
@@ -269,7 +266,7 @@ TEST_F(CdsApiImplTest, FailureArray) {
 
   EXPECT_EQ("", cds_->versionInfo());
   EXPECT_EQ(1UL, store_.counter("cluster_manager.cds.update_attempt").value());
-  EXPECT_EQ(1UL, store_.counter("cluster_manager.cds.update_rejected").value());
+  EXPECT_EQ(1UL, store_.counter("cluster_manager.cds.update_failure").value());
   EXPECT_EQ(0UL, store_.gauge("cluster_manager.cds.version").value());
 }
 

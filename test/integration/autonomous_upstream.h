@@ -1,5 +1,3 @@
-#pragma once
-
 #include "test/integration/fake_upstream.h"
 
 namespace Envoy {
@@ -8,7 +6,7 @@ class AutonomousUpstream;
 
 // A stream which automatically responds when the downstream request is
 // completely read. By default the response is 200: OK with 10 bytes of
-// payload. This behavior can be overridden with custom request headers defined below.
+// payload. This behavior can be overriden with custom request headers defined below.
 class AutonomousStream : public FakeStream {
 public:
   // The number of response bytes to send. Payload is randomized.
@@ -21,7 +19,8 @@ public:
   static const char RESET_AFTER_REQUEST[];
 
   AutonomousStream(FakeHttpConnection& parent, Http::StreamEncoder& encoder,
-                   AutonomousUpstream& upstream);
+                   AutonomousUpstream& upstream)
+      : FakeStream(parent, encoder), upstream_(upstream) {}
   ~AutonomousStream();
 
   void setEndStream(bool set) override;
@@ -35,7 +34,8 @@ private:
 class AutonomousHttpConnection : public FakeHttpConnection {
 public:
   AutonomousHttpConnection(SharedConnectionWrapper& shared_connection, Stats::Store& store,
-                           Type type, AutonomousUpstream& upstream);
+                           Type type, AutonomousUpstream& upstream)
+      : FakeHttpConnection(shared_connection, store, type), upstream_(upstream) {}
 
   Http::StreamDecoder& newStream(Http::StreamEncoder& response_encoder) override;
 
@@ -50,8 +50,8 @@ typedef std::unique_ptr<AutonomousHttpConnection> AutonomousHttpConnectionPtr;
 class AutonomousUpstream : public FakeUpstream {
 public:
   AutonomousUpstream(uint32_t port, FakeHttpConnection::Type type,
-                     Network::Address::IpVersion version, Event::TestTimeSystem& time_system)
-      : FakeUpstream(port, type, version, time_system) {}
+                     Network::Address::IpVersion version)
+      : FakeUpstream(port, type, version) {}
   ~AutonomousUpstream();
   bool
   createNetworkFilterChain(Network::Connection& connection,

@@ -18,8 +18,7 @@ class JitteredBackOffStrategy : public BackOffStrategy {
 public:
   /**
    * Constructs fully jittered backoff strategy.
-   * @param base_interval the base_interval to be used for next backoff computation. It should be
-   * greater than zero and less than or equal to max_interval.
+   * @param base_interval the base_interval to be used for next backoff computation.
    * @param max_interval the cap on the next backoff value.
    * @param random the random generator
    */

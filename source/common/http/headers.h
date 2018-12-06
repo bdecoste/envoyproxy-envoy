@@ -33,7 +33,6 @@ public:
   const LowerCaseString ContentType{"content-type"};
   const LowerCaseString Cookie{"cookie"};
   const LowerCaseString Date{"date"};
-  const LowerCaseString EnvoyAttemptCount{"x-envoy-attempt-count"};
   const LowerCaseString EnvoyDownstreamServiceCluster{"x-envoy-downstream-service-cluster"};
   const LowerCaseString EnvoyDownstreamServiceNode{"x-envoy-downstream-service-node"};
   const LowerCaseString EnvoyExternalAddress{"x-envoy-external-address"};
@@ -45,10 +44,8 @@ public:
   const LowerCaseString EnvoyOriginalDstHost{"x-envoy-original-dst-host"};
   const LowerCaseString EnvoyOriginalPath{"x-envoy-original-path"};
   const LowerCaseString EnvoyOverloaded{"x-envoy-overloaded"};
-  const LowerCaseString EnvoyRateLimited{"x-envoy-ratelimited"};
   const LowerCaseString EnvoyRetryOn{"x-envoy-retry-on"};
   const LowerCaseString EnvoyRetryGrpcOn{"x-envoy-retry-grpc-on"};
-  const LowerCaseString EnvoyRetriableStatusCodes{"x-envoy-retriable-status-codes"};
   const LowerCaseString EnvoyUpstreamAltStatName{"x-envoy-upstream-alt-stat-name"};
   const LowerCaseString EnvoyUpstreamCanary{"x-envoy-upstream-canary"};
   const LowerCaseString EnvoyUpstreamRequestTimeoutAltResponse{
@@ -79,7 +76,6 @@ public:
   const LowerCaseString Origin{"origin"};
   const LowerCaseString OtSpanContext{"x-ot-span-context"};
   const LowerCaseString Path{":path"};
-  const LowerCaseString Protocol{":protocol"};
   const LowerCaseString ProxyConnection{"proxy-connection"};
   const LowerCaseString Referer{"referer"};
   const LowerCaseString RequestId{"x-request-id"};
@@ -93,6 +89,11 @@ public:
   const LowerCaseString UserAgent{"user-agent"};
   const LowerCaseString Vary{"vary"};
   const LowerCaseString Via{"via"};
+  const LowerCaseString XB3TraceId{"x-b3-traceid"};
+  const LowerCaseString XB3SpanId{"x-b3-spanid"};
+  const LowerCaseString XB3ParentSpanId{"x-b3-parentspanid"};
+  const LowerCaseString XB3Sampled{"x-b3-sampled"};
+  const LowerCaseString XB3Flags{"x-b3-flags"};
   const LowerCaseString XContentTypeOptions{"x-content-type-options"};
   const LowerCaseString XSquashDebug{"x-squash-debug"};
 
@@ -138,16 +139,11 @@ public:
   } EnvoyOverloadedValues;
 
   struct {
-    const std::string True{"true"};
-  } EnvoyRateLimitedValues;
-
-  struct {
     const std::string _5xx{"5xx"};
     const std::string GatewayError{"gateway-error"};
     const std::string ConnectFailure{"connect-failure"};
     const std::string RefusedStream{"refused-stream"};
     const std::string Retriable4xx{"retriable-4xx"};
-    const std::string RetriableStatusCodes{"retriable-status-codes"};
   } EnvoyRetryOnValues;
 
   struct {
@@ -155,7 +151,6 @@ public:
     const std::string DeadlineExceeded{"deadline-exceeded"};
     const std::string ResourceExhausted{"resource-exhausted"};
     const std::string Unavailable{"unavailable"};
-    const std::string Internal{"internal"};
   } EnvoyRetryOnGrpcValues;
 
   struct {
@@ -163,7 +158,6 @@ public:
   } ExpectValues;
 
   struct {
-    const std::string Connect{"CONNECT"};
     const std::string Get{"GET"};
     const std::string Head{"HEAD"};
     const std::string Post{"POST"};

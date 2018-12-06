@@ -2,7 +2,6 @@
 
 #include <cstdint>
 #include <list>
-#include <memory>
 #include <string>
 
 #include "common/common/assert.h"
@@ -15,30 +14,9 @@
 namespace Envoy {
 namespace Http {
 
-namespace {
-constexpr size_t MinDynamicCapacity{32};
-// This includes the NULL (StringUtil::itoa technically only needs 21).
-constexpr size_t MaxIntegerLength{32};
-
-uint64_t newCapacity(uint32_t existing_capacity, uint32_t size_to_append) {
-  return (static_cast<uint64_t>(existing_capacity) + size_to_append) * 2;
-}
-
-void validateCapacity(uint64_t new_capacity) {
-  // If the resizing will cause buffer overflow due to hitting uint32_t::max, an OOM is likely
-  // imminent. Fast-fail rather than allow a buffer overflow attack (issue #1421)
-  RELEASE_ASSERT(new_capacity <= std::numeric_limits<uint32_t>::max(),
-                 "Trying to allocate overly large headers.");
-  ASSERT(new_capacity >= MinDynamicCapacity);
-}
-
-} // namespace
-
 HeaderString::HeaderString() : type_(Type::Inline) {
   buffer_.dynamic_ = inline_buffer_;
   clear();
-  static_assert(sizeof(inline_buffer_) >= MaxIntegerLength, "");
-  static_assert(MinDynamicCapacity >= MaxIntegerLength, "");
 }
 
 HeaderString::HeaderString(const LowerCaseString& ref_value) : type_(Type::Reference) {
@@ -89,26 +67,17 @@ void HeaderString::freeDynamic() {
 void HeaderString::append(const char* data, uint32_t size) {
   switch (type_) {
   case Type::Reference: {
-    // Rather than be too clever and optimize this uncommon case, we dynamically
-    // allocate and copy.
-    type_ = Type::Dynamic;
-    const uint64_t new_capacity = newCapacity(string_length_, size);
-    if (new_capacity > MinDynamicCapacity) {
-      validateCapacity(new_capacity);
-      dynamic_capacity_ = new_capacity;
-    } else {
-      dynamic_capacity_ = MinDynamicCapacity;
-    }
-    char* buf = static_cast<char*>(malloc(dynamic_capacity_));
-    RELEASE_ASSERT(buf != nullptr, "");
-    memcpy(buf, buffer_.ref_, string_length_);
-    buffer_.dynamic_ = buf;
-    break;
+    // Switch back to inline and fall through. We do not actually append to the static string
+    // currently which would require a copy.
+    type_ = Type::Inline;
+    buffer_.dynamic_ = inline_buffer_;
+    string_length_ = 0;
+
+    FALLTHRU;
   }
 
   case Type::Inline: {
-    const uint64_t new_capacity = static_cast<uint64_t>(size) + 1 + string_length_;
-    if (new_capacity <= sizeof(inline_buffer_)) {
+    if (size + 1 + string_length_ <= sizeof(inline_buffer_)) {
       // Already inline and the new value fits in inline storage.
       break;
     }
@@ -119,22 +88,19 @@ void HeaderString::append(const char* data, uint32_t size) {
   case Type::Dynamic: {
     // We can get here either because we didn't fit in inline or we are already dynamic.
     if (type_ == Type::Inline) {
-      const uint64_t new_capacity = newCapacity(string_length_, size);
-      validateCapacity(new_capacity);
+      const uint64_t new_capacity = (static_cast<uint64_t>(string_length_) + size) * 2;
+      // If the resizing will cause buffer overflow due to hitting uint32_t::max, an OOM is likely
+      // imminent. Fast-fail rather than allow a buffer overflow attack (issue #1421)
+      RELEASE_ASSERT(new_capacity <= std::numeric_limits<uint32_t>::max(), "");
       buffer_.dynamic_ = static_cast<char*>(malloc(new_capacity));
-      RELEASE_ASSERT(buffer_.dynamic_ != nullptr, "");
       memcpy(buffer_.dynamic_, inline_buffer_, string_length_);
       dynamic_capacity_ = new_capacity;
       type_ = Type::Dynamic;
     } else {
       if (size + 1 + string_length_ > dynamic_capacity_) {
-        const uint64_t new_capacity = newCapacity(string_length_, size);
-        validateCapacity(new_capacity);
-
         // Need to reallocate.
-        dynamic_capacity_ = new_capacity;
+        dynamic_capacity_ = (string_length_ + size) * 2;
         buffer_.dynamic_ = static_cast<char*>(realloc(buffer_.dynamic_, dynamic_capacity_));
-        RELEASE_ASSERT(buffer_.dynamic_ != nullptr, "");
       }
     }
   }
@@ -183,18 +149,14 @@ void HeaderString::setCopy(const char* data, uint32_t size) {
     // We can get here either because we didn't fit in inline or we are already dynamic.
     if (type_ == Type::Inline) {
       dynamic_capacity_ = size * 2;
-      validateCapacity(dynamic_capacity_);
       buffer_.dynamic_ = static_cast<char*>(malloc(dynamic_capacity_));
-      RELEASE_ASSERT(buffer_.dynamic_ != nullptr, "");
       type_ = Type::Dynamic;
     } else {
       if (size + 1 > dynamic_capacity_) {
         // Need to reallocate. Use free/malloc to avoid the copy since we are about to overwrite.
         dynamic_capacity_ = size * 2;
-        validateCapacity(dynamic_capacity_);
         free(buffer_.dynamic_);
         buffer_.dynamic_ = static_cast<char*>(malloc(dynamic_capacity_));
-        RELEASE_ASSERT(buffer_.dynamic_ != nullptr, "");
       }
     }
   }
@@ -216,15 +178,8 @@ void HeaderString::setInteger(uint64_t value) {
   }
 
   case Type::Inline:
-    // buffer_.dynamic_ should always point at inline_buffer_ for Type::Inline.
-    ASSERT(buffer_.dynamic_ == inline_buffer_);
-    FALLTHRU;
   case Type::Dynamic: {
     // Whether dynamic or inline the buffer is guaranteed to be large enough.
-    ASSERT(type_ == Type::Inline || dynamic_capacity_ >= MaxIntegerLength);
-    // It's safe to use buffer.dynamic_, since buffer.ref_ is union aliased.
-    // This better not change without verifying assumptions across this file.
-    static_assert(offsetof(Buffer, dynamic_) == offsetof(Buffer, ref_), "");
     string_length_ = StringUtil::itoa(buffer_.dynamic_, 32, value);
   }
   }
@@ -256,8 +211,8 @@ void HeaderMapImpl::HeaderEntryImpl::value(const char* value, uint32_t size) {
   value_.setCopy(value, size);
 }
 
-void HeaderMapImpl::HeaderEntryImpl::value(absl::string_view value) {
-  this->value(value.data(), static_cast<uint32_t>(value.size()));
+void HeaderMapImpl::HeaderEntryImpl::value(const std::string& value) {
+  this->value(value.c_str(), static_cast<uint32_t>(value.size()));
 }
 
 void HeaderMapImpl::HeaderEntryImpl::value(uint64_t value) { value_.setInteger(value); }
@@ -284,7 +239,7 @@ void HeaderMapImpl::StaticLookupTable::add(const char* key, StaticLookupEntry::E
   StaticLookupEntry* current = &root_;
   while (uint8_t c = *key) {
     if (!current->entries_[c]) {
-      current->entries_[c] = std::make_unique<StaticLookupEntry>();
+      current->entries_[c].reset(new StaticLookupEntry());
     }
 
     current = current->entries_[c].get();
@@ -368,12 +323,8 @@ void HeaderMapImpl::insertByKey(HeaderString&& key, HeaderString&& value) {
   if (cb) {
     key.clear();
     StaticLookupResponse ref_lookup_response = cb(*this);
-    if (*ref_lookup_response.entry_ == nullptr) {
-      maybeCreateInline(ref_lookup_response.entry_, *ref_lookup_response.key_, std::move(value));
-    } else {
-      appendToHeader((*ref_lookup_response.entry_)->value(), value.c_str());
-      value.clear();
-    }
+    ASSERT(*ref_lookup_response.entry_ == nullptr); // This function doesn't handle append.
+    maybeCreateInline(ref_lookup_response.entry_, *ref_lookup_response.key_, std::move(value));
   } else {
     std::list<HeaderEntryImpl>::iterator i = headers_.insert(std::move(key), std::move(value));
     i->entry_ = i;
@@ -404,7 +355,7 @@ void HeaderMapImpl::addReferenceKey(const LowerCaseString& key, uint64_t value) 
   HeaderString new_value;
   new_value.setInteger(value);
   insertByKey(std::move(ref_key), std::move(new_value));
-  ASSERT(new_value.empty()); // NOLINT(bugprone-use-after-move)
+  ASSERT(new_value.empty());
 }
 
 void HeaderMapImpl::addReferenceKey(const LowerCaseString& key, const std::string& value) {
@@ -412,7 +363,7 @@ void HeaderMapImpl::addReferenceKey(const LowerCaseString& key, const std::strin
   HeaderString new_value;
   new_value.setCopy(value.c_str(), value.size());
   insertByKey(std::move(ref_key), std::move(new_value));
-  ASSERT(new_value.empty()); // NOLINT(bugprone-use-after-move)
+  ASSERT(new_value.empty());
 }
 
 void HeaderMapImpl::addCopy(const LowerCaseString& key, uint64_t value) {
@@ -428,8 +379,8 @@ void HeaderMapImpl::addCopy(const LowerCaseString& key, uint64_t value) {
   HeaderString new_value;
   new_value.setInteger(value);
   insertByKey(std::move(new_key), std::move(new_value));
-  ASSERT(new_key.empty());   // NOLINT(bugprone-use-after-move)
-  ASSERT(new_value.empty()); // NOLINT(bugprone-use-after-move)
+  ASSERT(new_key.empty());
+  ASSERT(new_value.empty());
 }
 
 void HeaderMapImpl::addCopy(const LowerCaseString& key, const std::string& value) {
@@ -443,8 +394,8 @@ void HeaderMapImpl::addCopy(const LowerCaseString& key, const std::string& value
   HeaderString new_value;
   new_value.setCopy(value.c_str(), value.size());
   insertByKey(std::move(new_key), std::move(new_value));
-  ASSERT(new_key.empty());   // NOLINT(bugprone-use-after-move)
-  ASSERT(new_value.empty()); // NOLINT(bugprone-use-after-move)
+  ASSERT(new_key.empty());
+  ASSERT(new_value.empty());
 }
 
 void HeaderMapImpl::setReference(const LowerCaseString& key, const std::string& value) {
@@ -460,7 +411,7 @@ void HeaderMapImpl::setReferenceKey(const LowerCaseString& key, const std::strin
   new_value.setCopy(value.c_str(), value.size());
   remove(key);
   insertByKey(std::move(ref_key), std::move(new_value));
-  ASSERT(new_value.empty()); // NOLINT(bugprone-use-after-move)
+  ASSERT(new_value.empty());
 }
 
 uint64_t HeaderMapImpl::byteSize() const {

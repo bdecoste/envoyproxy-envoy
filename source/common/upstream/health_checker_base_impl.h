@@ -82,7 +82,6 @@ protected:
   virtual ActiveHealthCheckSessionPtr makeSession(HostSharedPtr host) PURE;
   virtual envoy::data::core::v2alpha::HealthCheckerType healthCheckerType() const PURE;
 
-  const bool always_log_health_check_failures_;
   const Cluster& cluster_;
   Event::Dispatcher& dispatcher_;
   const std::chrono::milliseconds timeout_;
@@ -133,22 +132,18 @@ private:
 
 class HealthCheckEventLoggerImpl : public HealthCheckEventLogger {
 public:
-  HealthCheckEventLoggerImpl(AccessLog::AccessLogManager& log_manager, TimeSource& time_source,
-                             const std::string& file_name)
-      : time_source_(time_source), file_(log_manager.createAccessLog(file_name)) {}
+  HealthCheckEventLoggerImpl(AccessLog::AccessLogManager& log_manager,
+                             SystemTimeSource& system_time_source, const std::string& file_name)
+      : system_time_source_(system_time_source), file_(log_manager.createAccessLog(file_name)) {}
 
   void logEjectUnhealthy(envoy::data::core::v2alpha::HealthCheckerType health_checker_type,
                          const HostDescriptionConstSharedPtr& host,
                          envoy::data::core::v2alpha::HealthCheckFailureType failure_type) override;
   void logAddHealthy(envoy::data::core::v2alpha::HealthCheckerType health_checker_type,
                      const HostDescriptionConstSharedPtr& host, bool first_check) override;
-  void logUnhealthy(envoy::data::core::v2alpha::HealthCheckerType health_checker_type,
-                    const HostDescriptionConstSharedPtr& host,
-                    envoy::data::core::v2alpha::HealthCheckFailureType failure_type,
-                    bool first_check) override;
 
 private:
-  TimeSource& time_source_;
+  SystemTimeSource& system_time_source_;
   Filesystem::FileSharedPtr file_;
 };
 

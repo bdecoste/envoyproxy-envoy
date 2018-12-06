@@ -10,7 +10,6 @@
 
 #include "envoy/api/v2/core/base.pb.h"
 #include "envoy/common/callback.h"
-#include "envoy/config/typed_metadata.h"
 #include "envoy/http/codec.h"
 #include "envoy/network/connection.h"
 #include "envoy/network/transport_socket.h"
@@ -19,7 +18,6 @@
 #include "envoy/stats/stats.h"
 #include "envoy/upstream/health_check_host_monitor.h"
 #include "envoy/upstream/load_balancer_type.h"
-#include "envoy/upstream/locality.h"
 #include "envoy/upstream/outlier_detection.h"
 #include "envoy/upstream/resource_manager.h"
 
@@ -47,15 +45,6 @@ public:
     FAILED_EDS_HEALTH = 0x04,
   };
 
-  enum class ActiveHealthFailureType {
-    // The failure type is unknown, all hosts' failure types are initialized as UNKNOWN
-    UNKNOWN,
-    // The host is actively responding it's unhealthy
-    UNHEALTHY,
-    // The host is timing out
-    TIMEOUT,
-  };
-
   /**
    * @return host specific counters.
    */
@@ -73,8 +62,7 @@ public:
    */
   virtual CreateConnectionData
   createConnection(Event::Dispatcher& dispatcher,
-                   const Network::ConnectionSocket::OptionsSharedPtr& options,
-                   Network::TransportSocketOptionsSharedPtr transport_socket_options) const PURE;
+                   const Network::ConnectionSocket::OptionsSharedPtr& options) const PURE;
 
   /**
    * Create a health check connection for this host.
@@ -109,17 +97,6 @@ public:
    *         information may be considered.
    */
   virtual bool healthy() const PURE;
-
-  /**
-   * Returns the host's ActiveHealthFailureType. Types are specified in ActiveHealthFailureType.
-   */
-  virtual ActiveHealthFailureType getActiveHealthFailureType() const PURE;
-
-  /**
-   * Set the most recent health failure type for a host. Types are specified in
-   * ActiveHealthFailureType.
-   */
-  virtual void setActiveHealthFailureType(ActiveHealthFailureType flag) PURE;
 
   /**
    * Set the host's health checker monitor. Monitors are assumed to be thread safe, however
@@ -160,14 +137,8 @@ public:
 typedef std::shared_ptr<const Host> HostConstSharedPtr;
 
 typedef std::vector<HostSharedPtr> HostVector;
-typedef std::unordered_map<std::string, Upstream::HostSharedPtr> HostMap;
 typedef std::shared_ptr<HostVector> HostVectorSharedPtr;
 typedef std::shared_ptr<const HostVector> HostVectorConstSharedPtr;
-
-typedef std::unique_ptr<HostVector> HostListPtr;
-typedef std::unordered_map<envoy::api::v2::core::Locality, uint32_t, LocalityHash, LocalityEqualTo>
-    LocalityWeightsMap;
-typedef std::vector<std::pair<HostListPtr, LocalityWeightsMap>> PriorityState;
 
 /**
  * Bucket hosts by locality.
@@ -413,17 +384,6 @@ public:
 // clang-format on
 
 /**
- * Cluster circuit breakers stats.
- */
-// clang-format off
-#define ALL_CLUSTER_CIRCUIT_BREAKERS_STATS(GAUGE)                                                  \
-  GAUGE (cx_open)                                                                                  \
-  GAUGE (rq_pending_open)                                                                          \
-  GAUGE (rq_open)                                                                                  \
-  GAUGE (rq_retry_open)
-// clang-format on
-
-/**
  * Struct definition for all cluster stats. @see stats_macros.h
  */
 struct ClusterStats {
@@ -438,13 +398,6 @@ struct ClusterLoadReportStats {
 };
 
 /**
- * Struct definition for cluster circuit breakers stats. @see stats_macros.h
- */
-struct ClusterCircuitBreakersStats {
-  ALL_CLUSTER_CIRCUIT_BREAKERS_STATS(GENERATE_GAUGE_STRUCT)
-};
-
-/**
  * All extension protocol specific options returned by the method at
  *   NamedNetworkFilterConfigFactory::createProtocolOptions
  * must be derived from this class.
@@ -454,11 +407,6 @@ public:
   virtual ~ProtocolOptionsConfig() {}
 };
 typedef std::shared_ptr<const ProtocolOptionsConfig> ProtocolOptionsConfigConstSharedPtr;
-
-/**
- *  Base class for all cluster typed metadata factory.
- */
-class ClusterTypedMetadataFactory : public Envoy::Config::TypedMetadataFactory {};
 
 /**
  * Information about a given upstream cluster.
@@ -536,12 +484,6 @@ public:
    * @return the service discovery type to use for resolving the cluster.
    */
   virtual envoy::api::v2::Cluster::DiscoveryType type() const PURE;
-
-  /**
-   * @return configuration for least request load balancing, only used if LB type is least request.
-   */
-  virtual const absl::optional<envoy::api::v2::Cluster::LeastRequestLbConfig>&
-  lbLeastRequestConfig() const PURE;
 
   /**
    * @return configuration for ring hash load balancing, only used if type is set to ring_hash_lb.
@@ -623,11 +565,6 @@ public:
   virtual const envoy::api::v2::core::Metadata& metadata() const PURE;
 
   /**
-   * @return const Envoy::Config::TypedMetadata&& the typed metadata for this cluster.
-   */
-  virtual const Envoy::Config::TypedMetadata& typedMetadata() const PURE;
-
-  /**
    *
    * @return const Network::ConnectionSocket::OptionsSharedPtr& socket options for all
    *         connections for this cluster.
@@ -695,8 +632,8 @@ public:
 
   /**
    * @return the phase in which the cluster is initialized at boot. This mechanism is used such that
-   *         clusters that depend on other clusters can correctly initialize. (E.g., an EDS cluster
-   *         that depends on resolution of the EDS server itself).
+   *         clusters that depend on other clusters can correctly initialize. (E.g., an SDS cluster
+   *         that depends on resolution of the SDS server itself).
    */
   virtual InitializePhase initializePhase() const PURE;
 

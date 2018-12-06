@@ -18,12 +18,8 @@ namespace Http {
  * Base for all providers.
  */
 class DateProviderImplBase : public DateProvider {
-public:
-  explicit DateProviderImplBase(TimeSource& time_source) : time_source_(time_source) {}
-
 protected:
   static DateFormatter date_formatter_;
-  TimeSource& time_source_;
 };
 
 /**
@@ -54,8 +50,6 @@ private:
  * A basic provider that just creates the date string every time.
  */
 class SlowDateProviderImpl : public DateProviderImplBase {
-  using DateProviderImplBase::DateProviderImplBase;
-
 public:
   // Http::DateProvider
   void setDateHeader(HeaderMap& headers) override;

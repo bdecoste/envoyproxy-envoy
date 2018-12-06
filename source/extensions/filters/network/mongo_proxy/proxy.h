@@ -85,14 +85,12 @@ struct MongoProxyStats {
  */
 class AccessLog {
 public:
-  AccessLog(const std::string& file_name, Envoy::AccessLog::AccessLogManager& log_manager,
-            TimeSource& time_source);
+  AccessLog(const std::string& file_name, Envoy::AccessLog::AccessLogManager& log_manager);
 
   void logMessage(const Message& message, bool full,
                   const Upstream::HostDescription* upstream_host);
 
 private:
-  TimeSource& time_source_;
   Filesystem::FileSharedPtr file_;
 };
 
@@ -104,8 +102,10 @@ typedef std::shared_ptr<AccessLog> AccessLogSharedPtr;
 class FaultConfig {
 public:
   FaultConfig(const envoy::config::filter::fault::v2::FaultDelay& fault_config)
-      : delay_percentage_(fault_config.percentage()),
-        duration_ms_(PROTOBUF_GET_MS_REQUIRED(fault_config, fixed_delay)) {}
+      : duration_ms_(PROTOBUF_GET_MS_REQUIRED(fault_config, fixed_delay)) {
+    PROTOBUF_SET_FRACTIONAL_PERCENT_OR_DEFAULT(delay_percentage_, fault_config, percentage,
+                                               percent);
+  }
   envoy::type::FractionalPercent delayPercentage() const { return delay_percentage_; }
   uint64_t delayDuration() const { return duration_ms_; }
 
@@ -127,8 +127,7 @@ class ProxyFilter : public Network::Filter,
 public:
   ProxyFilter(const std::string& stat_prefix, Stats::Scope& scope, Runtime::Loader& runtime,
               AccessLogSharedPtr access_log, const FaultConfigSharedPtr& fault_config,
-              const Network::DrainDecision& drain_decision, Runtime::RandomGenerator& generator,
-              Event::TimeSystem& time_system, bool emit_dynamic_metadata);
+              const Network::DrainDecision& drain_decision, Runtime::RandomGenerator& generator);
   ~ProxyFilter();
 
   virtual DecoderPtr createDecoder(DecoderCallbacks& callbacks) PURE;
@@ -158,12 +157,10 @@ public:
   void onAboveWriteBufferHighWatermark() override {}
   void onBelowWriteBufferLowWatermark() override {}
 
-  void setDynamicMetadata(std::string operation, std::string resource);
-
 private:
   struct ActiveQuery {
     ActiveQuery(ProxyFilter& parent, const QueryMessage& query)
-        : parent_(parent), query_info_(query), start_time_(parent_.time_system_.monotonicTime()) {
+        : parent_(parent), query_info_(query), start_time_(std::chrono::steady_clock::now()) {
       parent_.stats_.op_query_active_.inc();
     }
 
@@ -208,8 +205,6 @@ private:
   const FaultConfigSharedPtr fault_config_;
   Event::TimerPtr delay_timer_;
   Event::TimerPtr drain_close_timer_;
-  Event::TimeSystem& time_system_;
-  const bool emit_dynamic_metadata_;
 };
 
 class ProdProxyFilter : public ProxyFilter {

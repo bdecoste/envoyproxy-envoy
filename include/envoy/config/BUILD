@@ -12,7 +12,6 @@ envoy_cc_library(
     name = "grpc_mux_interface",
     hdrs = ["grpc_mux.h"],
     deps = [
-        "//include/envoy/stats:stats_macros",
         "//source/common/protobuf",
     ],
 )
@@ -22,14 +21,6 @@ envoy_cc_library(
     hdrs = ["subscription.h"],
     deps = [
         "//include/envoy/stats:stats_macros",
-        "//source/common/protobuf",
-    ],
-)
-
-envoy_cc_library(
-    name = "typed_metadata_interface",
-    hdrs = ["typed_metadata.h"],
-    deps = [
         "//source/common/protobuf",
     ],
 )

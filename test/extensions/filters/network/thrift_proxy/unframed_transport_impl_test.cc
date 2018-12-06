@@ -27,22 +27,13 @@ TEST(UnframedTransportTest, DecodeFrameStart) {
   UnframedTransportImpl transport;
 
   Buffer::OwnedImpl buffer;
-  buffer.writeBEInt<uint32_t>(0xDEADBEEF);
+  addInt32(buffer, 0xDEADBEEF);
   EXPECT_EQ(buffer.length(), 4);
 
   MessageMetadata metadata;
   EXPECT_TRUE(transport.decodeFrameStart(buffer, metadata));
   EXPECT_THAT(metadata, IsEmptyMetadata());
   EXPECT_EQ(buffer.length(), 4);
-}
-
-TEST(UnframedTransportTest, DecodeFrameStartWithNoData) {
-  UnframedTransportImpl transport;
-
-  Buffer::OwnedImpl buffer;
-  MessageMetadata metadata;
-  EXPECT_FALSE(transport.decodeFrameStart(buffer, metadata));
-  EXPECT_THAT(metadata, IsEmptyMetadata());
 }
 
 TEST(UnframedTransportTest, DecodeFrameEnd) {

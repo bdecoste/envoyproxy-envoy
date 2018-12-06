@@ -15,13 +15,10 @@ namespace Envoy {
 namespace Server {
 
 ConnectionHandlerImpl::ConnectionHandlerImpl(spdlog::logger& logger, Event::Dispatcher& dispatcher)
-    : logger_(logger), dispatcher_(dispatcher), disable_listeners_(false) {}
+    : logger_(logger), dispatcher_(dispatcher) {}
 
 void ConnectionHandlerImpl::addListener(Network::ListenerConfig& config) {
   ActiveListenerPtr l(new ActiveListener(*this, config));
-  if (disable_listeners_) {
-    l->listener_->disable();
-  }
   listeners_.emplace_back(config.socket().localAddress(), std::move(l));
 }
 
@@ -49,20 +46,6 @@ void ConnectionHandlerImpl::stopListeners() {
   }
 }
 
-void ConnectionHandlerImpl::disableListeners() {
-  disable_listeners_ = true;
-  for (auto& listener : listeners_) {
-    listener.second->listener_->disable();
-  }
-}
-
-void ConnectionHandlerImpl::enableListeners() {
-  disable_listeners_ = false;
-  for (auto& listener : listeners_) {
-    listener.second->listener_->enable();
-  }
-}
-
 void ConnectionHandlerImpl::ActiveListener::removeConnection(ActiveConnection& connection) {
   ENVOY_CONN_LOG_TO_LOGGER(parent_.logger_, debug, "adding to cleanup list",
                            *connection.connection_);
@@ -84,9 +67,8 @@ ConnectionHandlerImpl::ActiveListener::ActiveListener(ConnectionHandlerImpl& par
                                                       Network::ListenerPtr&& listener,
                                                       Network::ListenerConfig& config)
     : parent_(parent), listener_(std::move(listener)),
-      stats_(generateStats(config.listenerScope())),
-      listener_filters_timeout_(config.listenerFiltersTimeout()),
-      listener_tag_(config.listenerTag()), config_(config) {}
+      stats_(generateStats(config.listenerScope())), listener_tag_(config.listenerTag()),
+      config_(config) {}
 
 ConnectionHandlerImpl::ActiveListener::~ActiveListener() {
   // Purge sockets that have not progressed to connections. This should only happen when
@@ -138,27 +120,6 @@ ConnectionHandlerImpl::findActiveListenerByAddress(const Network::Address::Insta
   return (listener_it != listeners_.end()) ? listener_it->second.get() : nullptr;
 }
 
-void ConnectionHandlerImpl::ActiveSocket::onTimeout() {
-  listener_.stats_.downstream_pre_cx_timeout_.inc();
-  ASSERT(inserted());
-  unlink();
-}
-
-void ConnectionHandlerImpl::ActiveSocket::startTimer() {
-  if (listener_.listener_filters_timeout_.count() > 0) {
-    timer_ = listener_.parent_.dispatcher_.createTimer([this]() -> void { onTimeout(); });
-    timer_->enableTimer(listener_.listener_filters_timeout_);
-  }
-}
-
-void ConnectionHandlerImpl::ActiveSocket::unlink() {
-  ActiveSocketPtr removed = removeFromList(listener_.sockets_);
-  if (removed->timer_ != nullptr) {
-    removed->timer_->disableTimer();
-  }
-  listener_.parent_.dispatcher_.deferredDelete(std::move(removed));
-}
-
 void ConnectionHandlerImpl::ActiveSocket::continueFilterChain(bool success) {
   if (success) {
     if (iter_ == accept_filters_.end()) {
@@ -202,7 +163,8 @@ void ConnectionHandlerImpl::ActiveSocket::continueFilterChain(bool success) {
 
   // Filter execution concluded, unlink and delete this ActiveSocket if it was linked.
   if (inserted()) {
-    unlink();
+    ActiveSocketPtr removed = removeFromList(listener_.sockets_);
+    listener_.parent_.dispatcher_.deferredDelete(std::move(removed));
   }
 }
 
@@ -219,7 +181,6 @@ void ConnectionHandlerImpl::ActiveListener::onAccept(
   // Move active_socket to the sockets_ list if filter iteration needs to continue later.
   // Otherwise we let active_socket be destructed when it goes out of scope.
   if (active_socket->iter_ != active_socket->accept_filters_.end()) {
-    active_socket->startTimer();
     active_socket->moveIntoListBack(std::move(active_socket), sockets_);
   }
 }
@@ -235,11 +196,10 @@ void ConnectionHandlerImpl::ActiveListener::newConnection(Network::ConnectionSoc
     return;
   }
 
-  auto transport_socket = filter_chain->transportSocketFactory().createTransportSocket(nullptr);
+  auto transport_socket = filter_chain->transportSocketFactory().createTransportSocket();
   Network::ConnectionPtr new_connection =
       parent_.dispatcher_.createServerConnection(std::move(socket), std::move(transport_socket));
   new_connection->setBufferLimits(config_.perConnectionBufferLimitBytes());
-  new_connection->setWriteFilterOrder(config_.reverseWriteFilterOrder());
 
   const bool empty_filter_chain = !config_.filterChainFactory().createNetworkFilterChain(
       *new_connection, filter_chain->networkFilterFactories());
@@ -259,18 +219,16 @@ void ConnectionHandlerImpl::ActiveListener::onNewConnection(
 
   // If the connection is already closed, we can just let this connection immediately die.
   if (new_connection->state() != Network::Connection::State::Closed) {
-    ActiveConnectionPtr active_connection(
-        new ActiveConnection(*this, std::move(new_connection), parent_.dispatcher_.timeSystem()));
+    ActiveConnectionPtr active_connection(new ActiveConnection(*this, std::move(new_connection)));
     active_connection->moveIntoList(std::move(active_connection), connections_);
     parent_.num_connections_++;
   }
 }
 
 ConnectionHandlerImpl::ActiveConnection::ActiveConnection(ActiveListener& listener,
-                                                          Network::ConnectionPtr&& new_connection,
-                                                          Event::TimeSystem& time_system)
+                                                          Network::ConnectionPtr&& new_connection)
     : listener_(listener), connection_(std::move(new_connection)),
-      conn_length_(new Stats::Timespan(listener_.stats_.downstream_cx_length_ms_, time_system)) {
+      conn_length_(new Stats::Timespan(listener_.stats_.downstream_cx_length_ms_)) {
   // We just universally set no delay on connections. Theoretically we might at some point want
   // to make this configurable.
   connection_->noDelay(true);

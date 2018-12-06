@@ -93,7 +93,7 @@ protected:
     // HeaderEntry
     const HeaderString& key() const override { return key_; }
     void value(const char* value, uint32_t size) override;
-    void value(absl::string_view value) override;
+    void value(const std::string& value) override;
     void value(uint64_t value) override;
     void value(const HeaderEntry& header) override;
     const HeaderString& value() const override { return value_; }
@@ -138,7 +138,7 @@ protected:
    *
    * Note: the internal iterators held in fields make this unsafe to copy and move, since the
    * reference to end() is not preserved across a move (see Notes in
-   * https://en.cppreference.com/w/cpp/container/list/list). The NonCopyable will suppress both copy
+   * https://en.cppreference.com/w/cpp/container/list/list). The NonCopyable will supress both copy
    * and move constructors/assignment.
    * TODO(htuch): Maybe we want this to movable one day; for now, our header map moves happen on
    * HeaderMapPtr, so the performance impact should not be evident.

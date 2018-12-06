@@ -104,12 +104,12 @@ void HeaderMapWrapper::checkModifiable(lua_State* state) {
   }
 }
 
-int StreamInfoWrapper::luaProtocol(lua_State* state) {
-  lua_pushstring(state, Http::Utility::getProtocolString(stream_info_.protocol().value()).c_str());
+int RequestInfoWrapper::luaProtocol(lua_State* state) {
+  lua_pushstring(state, Http::Utility::getProtocolString(request_info_.protocol().value()).c_str());
   return 1;
 }
 
-int StreamInfoWrapper::luaDynamicMetadata(lua_State* state) {
+int RequestInfoWrapper::luaDynamicMetadata(lua_State* state) {
   if (dynamic_metadata_wrapper_.get() != nullptr) {
     dynamic_metadata_wrapper_.pushStack();
   } else {
@@ -119,12 +119,13 @@ int StreamInfoWrapper::luaDynamicMetadata(lua_State* state) {
 }
 
 DynamicMetadataMapIterator::DynamicMetadataMapIterator(DynamicMetadataMapWrapper& parent)
-    : parent_{parent}, current_{parent_.streamInfo().dynamicMetadata().filter_metadata().begin()} {}
+    : parent_{parent}, current_{parent_.requestInfo().dynamicMetadata().filter_metadata().begin()} {
+}
 
-StreamInfo::StreamInfo& DynamicMetadataMapWrapper::streamInfo() { return parent_.stream_info_; }
+RequestInfo::RequestInfo& DynamicMetadataMapWrapper::requestInfo() { return parent_.request_info_; }
 
 int DynamicMetadataMapIterator::luaPairsIterator(lua_State* state) {
-  if (current_ == parent_.streamInfo().dynamicMetadata().filter_metadata().end()) {
+  if (current_ == parent_.requestInfo().dynamicMetadata().filter_metadata().end()) {
     parent_.iterator_.reset();
     return 0;
   }
@@ -138,7 +139,7 @@ int DynamicMetadataMapIterator::luaPairsIterator(lua_State* state) {
 
 int DynamicMetadataMapWrapper::luaGet(lua_State* state) {
   const char* filter_name = luaL_checkstring(state, 2);
-  const auto& metadata = streamInfo().dynamicMetadata().filter_metadata();
+  const auto& metadata = requestInfo().dynamicMetadata().filter_metadata();
   const auto filter_it = metadata.find(filter_name);
   if (filter_it == metadata.end()) {
     return 0;
@@ -157,7 +158,7 @@ int DynamicMetadataMapWrapper::luaSet(lua_State* state) {
   const char* filter_name = luaL_checkstring(state, 2);
   const char* key = luaL_checkstring(state, 3);
   const char* value = luaL_checkstring(state, 4);
-  streamInfo().setDynamicMetadata(filter_name, MessageUtil::keyValueStruct(key, value));
+  requestInfo().setDynamicMetadata(filter_name, MessageUtil::keyValueStruct(key, value));
   return 0;
 }
 

@@ -19,8 +19,5 @@ envoy_sh_test(
 
 filegroup(
     name = "configs",
-    srcs = glob([
-        "config/*.yaml",
-        "config/*.json",
-    ]),
+    srcs = glob(["config/*.json"]),
 )

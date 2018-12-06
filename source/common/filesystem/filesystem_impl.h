@@ -6,7 +6,6 @@
 #include <cstdlib>
 #include <string>
 
-#include "envoy/api/api.h"
 #include "envoy/api/os_sys_calls.h"
 #include "envoy/event/dispatcher.h"
 #include "envoy/filesystem/filesystem.h"
@@ -31,44 +30,6 @@ struct FileSystemStats {
 };
 
 namespace Filesystem {
-
-/**
- * Captures state, properties, and stats of a file-system.
- */
-class Instance {
-public:
-  Instance(std::chrono::milliseconds file_flush_interval_msec,
-           Thread::ThreadFactory& thread_factory, Stats::Store& store);
-
-  /**
-   * Creates a file, overriding the flush-interval set in the class.
-   *
-   * @param path The path of the file to open.
-   * @param dispatcher The dispatcher used for set up timers to run flush().
-   * @param lock The lock.
-   * @param file_flush_interval_msec Number of milliseconds to delay before flushing.
-   */
-  FileSharedPtr createFile(const std::string& path, Event::Dispatcher& dispatcher,
-                           Thread::BasicLockable& lock,
-                           std::chrono::milliseconds file_flush_interval_msec);
-
-  /**
-   * Creates a file, using the default flush-interval for the class.
-   *
-   * @param path The path of the file to open.
-   * @param dispatcher The dispatcher used for set up timers to run flush().
-   * @param lock The lock.
-   */
-  FileSharedPtr createFile(const std::string& path, Event::Dispatcher& dispatcher,
-                           Thread::BasicLockable& lock) {
-    return createFile(path, dispatcher, lock, file_flush_interval_msec_);
-  }
-
-private:
-  const std::chrono::milliseconds file_flush_interval_msec_;
-  FileSystemStats file_stats_;
-  Thread::ThreadFactory& thread_factory_;
-};
 
 /**
  * @return bool whether a file exists on disk and can be opened for read.
@@ -121,8 +82,7 @@ bool illegalPath(const std::string& path);
 class FileImpl : public File {
 public:
   FileImpl(const std::string& path, Event::Dispatcher& dispatcher, Thread::BasicLockable& lock,
-           FileSystemStats& stats_, std::chrono::milliseconds flush_interval_msec,
-           Thread::ThreadFactory& thread_factory);
+           Stats::Store& stats_store, std::chrono::milliseconds flush_interval_msec);
   ~FileImpl();
 
   // Filesystem::File
@@ -160,7 +120,7 @@ private:
                                           // not get interleaved by multiple processes writing to
                                           // the same file during hot-restart.
   Thread::MutexBasicLockable flush_lock_; // This lock is used to prevent simulataneous flushes from
-                                          // the flush thread and a synchronous flush. This protects
+                                          // the flush thread and a syncronous flush. This protects
                                           // concurrent access to the about_to_write_buffer_, fd_,
                                           // and all other data used during flushing and file
                                           // re-opening.
@@ -186,11 +146,10 @@ private:
                                             // final write to disk.
   Event::TimerPtr flush_timer_;
   Api::OsSysCalls& os_sys_calls_;
-  Thread::ThreadFactory& thread_factory_;
   const std::chrono::milliseconds flush_interval_msec_; // Time interval buffer gets flushed no
                                                         // matter if it reached the MIN_FLUSH_SIZE
                                                         // or not.
-  FileSystemStats& stats_;
+  FileSystemStats stats_;
 };
 
 } // namespace Filesystem

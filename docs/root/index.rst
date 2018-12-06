@@ -18,5 +18,6 @@ Envoy documentation
   configuration/configuration
   operations/operations
   extending/extending
+  api-v1/api
   api-v2/api
   faq/overview

@@ -46,8 +46,8 @@ message HostStatus {
   // Address of this host.
   envoy.api.v2.core.Address address = 1;
 
-  // List of stats specific to this host.
-  repeated SimpleMetric stats = 2;
+  // Mapping from the name of the statistic to the current value.
+  map<string, SimpleMetric> stats = 2;
 
   // The host's current health status.
   HostHealthStatus health_status = 3;
@@ -58,9 +58,6 @@ message HostStatus {
   // success rate or the cluster did not have enough hosts to run through success rate outlier
   // ejection.
   envoy.type.Percent success_rate = 4;
-
-  // The host's weight. If not configured, the value defaults to 1.
-  uint32 weight = 5;
 }
 
 // Health status for a host.

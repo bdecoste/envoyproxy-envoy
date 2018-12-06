@@ -25,8 +25,7 @@ public:
   IntegrationStreamDecoderPtr makeHeaderOnlyRequest(const Http::HeaderMap& headers);
   IntegrationStreamDecoderPtr makeRequestWithBody(const Http::HeaderMap& headers,
                                                   uint64_t body_size);
-  bool sawGoAway() const { return saw_goaway_; }
-  bool connected() const { return connected_; }
+  bool sawGoAway() { return saw_goaway_; }
   void sendData(Http::StreamEncoder& encoder, absl::string_view data, bool end_stream);
   void sendData(Http::StreamEncoder& encoder, Buffer::Instance& data, bool end_stream);
   void sendData(Http::StreamEncoder& encoder, uint64_t size, bool end_stream);
@@ -34,9 +33,8 @@ public:
   void sendReset(Http::StreamEncoder& encoder);
   std::pair<Http::StreamEncoder&, IntegrationStreamDecoderPtr>
   startRequest(const Http::HeaderMap& headers);
-  bool waitForDisconnect(std::chrono::milliseconds time_to_wait = std::chrono::milliseconds(0));
+  void waitForDisconnect();
   Network::ClientConnection* connection() const { return connection_.get(); }
-  Network::ConnectionEvent last_connection_event() const { return last_connection_event_; }
 
 private:
   struct ConnectionCallbacks : public Network::ConnectionCallbacks {
@@ -67,7 +65,6 @@ private:
   bool connected_{};
   bool disconnected_{};
   bool saw_goaway_{};
-  Network::ConnectionEvent last_connection_event_;
 };
 
 typedef std::unique_ptr<IntegrationCodecClient> IntegrationCodecClientPtr;
@@ -78,15 +75,12 @@ typedef std::unique_ptr<IntegrationCodecClient> IntegrationCodecClientPtr;
 class HttpIntegrationTest : public BaseIntegrationTest {
 public:
   HttpIntegrationTest(Http::CodecClient::Type downstream_protocol,
-                      Network::Address::IpVersion version, TestTimeSystemPtr time_system,
+                      Network::Address::IpVersion version,
                       const std::string& config = ConfigHelper::HTTP_PROXY_CONFIG);
   virtual ~HttpIntegrationTest();
 
 protected:
   IntegrationCodecClientPtr makeHttpConnection(uint32_t port);
-  // Makes a http connection object without checking its connected state.
-  IntegrationCodecClientPtr makeRawHttpConnection(Network::ClientConnectionPtr&& conn);
-  // Makes a http connection object with asserting a connected state.
   IntegrationCodecClientPtr makeHttpConnection(Network::ClientConnectionPtr&& conn);
 
   // Sets downstream_protocol_ and alters the HTTP connection manager codec type in the
@@ -103,11 +97,8 @@ protected:
       const Http::TestHeaderMapImpl& request_headers, uint32_t request_body_size,
       const Http::TestHeaderMapImpl& response_headers, uint32_t response_body_size);
 
-  // Wait for the end of stream on the next upstream stream on any of the provided fake upstreams.
+  // Wait for the end of stream on the next upstream stream on fake_upstreams_
   // Sets fake_upstream_connection_ to the connection and upstream_request_ to stream.
-  // In cases where the upstream that will receive the request is not deterministic, a second
-  // upstream index may be provided, in which case both upstreams will be checked for requests.
-  uint64_t waitForNextUpstreamRequest(const std::vector<uint64_t>& upstream_indices);
   void waitForNextUpstreamRequest(uint64_t upstream_index = 0);
 
   // Close |codec_client_| and |fake_upstream_connection_| cleanly.
@@ -134,17 +125,12 @@ protected:
   void testRouterDownstreamDisconnectBeforeResponseComplete(
       ConnectionCreationFunction* creator = nullptr);
   void testRouterUpstreamResponseBeforeRequestComplete();
-  void testTwoRequests(bool force_network_backup = false);
+  void testTwoRequests();
   void testOverlyLongHeaders();
   void testIdleTimeoutBasic();
   void testIdleTimeoutWithTwoRequests();
   void testIdleTimerDisabled();
   void testUpstreamDisconnectWithTwoRequests();
-  void testHeadersOnlyFilterEncoding();
-  void testHeadersOnlyFilterDecoding();
-  void testHeadersOnlyFilterEncodingIntermediateFilters();
-  void testHeadersOnlyFilterDecodingIntermediateFilters();
-  void testHeadersOnlyFilterInterleaved();
   // HTTP/1 tests
   void testBadFirstline();
   void testMissingDelimiter();
@@ -175,17 +161,10 @@ protected:
   void testDrainClose();
   void testRetry();
   void testRetryHittingBufferLimit();
-  void testRetryAttemptCountHeader();
   void testGrpcRouterNotFound();
   void testGrpcRetry();
-  void testRetryPriority();
-  void testRetryHostPredicateFilter();
   void testHittingDecoderFilterLimit();
   void testHittingEncoderFilterLimit();
-  void testEnvoyProxyMetadataInResponse();
-  void testEnvoyProxyMultipleMetadata();
-  void testEnvoyProxyInvalidMetadata();
-  void testEnvoyMultipleMetadataReachSizeLimit();
   void testEnvoyHandling100Continue(bool additional_continue_from_upstream = false,
                                     const std::string& via = "");
   void testEnvoyProxying100Continue(bool continue_before_upstream_complete = false,
@@ -196,8 +175,6 @@ protected:
   void testTrailers(uint64_t request_size, uint64_t response_size);
 
   Http::CodecClient::Type downstreamProtocol() const { return downstream_protocol_; }
-  // Prefix listener stat with IP:port, including IP version dependent loopback address.
-  std::string listenerStatPrefix(const std::string& stat_name);
 
   // The client making requests to Envoy.
   IntegrationCodecClientPtr codec_client_;
@@ -209,8 +186,6 @@ protected:
   Http::StreamEncoder* request_encoder_{nullptr};
   // The response headers sent by sendRequestAndWaitForResponse() by default.
   Http::TestHeaderMapImpl default_response_headers_{{":status", "200"}};
-  Http::TestHeaderMapImpl default_request_headers_{
-      {":method", "GET"}, {":path", "/test/long/url"}, {":scheme", "http"}, {":authority", "host"}};
   // The codec type for the client-to-Envoy connection
   Http::CodecClient::Type downstream_protocol_{Http::CodecClient::Type::HTTP1};
 };

@@ -1,14 +1,11 @@
 #include <chrono>
 
-#include "envoy/stats/stats.h"
-
 #include "common/http/header_map_impl.h"
 #include "common/router/retry_state_impl.h"
 #include "common/upstream/resource_manager_impl.h"
 
 #include "test/mocks/router/mocks.h"
 #include "test/mocks/runtime/mocks.h"
-#include "test/mocks/stats/mocks.h"
 #include "test/mocks/upstream/mocks.h"
 #include "test/test_common/printers.h"
 #include "test/test_common/utility.h"
@@ -30,11 +27,6 @@ public:
         .WillByDefault(Return(true));
   }
 
-  void setup() {
-    Http::TestHeaderMapImpl headers;
-    setup(headers);
-  }
-
   void setup(Http::HeaderMap& request_headers) {
     state_ = RetryStateImpl::create(policy_, request_headers, cluster_, runtime_, random_,
                                     dispatcher_, Upstream::ResourcePriority::Default);
@@ -45,7 +37,7 @@ public:
     EXPECT_CALL(*retry_timer_, enableTimer(_));
   }
 
-  NiceMock<TestRetryPolicy> policy_;
+  TestRetryPolicy policy_;
   NiceMock<Upstream::MockClusterInfo> cluster_;
   NiceMock<Runtime::MockLoader> runtime_;
   NiceMock<Runtime::MockRandomGenerator> random_;
@@ -124,16 +116,6 @@ TEST_F(RouterRetryStateImplTest, Policy5xxRemote503Overloaded) {
   EXPECT_TRUE(state_->enabled());
 
   Http::TestHeaderMapImpl response_headers{{":status", "503"}, {"x-envoy-overloaded", "true"}};
-  EXPECT_EQ(RetryStatus::No, state_->shouldRetry(&response_headers, no_reset_, callback_));
-}
-
-TEST_F(RouterRetryStateImplTest, PolicyResourceExhaustedRemoteRateLimited) {
-  Http::TestHeaderMapImpl request_headers{{"x-envoy-retry-grpc-on", "resource-exhausted"}};
-  setup(request_headers);
-  EXPECT_TRUE(state_->enabled());
-
-  Http::TestHeaderMapImpl response_headers{
-      {":status", "200"}, {"grpc-status", "8"}, {"x-envoy-ratelimited", "true"}};
   EXPECT_EQ(RetryStatus::No, state_->shouldRetry(&response_headers, no_reset_, callback_));
 }
 
@@ -255,20 +237,6 @@ TEST_F(RouterRetryStateImplTest, PolicyGrpcUnavilable) {
   EXPECT_EQ(RetryStatus::No, state_->shouldRetry(&response_headers, no_reset_, callback_));
 }
 
-TEST_F(RouterRetryStateImplTest, PolicyGrpcInternal) {
-  Http::TestHeaderMapImpl request_headers{{"x-envoy-retry-grpc-on", "internal"}};
-  setup(request_headers);
-  EXPECT_TRUE(state_->enabled());
-
-  Http::TestHeaderMapImpl response_headers{{":status", "200"}, {"grpc-status", "13"}};
-  expectTimerCreateAndEnable();
-  EXPECT_EQ(RetryStatus::Yes, state_->shouldRetry(&response_headers, no_reset_, callback_));
-  EXPECT_CALL(callback_ready_, ready());
-  retry_timer_->callback_();
-
-  EXPECT_EQ(RetryStatus::No, state_->shouldRetry(&response_headers, no_reset_, callback_));
-}
-
 TEST_F(RouterRetryStateImplTest, Policy5xxRemote200RemoteReset) {
   // Don't retry after reply start.
   Http::TestHeaderMapImpl request_headers{{"x-envoy-retry-on", "5xx"}};
@@ -336,72 +304,6 @@ TEST_F(RouterRetryStateImplTest, PolicyRetriable4xxReset) {
   EXPECT_EQ(RetryStatus::No, state_->shouldRetry(nullptr, remote_reset_, callback_));
 }
 
-TEST_F(RouterRetryStateImplTest, RetriableStatusCodes) {
-  policy_.retriable_status_codes_.push_back(409);
-  Http::TestHeaderMapImpl request_headers{{"x-envoy-retry-on", "retriable-status-codes"}};
-  setup(request_headers);
-  EXPECT_TRUE(state_->enabled());
-
-  expectTimerCreateAndEnable();
-
-  Http::TestHeaderMapImpl response_headers{{":status", "409"}};
-  EXPECT_EQ(RetryStatus::Yes, state_->shouldRetry(&response_headers, no_reset_, callback_));
-}
-
-TEST_F(RouterRetryStateImplTest, RetriableStatusCodesUpstreamReset) {
-  policy_.retriable_status_codes_.push_back(409);
-  Http::TestHeaderMapImpl request_headers{{"x-envoy-retry-on", "retriable-status-codes"}};
-  setup(request_headers);
-  EXPECT_TRUE(state_->enabled());
-  EXPECT_EQ(RetryStatus::No, state_->shouldRetry(nullptr, remote_reset_, callback_));
-}
-
-TEST_F(RouterRetryStateImplTest, RetriableStatusCodesHeader) {
-  {
-    Http::TestHeaderMapImpl request_headers{{"x-envoy-retry-on", "retriable-status-codes"},
-                                            {"x-envoy-retriable-status-codes", "200"}};
-    setup(request_headers);
-    EXPECT_TRUE(state_->enabled());
-
-    expectTimerCreateAndEnable();
-
-    Http::TestHeaderMapImpl response_headers{{":status", "200"}};
-    EXPECT_EQ(RetryStatus::Yes, state_->shouldRetry(&response_headers, no_reset_, callback_));
-  }
-  {
-    Http::TestHeaderMapImpl request_headers{{"x-envoy-retry-on", "retriable-status-codes"},
-                                            {"x-envoy-retriable-status-codes", "418,200"}};
-    setup(request_headers);
-    EXPECT_TRUE(state_->enabled());
-
-    expectTimerCreateAndEnable();
-
-    Http::TestHeaderMapImpl response_headers{{":status", "200"}};
-    EXPECT_EQ(RetryStatus::Yes, state_->shouldRetry(&response_headers, no_reset_, callback_));
-  }
-  {
-    Http::TestHeaderMapImpl request_headers{{"x-envoy-retry-on", "retriable-status-codes"},
-                                            {"x-envoy-retriable-status-codes", "   418 junk,200"}};
-    setup(request_headers);
-    EXPECT_TRUE(state_->enabled());
-
-    expectTimerCreateAndEnable();
-
-    Http::TestHeaderMapImpl response_headers{{":status", "200"}};
-    EXPECT_EQ(RetryStatus::Yes, state_->shouldRetry(&response_headers, no_reset_, callback_));
-  }
-  {
-    Http::TestHeaderMapImpl request_headers{
-        {"x-envoy-retry-on", "retriable-status-codes"},
-        {"x-envoy-retriable-status-codes", "   418 junk,xxx200"}};
-    setup(request_headers);
-    EXPECT_TRUE(state_->enabled());
-
-    Http::TestHeaderMapImpl response_headers{{":status", "200"}};
-    EXPECT_EQ(RetryStatus::No, state_->shouldRetry(&response_headers, no_reset_, callback_));
-  }
-}
-
 TEST_F(RouterRetryStateImplTest, RouteConfigNoHeaderConfig) {
   policy_.num_retries_ = 1;
   policy_.retry_on_ = RetryPolicy::RETRY_ON_CONNECT_FAILURE;
@@ -416,7 +318,8 @@ TEST_F(RouterRetryStateImplTest, RouteConfigNoHeaderConfig) {
 }
 
 TEST_F(RouterRetryStateImplTest, NoAvailableRetries) {
-  cluster_.resetResourceManager(0, 0, 0, 0);
+  cluster_.resource_manager_.reset(
+      new Upstream::ResourceManagerImpl(runtime_, "fake_key", 0, 0, 0, 0));
 
   Http::TestHeaderMapImpl request_headers{{"x-envoy-retry-on", "connect-failure"}};
   setup(request_headers);
@@ -451,7 +354,6 @@ TEST_F(RouterRetryStateImplTest, MaxRetriesHeader) {
   EXPECT_CALL(callback_ready_, ready());
   retry_timer_->callback_();
 
-  EXPECT_EQ(1UL, cluster_.circuit_breakers_stats_.rq_retry_open_.value());
   EXPECT_EQ(RetryStatus::No, state_->shouldRetry(nullptr, connect_failure_, callback_));
 
   EXPECT_EQ(3UL, cluster_.stats().upstream_rq_retry_.value());
@@ -489,16 +391,6 @@ TEST_F(RouterRetryStateImplTest, Backoff) {
 
   EXPECT_EQ(3UL, cluster_.stats().upstream_rq_retry_.value());
   EXPECT_EQ(1UL, cluster_.stats().upstream_rq_retry_success_.value());
-  EXPECT_EQ(0UL, cluster_.circuit_breakers_stats_.rq_retry_open_.value());
-}
-
-TEST_F(RouterRetryStateImplTest, HostSelectionAttempts) {
-  policy_.host_selection_max_attempts_ = 2;
-  policy_.retry_on_ = RetryPolicy::RETRY_ON_CONNECT_FAILURE;
-
-  setup();
-
-  EXPECT_EQ(2, state_->hostSelectionMaxAttempts());
 }
 
 TEST_F(RouterRetryStateImplTest, Cancel) {

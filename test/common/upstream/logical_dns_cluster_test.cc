@@ -82,7 +82,7 @@ public:
   }
 
   void testBasicSetup(const std::string& config, const std::string& expected_address,
-                      const uint32_t expected_port, ConfigType config_type = ConfigType::V2_YAML) {
+                      ConfigType config_type = ConfigType::V2_YAML) {
     expectResolve(Network::DnsLookupFamily::V4Only, expected_address);
     if (config_type == ConfigType::V1_JSON) {
       setupFromV1Json(config);
@@ -106,17 +106,11 @@ public:
               cluster_->prioritySet().hostSetsPerPriority()[0]->healthyHosts()[0]);
     HostSharedPtr logical_host = cluster_->prioritySet().hostSetsPerPriority()[0]->hosts()[0];
 
-    // Regression test for issue #3908. Make sure we do not get "0.0.0.0:0" as the logical host's
-    // health check address.
-    EXPECT_NE("0.0.0.0:0", logical_host->healthCheckAddress()->asString());
-    EXPECT_EQ(fmt::format("127.0.0.1:{}", expected_port),
-              logical_host->healthCheckAddress()->asString());
-
     EXPECT_CALL(dispatcher_,
                 createClientConnection_(
                     PointeesEq(Network::Utility::resolveUrl("tcp://127.0.0.1:443")), _, _, _))
         .WillOnce(Return(new NiceMock<Network::MockClientConnection>()));
-    logical_host->createConnection(dispatcher_, nullptr, nullptr);
+    logical_host->createConnection(dispatcher_, nullptr);
     logical_host->outlierDetector().putHttpResponseCode(200);
 
     expectResolve(Network::DnsLookupFamily::V4Only, expected_address);
@@ -126,16 +120,12 @@ public:
     EXPECT_CALL(*resolve_timer_, enableTimer(_));
     dns_callback_(TestUtility::makeDnsResponse({"127.0.0.1", "127.0.0.2", "127.0.0.3"}));
 
-    EXPECT_NE("0.0.0.0:0", logical_host->healthCheckAddress()->asString());
-    EXPECT_EQ(fmt::format("127.0.0.1:{}", expected_port),
-              logical_host->healthCheckAddress()->asString());
-
     EXPECT_EQ(logical_host, cluster_->prioritySet().hostSetsPerPriority()[0]->hosts()[0]);
     EXPECT_CALL(dispatcher_,
                 createClientConnection_(
                     PointeesEq(Network::Utility::resolveUrl("tcp://127.0.0.1:443")), _, _, _))
         .WillOnce(Return(new NiceMock<Network::MockClientConnection>()));
-    Host::CreateConnectionData data = logical_host->createConnection(dispatcher_, nullptr, nullptr);
+    Host::CreateConnectionData data = logical_host->createConnection(dispatcher_, nullptr);
     EXPECT_FALSE(data.host_description_->canary());
     EXPECT_EQ(&cluster_->prioritySet().hostSetsPerPriority()[0]->hosts()[0]->cluster(),
               &data.host_description_->cluster());
@@ -158,16 +148,12 @@ public:
     EXPECT_CALL(*resolve_timer_, enableTimer(_));
     dns_callback_(TestUtility::makeDnsResponse({"127.0.0.3", "127.0.0.1", "127.0.0.2"}));
 
-    EXPECT_NE("0.0.0.0:0", logical_host->healthCheckAddress()->asString());
-    EXPECT_EQ(fmt::format("127.0.0.3:{}", expected_port),
-              logical_host->healthCheckAddress()->asString());
-
     EXPECT_EQ(logical_host, cluster_->prioritySet().hostSetsPerPriority()[0]->hosts()[0]);
     EXPECT_CALL(dispatcher_,
                 createClientConnection_(
                     PointeesEq(Network::Utility::resolveUrl("tcp://127.0.0.3:443")), _, _, _))
         .WillOnce(Return(new NiceMock<Network::MockClientConnection>()));
-    logical_host->createConnection(dispatcher_, nullptr, nullptr);
+    logical_host->createConnection(dispatcher_, nullptr);
 
     expectResolve(Network::DnsLookupFamily::V4Only, expected_address);
     resolve_timer_->callback_();
@@ -181,7 +167,7 @@ public:
                 createClientConnection_(
                     PointeesEq(Network::Utility::resolveUrl("tcp://127.0.0.3:443")), _, _, _))
         .WillOnce(Return(new NiceMock<Network::MockClientConnection>()));
-    logical_host->createConnection(dispatcher_, nullptr, nullptr);
+    logical_host->createConnection(dispatcher_, nullptr);
 
     // Make sure we cancel.
     EXPECT_CALL(active_dns_query_, cancel());
@@ -407,10 +393,9 @@ TEST_F(LogicalDnsClusterTest, Basic) {
               port_value: 8000
   )EOF";
 
-  testBasicSetup(json, "foo.bar.com", 443, ConfigType::V1_JSON);
-  testBasicSetup(basic_yaml_hosts, "foo.bar.com", 443);
-  // Expect to override the health check address port value.
-  testBasicSetup(basic_yaml_load_assignment, "foo.bar.com", 8000);
+  testBasicSetup(json, "foo.bar.com", ConfigType::V1_JSON);
+  testBasicSetup(basic_yaml_hosts, "foo.bar.com");
+  testBasicSetup(basic_yaml_load_assignment, "foo.bar.com");
 }
 
 } // namespace Upstream

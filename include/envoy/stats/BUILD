@@ -18,7 +18,6 @@ envoy_cc_library(
         "source.h",
         "stat_data_allocator.h",
         "stats.h",
-        "stats_matcher.h",
         "stats_options.h",
         "store.h",
         "tag.h",
@@ -26,11 +25,6 @@ envoy_cc_library(
         "tag_producer.h",
     ],
     deps = ["//include/envoy/common:interval_set_interface"],
-)
-
-envoy_cc_library(
-    name = "symbol_table_interface",
-    hdrs = ["symbol_table.h"],
 )
 
 envoy_cc_library(

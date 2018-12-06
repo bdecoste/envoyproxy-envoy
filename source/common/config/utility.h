@@ -10,7 +10,6 @@
 #include "envoy/registry/registry.h"
 #include "envoy/server/filter_config.h"
 #include "envoy/stats/scope.h"
-#include "envoy/stats/stats_matcher.h"
 #include "envoy/stats/stats_options.h"
 #include "envoy/stats/tag_producer.h"
 #include "envoy/upstream/cluster_manager.h"
@@ -34,20 +33,6 @@ public:
   const std::string RestLegacy{"REST_LEGACY"};
   const std::string Rest{"REST"};
   const std::string Grpc{"GRPC"};
-};
-
-/**
- * RateLimitSettings for discovery requests.
- */
-struct RateLimitSettings {
-  // Default Max Tokens.
-  static const uint32_t DefaultMaxTokens = 100;
-  // Default Fill Rate.
-  static constexpr double DefaultFillRate = 10;
-
-  uint32_t max_tokens_{DefaultMaxTokens};
-  double fill_rate_{DefaultFillRate};
-  bool enabled_{false};
 };
 
 typedef ConstSingleton<ApiTypeValues> ApiType;
@@ -214,14 +199,6 @@ public:
                                  envoy::api::v2::core::ConfigSource& lds_config);
 
   /**
-   * Parses RateLimit configuration from envoy::api::v2::core::ApiConfigSource to RateLimitSettings.
-   * @param api_config_source ApiConfigSource.
-   * @return RateLimitSettings.
-   */
-  static RateLimitSettings
-  parseRateLimitSettings(const envoy::api::v2::core::ApiConfigSource& api_config_source);
-
-  /**
    * Generate a SubscriptionStats object from stats scope.
    * @param scope for stats.
    * @return SubscriptionStats for scope.
@@ -303,13 +280,14 @@ public:
    * @return ProtobufTypes::MessagePtr the translated config
    * @throws EnvoyException if the factory does not support protocol options
    */
-  static ProtobufTypes::MessagePtr
-  translateToFactoryProtocolOptionsConfig(const Protobuf::Message& source, const std::string& name,
-                                          Server::Configuration::ProtocolOptionsFactory& factory) {
+  static ProtobufTypes::MessagePtr translateToFactoryProtocolOptionsConfig(
+      const Protobuf::Message& source,
+      Server::Configuration::NamedNetworkFilterConfigFactory& factory) {
     ProtobufTypes::MessagePtr config = factory.createEmptyProtocolOptionsProto();
 
     if (config == nullptr) {
-      throw EnvoyException(fmt::format("filter {} does not support protocol options", name));
+      throw EnvoyException(
+          fmt::format("filter {} does not support protocol options", factory.name()));
     }
 
     MessageUtil::jsonConvert(source, *config);
@@ -324,12 +302,6 @@ public:
    */
   static Stats::TagProducerPtr
   createTagProducer(const envoy::config::bootstrap::v2::Bootstrap& bootstrap);
-
-  /**
-   * Create StatsMatcher instance.
-   */
-  static Stats::StatsMatcherPtr
-  createStatsMatcher(const envoy::config::bootstrap::v2::Bootstrap& bootstrap);
 
   /**
    * Check user supplied name in RDS/CDS/LDS for sanity.

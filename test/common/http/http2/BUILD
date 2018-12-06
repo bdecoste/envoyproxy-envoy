@@ -13,6 +13,8 @@ envoy_package()
 envoy_proto_library(
     name = "codec_impl_fuzz_proto",
     srcs = ["codec_impl_fuzz.proto"],
+    external_deps = ["well_known_protos"],
+    generate_python = 0,
     deps = ["//test/fuzz:common_proto"],
 )
 
@@ -21,7 +23,7 @@ envoy_cc_fuzz_test(
     srcs = ["codec_impl_fuzz_test.cc"],
     corpus = "codec_impl_corpus",
     deps = [
-        ":codec_impl_fuzz_proto_cc",
+        ":codec_impl_fuzz_proto",
         "//source/common/http:header_map_lib",
         "//source/common/http/http2:codec_lib",
         "//test/fuzz:utility_lib",
@@ -63,21 +65,5 @@ envoy_cc_test(
         "//test/mocks/network:network_mocks",
         "//test/mocks/runtime:runtime_mocks",
         "//test/mocks/upstream:upstream_mocks",
-        "//test/test_common:test_time_lib",
-    ],
-)
-
-envoy_cc_test(
-    name = "metadata_encoder_decoder_test",
-    srcs = ["metadata_encoder_decoder_test.cc"],
-    external_deps = [
-        "nghttp2",
-    ],
-    deps = [
-        "//source/common/buffer:buffer_lib",
-        "//source/common/http/http2:metadata_decoder_lib",
-        "//source/common/http/http2:metadata_encoder_lib",
-        "//source/common/runtime:runtime_lib",
-        "//test/test_common:utility_lib",
     ],
 )

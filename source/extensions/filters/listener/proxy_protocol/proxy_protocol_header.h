@@ -1,7 +1,5 @@
 #pragma once
 
-#include "envoy/network/address.h"
-
 #include "common/common/assert.h"
 
 namespace Envoy {

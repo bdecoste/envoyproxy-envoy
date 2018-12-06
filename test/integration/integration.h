@@ -14,8 +14,6 @@
 #include "test/mocks/buffer/mocks.h"
 #include "test/test_common/environment.h"
 #include "test/test_common/printers.h"
-#include "test/test_common/simulated_time_system.h"
-#include "test/test_common/test_time.h"
 
 #include "spdlog/spdlog.h"
 
@@ -34,7 +32,6 @@ public:
   const Http::HeaderMap* continue_headers() { return continue_headers_.get(); }
   const Http::HeaderMap& headers() { return *headers_; }
   const Http::HeaderMapPtr& trailers() { return trailers_; }
-  const Http::MetadataMap& metadata_map() { return *metadata_map_; }
   void waitForContinueHeaders();
   void waitForHeaders();
   void waitForBodyData(uint64_t size);
@@ -46,7 +43,6 @@ public:
   void decodeHeaders(Http::HeaderMapPtr&& headers, bool end_stream) override;
   void decodeData(Buffer::Instance& data, bool end_stream) override;
   void decodeTrailers(Http::HeaderMapPtr&& trailers) override;
-  void decodeMetadata(Http::MetadataMapPtr&& metadata_map) override;
 
   // Http::StreamCallbacks
   void onResetStream(Http::StreamResetReason reason) override;
@@ -58,7 +54,6 @@ private:
   Http::HeaderMapPtr continue_headers_;
   Http::HeaderMapPtr headers_;
   Http::HeaderMapPtr trailers_;
-  Http::MetadataMapPtr metadata_map_{new Http::MetadataMap()};
   bool waiting_for_end_stream_{};
   bool saw_end_stream_{};
   std::string body_;
@@ -123,22 +118,11 @@ struct ApiFilesystemConfig {
  */
 class BaseIntegrationTest : Logger::Loggable<Logger::Id::testing> {
 public:
-  using TestTimeSystemPtr = std::unique_ptr<Event::TestTimeSystem>;
-
-  BaseIntegrationTest(Network::Address::IpVersion version, TestTimeSystemPtr time_system,
+  BaseIntegrationTest(Network::Address::IpVersion version,
                       const std::string& config = ConfigHelper::HTTP_PROXY_CONFIG);
-
   virtual ~BaseIntegrationTest() {}
 
-  /**
-   * Helper function to create a simulated time integration test during construction.
-   */
-  static TestTimeSystemPtr simTime() { return std::make_unique<Event::SimulatedTimeSystem>(); }
-
-  /**
-   * Helper function to create a wall-clock time integration test during construction.
-   */
-  static TestTimeSystemPtr realTime() { return std::make_unique<Event::TestRealTimeSystem>(); }
+  void SetUp();
 
   // Initialize the basic proto configuration, create fake upstreams, and start Envoy.
   virtual void initialize();
@@ -175,15 +159,8 @@ public:
   void createApiTestServer(const ApiFilesystemConfig& api_filesystem_config,
                            const std::vector<std::string>& port_names);
 
-  Event::TestTimeSystem& timeSystem() { return *time_system_; }
-
-  Stats::IsolatedStoreImpl stats_store_;
   Api::ApiPtr api_;
   MockBufferFactory* mock_buffer_factory_; // Will point to the dispatcher's factory.
-private:
-  TestTimeSystemPtr time_system_;
-
-public:
   Event::DispatcherPtr dispatcher_;
 
   /**
@@ -201,13 +178,6 @@ public:
                                      bool disconnect_after_headers_complete = false);
 
 protected:
-  // Create the envoy server in another thread and start it.
-  // Will not return until that server is listening.
-  virtual IntegrationTestServerPtr
-  createIntegrationTestServer(const std::string& bootstrap_path,
-                              std::function<void()> pre_worker_start_steps,
-                              Event::TestTimeSystem& time_system);
-
   bool initialized() const { return initialized_; }
 
   // The IpVersion (IPv4, IPv6) to use.
@@ -231,14 +201,15 @@ protected:
 
   bool enable_half_close_{false};
 
-  // True if test will use a fixed RNG value.
-  bool deterministic_{};
-
 private:
+  // The codec type for the client-to-Envoy connection
+  Http::CodecClient::Type downstream_protocol_{Http::CodecClient::Type::HTTP1};
   // The type for the Envoy-to-backend connection
   FakeHttpConnection::Type upstream_protocol_{FakeHttpConnection::Type::HTTP1};
   // True if initialized() has been called.
   bool initialized_{};
+  // True if test will use a fixed RNG value.
+  bool deterministic_{};
 };
 
 } // namespace Envoy

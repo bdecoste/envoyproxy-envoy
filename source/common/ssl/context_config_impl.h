@@ -4,14 +4,12 @@
 #include <vector>
 
 #include "envoy/api/v2/auth/cert.pb.h"
-#include "envoy/secret/secret_callbacks.h"
+#include "envoy/secret/secret_manager.h"
 #include "envoy/secret/secret_provider.h"
-#include "envoy/server/transport_socket_config.h"
 #include "envoy/ssl/context_config.h"
 
 #include "common/common/empty_string.h"
 #include "common/json/json_loader.h"
-#include "common/ssl/tls_certificate_config_impl.h"
 
 namespace Envoy {
 namespace Ssl {
@@ -20,44 +18,42 @@ static const std::string INLINE_STRING = "<inline>";
 
 class ContextConfigImpl : public virtual Ssl::ContextConfig {
 public:
-  ~ContextConfigImpl() override;
-
   // Ssl::ContextConfig
   const std::string& alpnProtocols() const override { return alpn_protocols_; }
+  const std::string& altAlpnProtocols() const override { return alt_alpn_protocols_; }
   const std::string& cipherSuites() const override { return cipher_suites_; }
   const std::string& ecdhCurves() const override { return ecdh_curves_; }
-  // TODO(htuch): This needs to be made const again and/or zero copy and/or callers fixed.
-  std::vector<std::reference_wrapper<const TlsCertificateConfig>> tlsCertificates() const override {
-    std::vector<std::reference_wrapper<const TlsCertificateConfig>> configs;
-    for (const auto& config : tls_certificate_configs_) {
-      configs.push_back(config);
-    }
-    return configs;
+  const std::string& caCert() const override { return ca_cert_; }
+  const std::string& caCertPath() const override {
+    return (ca_cert_path_.empty() && !ca_cert_.empty()) ? INLINE_STRING : ca_cert_path_;
   }
-  const CertificateValidationContextConfig* certificateValidationContext() const override {
-    return validation_context_config_.get();
+  const std::string& certificateRevocationList() const override {
+    return certificate_revocation_list_;
   }
+  const std::string& certificateRevocationListPath() const override {
+    return (certificate_revocation_list_path_.empty() && !certificate_revocation_list_.empty())
+               ? INLINE_STRING
+               : certificate_revocation_list_path_;
+  }
+  const TlsCertificateConfig* tlsCertificate() const override {
+    return tls_certficate_provider_ == nullptr ? nullptr : tls_certficate_provider_->secret();
+  }
+  const std::vector<std::string>& verifySubjectAltNameList() const override {
+    return verify_subject_alt_name_list_;
+  };
+  const std::vector<std::string>& verifyCertificateHashList() const override {
+    return verify_certificate_hash_list_;
+  };
+  const std::vector<std::string>& verifyCertificateSpkiList() const override {
+    return verify_certificate_spki_list_;
+  };
+  bool allowExpiredCertificate() const override { return allow_expired_certificate_; };
   unsigned minProtocolVersion() const override { return min_protocol_version_; };
   unsigned maxProtocolVersion() const override { return max_protocol_version_; };
 
-  bool isReady() const override {
-    const bool tls_is_ready =
-        (tls_certficate_providers_.empty() || !tls_certificate_configs_.empty());
-    const bool combined_cvc_is_ready =
-        (default_cvc_ == nullptr || validation_context_config_ != nullptr);
-    const bool cvc_is_ready = (certficate_validation_context_provider_ == nullptr ||
-                               default_cvc_ != nullptr || validation_context_config_ != nullptr);
-    return tls_is_ready && combined_cvc_is_ready && cvc_is_ready;
-  }
-
-  void setSecretUpdateCallback(std::function<void()> callback) override;
-
-  Ssl::CertificateValidationContextConfigPtr getCombinedValidationContextConfig(
-      const envoy::api::v2::auth::CertificateValidationContext& dynamic_cvc);
-
 protected:
   ContextConfigImpl(const envoy::api::v2::auth::CommonTlsContext& config,
-                    Server::Configuration::TransportSocketFactoryContext& factory_context);
+                    Secret::SecretManager& secret_manager);
 
 private:
   static unsigned
@@ -68,55 +64,44 @@ private:
   static const std::string DEFAULT_ECDH_CURVES;
 
   const std::string alpn_protocols_;
+  const std::string alt_alpn_protocols_;
   const std::string cipher_suites_;
   const std::string ecdh_curves_;
-
-  std::vector<Ssl::TlsCertificateConfigImpl> tls_certificate_configs_;
-  Ssl::CertificateValidationContextConfigPtr validation_context_config_;
-  // If certificate validation context type is combined_validation_context. default_cvc_
-  // holds a copy of CombinedCertificateValidationContext::default_validation_context.
-  // Otherwise, default_cvc_ is nullptr.
-  std::unique_ptr<envoy::api::v2::auth::CertificateValidationContext> default_cvc_;
-  std::vector<Secret::TlsCertificateConfigProviderSharedPtr> tls_certficate_providers_;
-  // Handle for TLS certificate dyanmic secret callback.
-  Common::CallbackHandle* tc_update_callback_handle_{};
-  Secret::CertificateValidationContextConfigProviderSharedPtr
-      certficate_validation_context_provider_;
-  // Handle for certificate validation context dyanmic secret callback.
-  Common::CallbackHandle* cvc_update_callback_handle_{};
-  Common::CallbackHandle* cvc_validation_callback_handle_{};
+  const std::string ca_cert_;
+  const std::string ca_cert_path_;
+  const std::string certificate_revocation_list_;
+  const std::string certificate_revocation_list_path_;
+  Secret::TlsCertificateConfigProviderSharedPtr tls_certficate_provider_;
+  const std::vector<std::string> verify_subject_alt_name_list_;
+  const std::vector<std::string> verify_certificate_hash_list_;
+  const std::vector<std::string> verify_certificate_spki_list_;
+  const bool allow_expired_certificate_;
   const unsigned min_protocol_version_;
   const unsigned max_protocol_version_;
 };
 
 class ClientContextConfigImpl : public ContextConfigImpl, public ClientContextConfig {
 public:
-  explicit ClientContextConfigImpl(
-      const envoy::api::v2::auth::UpstreamTlsContext& config,
-      Server::Configuration::TransportSocketFactoryContext& secret_provider_context);
-  explicit ClientContextConfigImpl(
-      const Json::Object& config,
-      Server::Configuration::TransportSocketFactoryContext& secret_provider_context);
+  explicit ClientContextConfigImpl(const envoy::api::v2::auth::UpstreamTlsContext& config,
+                                   Secret::SecretManager& secret_manager);
+  explicit ClientContextConfigImpl(const Json::Object& config,
+                                   Secret::SecretManager& secret_manager);
 
   // Ssl::ClientContextConfig
   const std::string& serverNameIndication() const override { return server_name_indication_; }
   bool allowRenegotiation() const override { return allow_renegotiation_; }
-  size_t maxSessionKeys() const override { return max_session_keys_; }
 
 private:
   const std::string server_name_indication_;
   const bool allow_renegotiation_;
-  const size_t max_session_keys_;
 };
 
 class ServerContextConfigImpl : public ContextConfigImpl, public ServerContextConfig {
 public:
-  explicit ServerContextConfigImpl(
-      const envoy::api::v2::auth::DownstreamTlsContext& config,
-      Server::Configuration::TransportSocketFactoryContext& secret_provider_context);
-  explicit ServerContextConfigImpl(
-      const Json::Object& config,
-      Server::Configuration::TransportSocketFactoryContext& secret_provider_context);
+  explicit ServerContextConfigImpl(const envoy::api::v2::auth::DownstreamTlsContext& config,
+                                   Secret::SecretManager& secret_manager);
+  explicit ServerContextConfigImpl(const Json::Object& config,
+                                   Secret::SecretManager& secret_manager);
 
   // Ssl::ServerContextConfig
   bool requireClientCertificate() const override { return require_client_certificate_; }

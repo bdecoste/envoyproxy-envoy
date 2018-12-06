@@ -1,7 +1,5 @@
 #pragma once
 
-#include "extensions/filters/common/lua/lua.h"
-
 #include "test/mocks/thread_local/mocks.h"
 
 #include "gmock/gmock.h"

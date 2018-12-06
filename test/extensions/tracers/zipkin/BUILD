@@ -2,7 +2,6 @@ licenses(["notice"])  # Apache 2
 
 load(
     "//bazel:envoy_build_system.bzl",
-    "envoy_cc_test_library",
     "envoy_package",
 )
 load(
@@ -16,7 +15,6 @@ envoy_extension_cc_test(
     name = "zipkin_test",
     srcs = [
         "span_buffer_test.cc",
-        "span_context_extractor_test.cc",
         "tracer_test.cc",
         "util_test.cc",
         "zipkin_core_types_test.cc",
@@ -41,8 +39,6 @@ envoy_extension_cc_test(
         "//test/mocks/thread_local:thread_local_mocks",
         "//test/mocks/tracing:tracing_mocks",
         "//test/mocks/upstream:upstream_mocks",
-        "//test/test_common:simulated_time_system_lib",
-        "//test/test_common:test_time_lib",
         "//test/test_common:utility_lib",
     ],
 )

@@ -19,9 +19,7 @@ public:
                      bool(const Envoy::Network::Connection&, const Envoy::Http::HeaderMap&,
                           const envoy::api::v2::core::Metadata&, std::string* effective_policy_id));
 
-  MOCK_CONST_METHOD3(allowed,
-                     bool(const Envoy::Network::Connection&, const envoy::api::v2::core::Metadata&,
-                          std::string* effective_policy_id));
+  MOCK_CONST_METHOD1(allowed, bool(const Envoy::Network::Connection&));
 };
 
 } // namespace RBAC

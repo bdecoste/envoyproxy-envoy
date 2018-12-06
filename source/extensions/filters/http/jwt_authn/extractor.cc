@@ -1,16 +1,12 @@
 #include "extensions/filters/http/jwt_authn/extractor.h"
 
-#include <memory>
-
 #include "common/common/utility.h"
 #include "common/http/headers.h"
 #include "common/http/utility.h"
 #include "common/singleton/const_singleton.h"
 
 using ::envoy::config::filter::http::jwt_authn::v2alpha::JwtAuthentication;
-using ::envoy::config::filter::http::jwt_authn::v2alpha::JwtHeader;
-using ::envoy::config::filter::http::jwt_authn::v2alpha::JwtProvider;
-using Envoy::Http::LowerCaseString;
+using ::Envoy::Http::LowerCaseString;
 
 namespace Envoy {
 namespace Extensions {
@@ -83,13 +79,9 @@ public:
  */
 class ExtractorImpl : public Extractor {
 public:
-  ExtractorImpl(const JwtProvider& provider);
-
   ExtractorImpl(const JwtAuthentication& config);
 
   std::vector<JwtLocationConstPtr> extract(const Http::HeaderMap& headers) const override;
-
-  void sanitizePayloadHeaders(Http::HeaderMap& headers) const override;
 
 private:
   // add a header config
@@ -97,8 +89,6 @@ private:
                        const std::string& value_prefix);
   // add a query param config
   void addQueryParamConfig(const std::string& issuer, const std::string& param);
-  // ctor helper for a jwt provider config
-  void addProvider(const JwtProvider& provider);
 
   // HeaderMap value type to store prefix and issuers that specified this
   // header.
@@ -123,34 +113,24 @@ private:
   };
   // The map of a parameter key to set of issuers specified the parameter
   std::map<std::string, ParamLocationSpec> param_locations_;
-
-  std::vector<LowerCaseString> forward_payload_headers_;
 };
 
 ExtractorImpl::ExtractorImpl(const JwtAuthentication& config) {
   for (const auto& it : config.providers()) {
     const auto& provider = it.second;
-    addProvider(provider);
-  }
-}
+    for (const auto& header : provider.from_headers()) {
+      addHeaderConfig(provider.issuer(), LowerCaseString(header.name()), header.value_prefix());
+    }
+    for (const std::string& param : provider.from_params()) {
+      addQueryParamConfig(provider.issuer(), param);
+    }
 
-ExtractorImpl::ExtractorImpl(const JwtProvider& provider) { addProvider(provider); }
-
-void ExtractorImpl::addProvider(const JwtProvider& provider) {
-  for (const auto& header : provider.from_headers()) {
-    addHeaderConfig(provider.issuer(), LowerCaseString(header.name()), header.value_prefix());
-  }
-  for (const std::string& param : provider.from_params()) {
-    addQueryParamConfig(provider.issuer(), param);
-  }
-  // If not specified, use default locations.
-  if (provider.from_headers().empty() && provider.from_params().empty()) {
-    addHeaderConfig(provider.issuer(), Http::Headers::get().Authorization,
-                    JwtConstValues::get().BearerPrefix);
-    addQueryParamConfig(provider.issuer(), JwtConstValues::get().AccessTokenParam);
-  }
-  if (!provider.forward_payload_header().empty()) {
-    forward_payload_headers_.emplace_back(provider.forward_payload_header());
+    // If not specified, use default locations.
+    if (provider.from_headers().empty() && provider.from_params().empty()) {
+      addHeaderConfig(provider.issuer(), Http::Headers::get().Authorization,
+                      JwtConstValues::get().BearerPrefix);
+      addQueryParamConfig(provider.issuer(), JwtConstValues::get().AccessTokenParam);
+    }
   }
 }
 
@@ -159,7 +139,7 @@ void ExtractorImpl::addHeaderConfig(const std::string& issuer, const LowerCaseSt
   const std::string map_key = header_name.get() + value_prefix;
   auto& header_location_spec = header_locations_[map_key];
   if (!header_location_spec) {
-    header_location_spec = std::make_unique<HeaderLocationSpec>(header_name, value_prefix);
+    header_location_spec.reset(new HeaderLocationSpec(header_name, value_prefix));
   }
   header_location_spec->specified_issuers_.insert(issuer);
 }
@@ -209,20 +189,10 @@ std::vector<JwtLocationConstPtr> ExtractorImpl::extract(const Http::HeaderMap& h
   return tokens;
 }
 
-void ExtractorImpl::sanitizePayloadHeaders(Http::HeaderMap& headers) const {
-  for (const auto& header : forward_payload_headers_) {
-    headers.remove(header);
-  }
-}
-
 } // namespace
 
 ExtractorConstPtr Extractor::create(const JwtAuthentication& config) {
-  return std::make_unique<ExtractorImpl>(config);
-}
-
-ExtractorConstPtr Extractor::create(const JwtProvider& provider) {
-  return std::make_unique<ExtractorImpl>(provider);
+  return ExtractorConstPtr(new ExtractorImpl(config));
 }
 
 } // namespace JwtAuthn

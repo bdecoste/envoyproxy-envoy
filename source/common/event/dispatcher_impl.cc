@@ -11,9 +11,9 @@
 
 #include "common/buffer/buffer_impl.h"
 #include "common/common/lock_guard.h"
-#include "common/common/thread.h"
 #include "common/event/file_event_impl.h"
 #include "common/event/signal_impl.h"
+#include "common/event/timer_impl.h"
 #include "common/filesystem/watcher_impl.h"
 #include "common/network/connection_impl.h"
 #include "common/network/dns_impl.h"
@@ -24,15 +24,14 @@
 namespace Envoy {
 namespace Event {
 
-DispatcherImpl::DispatcherImpl(TimeSystem& time_system)
-    : DispatcherImpl(time_system, Buffer::WatermarkFactoryPtr{new Buffer::WatermarkBufferFactory}) {
+DispatcherImpl::DispatcherImpl()
+    : DispatcherImpl(Buffer::WatermarkFactoryPtr{new Buffer::WatermarkBufferFactory}) {
   // The dispatcher won't work as expected if libevent hasn't been configured to use threads.
   RELEASE_ASSERT(Libevent::Global::initialized(), "");
 }
 
-DispatcherImpl::DispatcherImpl(TimeSystem& time_system, Buffer::WatermarkFactoryPtr&& factory)
-    : time_system_(time_system), buffer_factory_(std::move(factory)), base_(event_base_new()),
-      scheduler_(time_system_.createScheduler(base_)),
+DispatcherImpl::DispatcherImpl(Buffer::WatermarkFactoryPtr&& factory)
+    : buffer_factory_(std::move(factory)), base_(event_base_new()),
       deferred_delete_timer_(createTimer([this]() -> void { clearDeferredDeleteList(); })),
       post_timer_(createTimer([this]() -> void { runPostCallbacks(); })),
       current_to_delete_(&to_delete_1_) {
@@ -118,7 +117,7 @@ DispatcherImpl::createListener(Network::Socket& socket, Network::ListenerCallbac
 
 TimerPtr DispatcherImpl::createTimer(TimerCb cb) {
   ASSERT(isThreadSafe());
-  return scheduler_->createTimer(cb);
+  return TimerPtr{new TimerImpl(*this, cb)};
 }
 
 void DispatcherImpl::deferredDelete(DeferredDeletablePtr&& to_delete) {
@@ -151,11 +150,11 @@ void DispatcherImpl::post(std::function<void()> callback) {
 }
 
 void DispatcherImpl::run(RunType type) {
-  run_tid_ = Thread::currentThreadId();
+  run_tid_ = Thread::Thread::currentThreadId();
 
   // Flush all post callbacks before we run the event loop. We do this because there are post
   // callbacks that have to get run before the initial event loop starts running. libevent does
-  // not guarantee that events are run in any particular order. So even if we post() and call
+  // not gaurantee that events are run in any particular order. So even if we post() and call
   // event_base_once() before some other event, the other event might get called first.
   runPostCallbacks();
 

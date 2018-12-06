@@ -10,25 +10,21 @@
 #include "envoy/buffer/buffer.h"
 #include "envoy/event/dispatcher.h"
 #include "envoy/http/header_map.h"
-#include "envoy/registry/registry.h"
 
 #include "common/api/api_impl.h"
 #include "common/buffer/buffer_impl.h"
 #include "common/common/fmt.h"
-#include "common/common/thread_annotations.h"
-#include "common/http/headers.h"
+#include "common/network/connection_impl.h"
 #include "common/network/utility.h"
 #include "common/protobuf/utility.h"
 #include "common/upstream/upstream_impl.h"
 
 #include "test/common/upstream/utility.h"
 #include "test/integration/autonomous_upstream.h"
-#include "test/integration/test_host_predicate_config.h"
 #include "test/integration/utility.h"
 #include "test/mocks/upstream/mocks.h"
 #include "test/test_common/environment.h"
 #include "test/test_common/network_utility.h"
-#include "test/test_common/registry.h"
 
 #include "gtest/gtest.h"
 
@@ -83,6 +79,7 @@ IntegrationCodecClient::IntegrationCodecClient(
   connection_->addConnectionCallbacks(callbacks_);
   setCodecConnectionCallbacks(codec_callbacks_);
   dispatcher.run(Event::Dispatcher::RunType::Block);
+  EXPECT_TRUE(connected_);
 }
 
 void IntegrationCodecClient::flushWrite() {
@@ -152,42 +149,18 @@ IntegrationCodecClient::startRequest(const Http::HeaderMap& headers) {
   return {encoder, std::move(response)};
 }
 
-bool IntegrationCodecClient::waitForDisconnect(std::chrono::milliseconds time_to_wait) {
-  Event::TimerPtr wait_timer;
-  bool wait_timer_triggered = false;
-  if (time_to_wait.count()) {
-    wait_timer = connection_->dispatcher().createTimer([this, &wait_timer_triggered] {
-      connection_->dispatcher().exit();
-      wait_timer_triggered = true;
-    });
-    wait_timer->enableTimer(time_to_wait);
-  }
-
+void IntegrationCodecClient::waitForDisconnect() {
   connection_->dispatcher().run(Event::Dispatcher::RunType::Block);
-
-  // Disable the timer if it was created. This call is harmless if the timer already triggered.
-  if (wait_timer) {
-    wait_timer->disableTimer();
-  }
-
-  if (wait_timer_triggered && !disconnected_) {
-    return false;
-  }
   EXPECT_TRUE(disconnected_);
-
-  return true;
 }
 
 void IntegrationCodecClient::ConnectionCallbacks::onEvent(Network::ConnectionEvent event) {
-  parent_.last_connection_event_ = event;
   if (event == Network::ConnectionEvent::Connected) {
     parent_.connected_ = true;
     parent_.connection_->dispatcher().exit();
   } else if (event == Network::ConnectionEvent::RemoteClose) {
     parent_.disconnected_ = true;
     parent_.connection_->dispatcher().exit();
-  } else {
-    parent_.disconnected_ = true;
   }
 }
 
@@ -196,28 +169,18 @@ IntegrationCodecClientPtr HttpIntegrationTest::makeHttpConnection(uint32_t port)
 }
 
 IntegrationCodecClientPtr
-HttpIntegrationTest::makeRawHttpConnection(Network::ClientConnectionPtr&& conn) {
+HttpIntegrationTest::makeHttpConnection(Network::ClientConnectionPtr&& conn) {
   std::shared_ptr<Upstream::MockClusterInfo> cluster{new NiceMock<Upstream::MockClusterInfo>()};
-  cluster->http2_settings_.allow_connect_ = true;
-  cluster->http2_settings_.allow_metadata_ = true;
   Upstream::HostDescriptionConstSharedPtr host_description{Upstream::makeTestHostDescription(
       cluster, fmt::format("tcp://{}:80", Network::Test::getLoopbackAddressUrlString(version_)))};
-  return std::make_unique<IntegrationCodecClient>(*dispatcher_, std::move(conn), host_description,
-                                                  downstream_protocol_);
-}
-
-IntegrationCodecClientPtr
-HttpIntegrationTest::makeHttpConnection(Network::ClientConnectionPtr&& conn) {
-  auto codec = makeRawHttpConnection(std::move(conn));
-  EXPECT_TRUE(codec->connected());
-  return codec;
+  return IntegrationCodecClientPtr{new IntegrationCodecClient(
+      *dispatcher_, std::move(conn), host_description, downstream_protocol_)};
 }
 
 HttpIntegrationTest::HttpIntegrationTest(Http::CodecClient::Type downstream_protocol,
                                          Network::Address::IpVersion version,
-                                         TestTimeSystemPtr time_system, const std::string& config)
-    : BaseIntegrationTest(version, std::move(time_system), config),
-      downstream_protocol_(downstream_protocol) {
+                                         const std::string& config)
+    : BaseIntegrationTest(version, config), downstream_protocol_(downstream_protocol) {
   // Legacy integration tests expect the default listener to be named "http" for lookupPort calls.
   config_helper_.renameListener("http");
   config_helper_.setClientCodec(typeToCodecType(downstream_protocol_));
@@ -247,7 +210,7 @@ IntegrationStreamDecoderPtr HttpIntegrationTest::sendRequestAndWaitForResponse(
     response = codec_client_->makeHeaderOnlyRequest(request_headers);
   }
   waitForNextUpstreamRequest();
-  // Send response headers, and end_stream if there is no response body.
+  // Send response headers, and end_stream if there is no respone body.
   upstream_request_->encodeHeaders(response_headers, response_size == 0);
   // Send any response data, with end_stream true.
   if (response_size) {
@@ -274,20 +237,11 @@ void HttpIntegrationTest::cleanupUpstreamAndDownstream() {
   }
 }
 
-uint64_t
-HttpIntegrationTest::waitForNextUpstreamRequest(const std::vector<uint64_t>& upstream_indices) {
-  uint64_t upstream_with_request;
+void HttpIntegrationTest::waitForNextUpstreamRequest(uint64_t upstream_index) {
   // If there is no upstream connection, wait for it to be established.
   if (!fake_upstream_connection_) {
-    AssertionResult result = AssertionFailure();
-    for (auto upstream_index : upstream_indices) {
-      result = fake_upstreams_[upstream_index]->waitForHttpConnection(*dispatcher_,
-                                                                      fake_upstream_connection_);
-      if (result) {
-        upstream_with_request = upstream_index;
-        break;
-      }
-    }
+    AssertionResult result = fake_upstreams_[upstream_index]->waitForHttpConnection(
+        *dispatcher_, fake_upstream_connection_);
     RELEASE_ASSERT(result, result.message());
   }
   // Wait for the next stream on the upstream connection.
@@ -297,12 +251,6 @@ HttpIntegrationTest::waitForNextUpstreamRequest(const std::vector<uint64_t>& ups
   // Wait for the stream to be completely received.
   result = upstream_request_->waitForEndStream(*dispatcher_);
   RELEASE_ASSERT(result, result.message());
-
-  return upstream_with_request;
-}
-
-void HttpIntegrationTest::waitForNextUpstreamRequest(uint64_t upstream_index) {
-  waitForNextUpstreamRequest(std::vector<uint64_t>({upstream_index}));
 }
 
 void HttpIntegrationTest::testRouterRequestAndResponseWithBody(
@@ -347,7 +295,6 @@ void HttpIntegrationTest::testRouterHeaderOnlyRequestAndResponse(
   // The following allows us to test shutting down the server with active connection pool
   // connections.
   if (!close_upstream) {
-    fake_upstreams_[0]->set_allow_unexpected_disconnects(true);
     test_server_.reset();
   }
 
@@ -491,7 +438,12 @@ config: {}
   initialize();
 
   codec_client_ = makeHttpConnection(lookupPort("http"));
-  auto response = codec_client_->makeRequestWithBody(default_request_headers_, 128);
+  auto response =
+      codec_client_->makeRequestWithBody(Http::TestHeaderMapImpl{{":method", "GET"},
+                                                                 {":path", "/test/long/url"},
+                                                                 {":scheme", "http"},
+                                                                 {":authority", "host"}},
+                                         128);
   waitForNextUpstreamRequest();
   upstream_request_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "503"}}, false);
   upstream_request_->encodeData(128, true);
@@ -514,7 +466,8 @@ void HttpIntegrationTest::testDrainClose() {
 
   test_server_->drainManager().draining_ = true;
   codec_client_ = makeHttpConnection(lookupPort("http"));
-  auto response = codec_client_->makeHeaderOnlyRequest(default_request_headers_);
+  auto response = codec_client_->makeHeaderOnlyRequest(Http::TestHeaderMapImpl{
+      {":method", "GET"}, {":path", "/healthcheck"}, {":scheme", "http"}, {":authority", "host"}});
   response->waitForEndStream();
   codec_client_->waitForDisconnect();
 
@@ -531,7 +484,11 @@ void HttpIntegrationTest::testRouterUpstreamDisconnectBeforeRequestComplete() {
   initialize();
   codec_client_ = makeHttpConnection(lookupPort("http"));
 
-  auto encoder_decoder = codec_client_->startRequest(default_request_headers_);
+  auto encoder_decoder =
+      codec_client_->startRequest(Http::TestHeaderMapImpl{{":method", "GET"},
+                                                          {":path", "/test/long/url"},
+                                                          {":scheme", "http"},
+                                                          {":authority", "host"}});
   auto response = std::move(encoder_decoder.second);
 
   ASSERT_TRUE(fake_upstreams_[0]->waitForHttpConnection(*dispatcher_, fake_upstream_connection_));
@@ -561,9 +518,13 @@ void HttpIntegrationTest::testRouterUpstreamDisconnectBeforeResponseComplete(
   initialize();
   codec_client_ = makeHttpConnection(
       create_connection ? ((*create_connection)()) : makeClientConnection((lookupPort("http"))));
-  auto response = codec_client_->makeHeaderOnlyRequest(default_request_headers_);
+  auto response =
+      codec_client_->makeHeaderOnlyRequest(Http::TestHeaderMapImpl{{":method", "GET"},
+                                                                   {":path", "/test/long/url"},
+                                                                   {":scheme", "http"},
+                                                                   {":authority", "host"}});
   waitForNextUpstreamRequest();
-  upstream_request_->encodeHeaders(default_response_headers_, false);
+  upstream_request_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "200"}}, false);
   ASSERT_TRUE(fake_upstream_connection_->close());
   ASSERT_TRUE(fake_upstream_connection_->waitForDisconnect());
 
@@ -588,7 +549,11 @@ void HttpIntegrationTest::testRouterDownstreamDisconnectBeforeRequestComplete(
 
   codec_client_ = makeHttpConnection(
       create_connection ? ((*create_connection)()) : makeClientConnection((lookupPort("http"))));
-  auto encoder_decoder = codec_client_->startRequest(default_request_headers_);
+  auto encoder_decoder =
+      codec_client_->startRequest(Http::TestHeaderMapImpl{{":method", "GET"},
+                                                          {":path", "/test/long/url"},
+                                                          {":scheme", "http"},
+                                                          {":authority", "host"}});
   auto response = std::move(encoder_decoder.second);
   ASSERT_TRUE(fake_upstreams_[0]->waitForHttpConnection(*dispatcher_, fake_upstream_connection_));
   ASSERT_TRUE(fake_upstream_connection_->waitForNewStream(*dispatcher_, upstream_request_));
@@ -611,19 +576,16 @@ void HttpIntegrationTest::testRouterDownstreamDisconnectBeforeRequestComplete(
 
 void HttpIntegrationTest::testRouterDownstreamDisconnectBeforeResponseComplete(
     ConnectionCreationFunction* create_connection) {
-#ifdef __APPLE__
-  // Skip this test on OS X: we can't detect the early close on OS X, and we
-  // won't clean up the upstream connection until it times out. See #4294.
-  if (downstream_protocol_ == Http::CodecClient::Type::HTTP1) {
-    return;
-  }
-#endif
   initialize();
   codec_client_ = makeHttpConnection(
       create_connection ? ((*create_connection)()) : makeClientConnection((lookupPort("http"))));
-  auto response = codec_client_->makeHeaderOnlyRequest(default_request_headers_);
+  auto response =
+      codec_client_->makeHeaderOnlyRequest(Http::TestHeaderMapImpl{{":method", "GET"},
+                                                                   {":path", "/test/long/url"},
+                                                                   {":scheme", "http"},
+                                                                   {":authority", "host"}});
   waitForNextUpstreamRequest();
-  upstream_request_->encodeHeaders(default_response_headers_, false);
+  upstream_request_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "200"}}, false);
   upstream_request_->encodeData(512, false);
   response->waitForBodyData(512);
   codec_client_->close();
@@ -647,12 +609,16 @@ void HttpIntegrationTest::testRouterDownstreamDisconnectBeforeResponseComplete(
 void HttpIntegrationTest::testRouterUpstreamResponseBeforeRequestComplete() {
   initialize();
   codec_client_ = makeHttpConnection(lookupPort("http"));
-  auto encoder_decoder = codec_client_->startRequest(default_request_headers_);
+  auto encoder_decoder =
+      codec_client_->startRequest(Http::TestHeaderMapImpl{{":method", "GET"},
+                                                          {":path", "/test/long/url"},
+                                                          {":scheme", "http"},
+                                                          {":authority", "host"}});
   auto response = std::move(encoder_decoder.second);
   ASSERT_TRUE(fake_upstreams_[0]->waitForHttpConnection(*dispatcher_, fake_upstream_connection_));
   ASSERT_TRUE(fake_upstream_connection_->waitForNewStream(*dispatcher_, upstream_request_));
   ASSERT_TRUE(upstream_request_->waitForHeadersComplete());
-  upstream_request_->encodeHeaders(default_response_headers_, false);
+  upstream_request_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "200"}}, false);
   upstream_request_->encodeData(512, true);
   response->waitForEndStream();
 
@@ -699,48 +665,7 @@ void HttpIntegrationTest::testRetry() {
     ASSERT_TRUE(upstream_request_->waitForReset());
   }
   waitForNextUpstreamRequest();
-  upstream_request_->encodeHeaders(default_response_headers_, false);
-  upstream_request_->encodeData(512, true);
-
-  response->waitForEndStream();
-  EXPECT_TRUE(upstream_request_->complete());
-  EXPECT_EQ(1024U, upstream_request_->bodyLength());
-
-  EXPECT_TRUE(response->complete());
-  EXPECT_STREQ("200", response->headers().Status()->value().c_str());
-  EXPECT_EQ(512U, response->body().size());
-}
-
-// Tests that the x-envoy-attempt-count header is properly set on the upstream request
-// and updated after the request is retried.
-void HttpIntegrationTest::testRetryAttemptCountHeader() {
-  config_helper_.addRoute("host", "/test_retry", "cluster_0", false,
-                          envoy::api::v2::route::RouteAction::NOT_FOUND,
-                          envoy::api::v2::route::VirtualHost::NONE, {}, true);
-  initialize();
-  codec_client_ = makeHttpConnection(lookupPort("http"));
-  auto response =
-      codec_client_->makeRequestWithBody(Http::TestHeaderMapImpl{{":method", "POST"},
-                                                                 {":path", "/test_retry"},
-                                                                 {":scheme", "http"},
-                                                                 {":authority", "host"},
-                                                                 {"x-forwarded-for", "10.0.0.1"},
-                                                                 {"x-envoy-retry-on", "5xx"}},
-                                         1024);
-  waitForNextUpstreamRequest();
-  upstream_request_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "503"}}, false);
-
-  EXPECT_EQ(atoi(upstream_request_->headers().EnvoyAttemptCount()->value().c_str()), 1);
-
-  if (fake_upstreams_[0]->httpType() == FakeHttpConnection::Type::HTTP1) {
-    ASSERT_TRUE(fake_upstream_connection_->waitForDisconnect());
-    ASSERT_TRUE(fake_upstreams_[0]->waitForHttpConnection(*dispatcher_, fake_upstream_connection_));
-  } else {
-    ASSERT_TRUE(upstream_request_->waitForReset());
-  }
-  waitForNextUpstreamRequest();
-  EXPECT_EQ(atoi(upstream_request_->headers().EnvoyAttemptCount()->value().c_str()), 2);
-  upstream_request_->encodeHeaders(default_response_headers_, false);
+  upstream_request_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "200"}}, false);
   upstream_request_->encodeData(512, true);
 
   response->waitForEndStream();
@@ -792,7 +717,7 @@ void HttpIntegrationTest::testGrpcRetry() {
   }
   waitForNextUpstreamRequest();
 
-  upstream_request_->encodeHeaders(default_response_headers_, false);
+  upstream_request_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "200"}}, false);
   upstream_request_->encodeData(512,
                                 fake_upstreams_[0]->httpType() != FakeHttpConnection::Type::HTTP2);
   if (fake_upstreams_[0]->httpType() == FakeHttpConnection::Type::HTTP2) {
@@ -809,142 +734,6 @@ void HttpIntegrationTest::testGrpcRetry() {
   if (fake_upstreams_[0]->httpType() == FakeHttpConnection::Type::HTTP2) {
     EXPECT_THAT(*response->trailers(), HeaderMapEqualRef(&response_trailers));
   }
-}
-
-// Verifies that a retry priority can be configured and affect the host selected during retries.
-// The retry priority will always target P1, which would otherwise never be hit due to P0 being
-// healthy.
-void HttpIntegrationTest::testRetryPriority() {
-  const Upstream::PriorityLoad priority_load{0, 100};
-  NiceMock<Upstream::MockRetryPriority> retry_priority(priority_load);
-  Upstream::MockRetryPriorityFactory factory(retry_priority);
-
-  Registry::InjectFactory<Upstream::RetryPriorityFactory> inject_factory(factory);
-
-  envoy::api::v2::route::RouteAction::RetryPolicy retry_policy;
-  retry_policy.mutable_retry_priority()->set_name(factory.name());
-
-  // Add route with custom retry policy
-  config_helper_.addRoute("host", "/test_retry", "cluster_0", false,
-                          envoy::api::v2::route::RouteAction::NOT_FOUND,
-                          envoy::api::v2::route::VirtualHost::NONE, retry_policy);
-
-  // Use load assignments instead of static hosts. Necessary in order to use priorities.
-  config_helper_.addConfigModifier([](envoy::config::bootstrap::v2::Bootstrap& bootstrap) {
-    auto cluster = bootstrap.mutable_static_resources()->mutable_clusters(0);
-    auto load_assignment = cluster->mutable_load_assignment();
-    load_assignment->set_cluster_name(cluster->name());
-    const auto& host_address = cluster->hosts(0).socket_address().address();
-
-    for (int i = 0; i < 2; ++i) {
-      auto locality = load_assignment->add_endpoints();
-      locality->set_priority(i);
-      locality->mutable_locality()->set_region("region");
-      locality->mutable_locality()->set_zone("zone");
-      locality->mutable_locality()->set_sub_zone("sub_zone" + std::to_string(i));
-      auto lb_endpoint = locality->add_lb_endpoints();
-      lb_endpoint->mutable_endpoint()->mutable_address()->mutable_socket_address()->set_address(
-          host_address);
-      lb_endpoint->mutable_endpoint()->mutable_address()->mutable_socket_address()->set_port_value(
-          0);
-    }
-
-    cluster->clear_hosts();
-  });
-
-  fake_upstreams_count_ = 2;
-  initialize();
-  codec_client_ = makeHttpConnection(lookupPort("http"));
-  auto response =
-      codec_client_->makeRequestWithBody(Http::TestHeaderMapImpl{{":method", "POST"},
-                                                                 {":path", "/test_retry"},
-                                                                 {":scheme", "http"},
-                                                                 {":authority", "host"},
-                                                                 {"x-forwarded-for", "10.0.0.1"},
-                                                                 {"x-envoy-retry-on", "5xx"}},
-                                         1024);
-
-  // Note how we're exepcting each upstream request to hit the same upstream.
-  waitForNextUpstreamRequest(0);
-  upstream_request_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "503"}}, false);
-
-  if (fake_upstreams_[0]->httpType() == FakeHttpConnection::Type::HTTP1) {
-    ASSERT_TRUE(fake_upstream_connection_->waitForDisconnect());
-    ASSERT_TRUE(fake_upstreams_[1]->waitForHttpConnection(*dispatcher_, fake_upstream_connection_));
-  } else {
-    ASSERT_TRUE(upstream_request_->waitForReset());
-  }
-
-  waitForNextUpstreamRequest(1);
-  upstream_request_->encodeHeaders(default_response_headers_, false);
-  upstream_request_->encodeData(512, true);
-
-  response->waitForEndStream();
-  EXPECT_TRUE(upstream_request_->complete());
-  EXPECT_EQ(1024U, upstream_request_->bodyLength());
-
-  EXPECT_TRUE(response->complete());
-  EXPECT_STREQ("200", response->headers().Status()->value().c_str());
-  EXPECT_EQ(512U, response->body().size());
-}
-
-//
-// Verifies that a retry host filter can be configured and affect the host selected during retries.
-// The predicate will keep track of the first host attempted, and attempt to route all requests to
-// the same host. With a total of two upstream hosts, this should result in us continuously sending
-// requests to the same host.
-void HttpIntegrationTest::testRetryHostPredicateFilter() {
-  TestHostPredicateFactory predicate_factory;
-  Registry::InjectFactory<Upstream::RetryHostPredicateFactory> inject_factory(predicate_factory);
-
-  envoy::api::v2::route::RouteAction::RetryPolicy retry_policy;
-  retry_policy.add_retry_host_predicate()->set_name(predicate_factory.name());
-
-  // Add route with custom retry policy
-  config_helper_.addRoute("host", "/test_retry", "cluster_0", false,
-                          envoy::api::v2::route::RouteAction::NOT_FOUND,
-                          envoy::api::v2::route::VirtualHost::NONE, retry_policy);
-
-  // We want to work with a cluster with two hosts.
-  config_helper_.addConfigModifier([](envoy::config::bootstrap::v2::Bootstrap& bootstrap) {
-    auto* new_host = bootstrap.mutable_static_resources()->mutable_clusters(0)->add_hosts();
-    new_host->MergeFrom(bootstrap.static_resources().clusters(0).hosts(0));
-  });
-  fake_upstreams_count_ = 2;
-  initialize();
-  codec_client_ = makeHttpConnection(lookupPort("http"));
-  auto response =
-      codec_client_->makeRequestWithBody(Http::TestHeaderMapImpl{{":method", "POST"},
-                                                                 {":path", "/test_retry"},
-                                                                 {":scheme", "http"},
-                                                                 {":authority", "host"},
-                                                                 {"x-forwarded-for", "10.0.0.1"},
-                                                                 {"x-envoy-retry-on", "5xx"}},
-                                         1024);
-
-  // Note how we're exepcting each upstream request to hit the same upstream.
-  auto upstream_idx = waitForNextUpstreamRequest({0, 1});
-  upstream_request_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "503"}}, false);
-
-  if (fake_upstreams_[upstream_idx]->httpType() == FakeHttpConnection::Type::HTTP1) {
-    ASSERT_TRUE(fake_upstream_connection_->waitForDisconnect());
-    ASSERT_TRUE(fake_upstreams_[upstream_idx]->waitForHttpConnection(*dispatcher_,
-                                                                     fake_upstream_connection_));
-  } else {
-    ASSERT_TRUE(upstream_request_->waitForReset());
-  }
-
-  waitForNextUpstreamRequest(upstream_idx);
-  upstream_request_->encodeHeaders(default_response_headers_, false);
-  upstream_request_->encodeData(512, true);
-
-  response->waitForEndStream();
-  EXPECT_TRUE(upstream_request_->complete());
-  EXPECT_EQ(1024U, upstream_request_->bodyLength());
-
-  EXPECT_TRUE(response->complete());
-  EXPECT_STREQ("200", response->headers().Status()->value().c_str());
-  EXPECT_EQ(512U, response->body().size());
 }
 
 // Very similar set-up to testRetry but with a 16k request the request will not
@@ -1017,15 +806,16 @@ void HttpIntegrationTest::testHittingEncoderFilterLimit() {
 
   // Send the request.
   codec_client_ = makeHttpConnection(lookupPort("http"));
-  auto encoder_decoder = codec_client_->startRequest(default_request_headers_);
+  auto encoder_decoder = codec_client_->startRequest(Http::TestHeaderMapImpl{
+      {":method", "GET"}, {":path", "/dynamo/url"}, {":scheme", "http"}, {":authority", "host"}});
   auto downstream_request = &encoder_decoder.first;
   auto response = std::move(encoder_decoder.second);
   Buffer::OwnedImpl data("{\"TableName\":\"locations\"}");
   codec_client_->sendData(*downstream_request, data, true);
   waitForNextUpstreamRequest();
 
-  // Send the response headers.
-  upstream_request_->encodeHeaders(default_response_headers_, false);
+  // Send the respone headers.
+  upstream_request_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "200"}}, false);
 
   // Now send an overly large response body. At some point, too much data will
   // be buffered, the stream will be reset, and the connection will disconnect.
@@ -1036,199 +826,6 @@ void HttpIntegrationTest::testHittingEncoderFilterLimit() {
   response->waitForEndStream();
   EXPECT_TRUE(response->complete());
   EXPECT_STREQ("500", response->headers().Status()->value().c_str());
-}
-
-// Verifies metadata can be sent at different locations of the responses.
-void HttpIntegrationTest::testEnvoyProxyMetadataInResponse() {
-  initialize();
-  codec_client_ = makeHttpConnection(lookupPort("http"));
-
-  // Sends the first request.
-  auto response = codec_client_->makeRequestWithBody(default_request_headers_, 10);
-  waitForNextUpstreamRequest();
-
-  // Sends metadata before response header.
-  const std::string key = "key";
-  std::string value = std::string(80 * 1024, '1');
-  Http::MetadataMap metadata_map = {{key, value}};
-  upstream_request_->encodeMetadata(metadata_map);
-  upstream_request_->encodeHeaders(default_response_headers_, false);
-  upstream_request_->encodeData(12, true);
-
-  // Verifies metadata is received by the client.
-  response->waitForEndStream();
-  ASSERT_TRUE(response->complete());
-  EXPECT_EQ(response->metadata_map().find(key)->second, value);
-
-  // Sends the second request.
-  response = codec_client_->makeRequestWithBody(default_request_headers_, 10);
-  waitForNextUpstreamRequest();
-
-  // Sends metadata after response header followed by an empty data frame with end_stream true.
-  value = std::string(10, '2');
-  upstream_request_->encodeHeaders(default_response_headers_, false);
-  metadata_map = {{key, value}};
-  upstream_request_->encodeMetadata(metadata_map);
-  upstream_request_->encodeData(0, true);
-
-  // Verifies metadata is received by the client.
-  response->waitForEndStream();
-  ASSERT_TRUE(response->complete());
-  EXPECT_EQ(response->metadata_map().find(key)->second, value);
-
-  // Sends the third request.
-  response = codec_client_->makeRequestWithBody(default_request_headers_, 10);
-  waitForNextUpstreamRequest();
-
-  // Sends metadata after response header and before data.
-  value = std::string(10, '3');
-  upstream_request_->encodeHeaders(default_response_headers_, false);
-  metadata_map = {{key, value}};
-  upstream_request_->encodeMetadata(metadata_map);
-  upstream_request_->encodeData(10, true);
-
-  // Verifies metadata is received by the client.
-  response->waitForEndStream();
-  ASSERT_TRUE(response->complete());
-  EXPECT_EQ(response->metadata_map().find(key)->second, value);
-
-  // Sends the fourth request.
-  response = codec_client_->makeRequestWithBody(default_request_headers_, 10);
-  waitForNextUpstreamRequest();
-
-  // Sends metadata between data frames.
-  value = std::string(10, '4');
-  upstream_request_->encodeHeaders(default_response_headers_, false);
-  upstream_request_->encodeData(10, false);
-  metadata_map = {{key, value}};
-  upstream_request_->encodeMetadata(metadata_map);
-  upstream_request_->encodeData(10, true);
-
-  // Verifies metadata is received by the client.
-  response->waitForEndStream();
-  ASSERT_TRUE(response->complete());
-  EXPECT_EQ(response->metadata_map().find(key)->second, value);
-
-  // Sends the fifth request.
-  response = codec_client_->makeRequestWithBody(default_request_headers_, 10);
-  waitForNextUpstreamRequest();
-
-  // Sends metadata after the last non-empty data frames.
-  value = std::string(10, '5');
-  upstream_request_->encodeHeaders(default_response_headers_, false);
-  upstream_request_->encodeData(10, false);
-  metadata_map = {{key, value}};
-  upstream_request_->encodeMetadata(metadata_map);
-  upstream_request_->encodeData(0, true);
-
-  // Verifies metadata is received by the client.
-  response->waitForEndStream();
-  ASSERT_TRUE(response->complete());
-  EXPECT_EQ(response->metadata_map().find(key)->second, value);
-
-  // Sends the sixth request.
-  response = codec_client_->makeRequestWithBody(default_request_headers_, 10);
-  waitForNextUpstreamRequest();
-
-  // Sends metadata before reset.
-  value = std::string(10, '6');
-  upstream_request_->encodeHeaders(default_response_headers_, false);
-  upstream_request_->encodeData(10, false);
-  metadata_map = {{key, value}};
-  upstream_request_->encodeMetadata(metadata_map);
-  upstream_request_->encodeResetStream();
-
-  // Verifies stream is reset.
-  response->waitForReset();
-  ASSERT_FALSE(response->complete());
-}
-
-void HttpIntegrationTest::testEnvoyProxyMultipleMetadata() {
-  initialize();
-  codec_client_ = makeHttpConnection(lookupPort("http"));
-
-  // Sends a request.
-  auto response = codec_client_->makeRequestWithBody(default_request_headers_, 10);
-  waitForNextUpstreamRequest();
-
-  // Sends metadata before response header.
-  std::vector<Http::MetadataMap> metadata_map_vector = {{
-                                                            {"0", "000"},
-                                                        },
-                                                        {
-                                                            {"1", "111"},
-                                                        },
-                                                        {
-                                                            {"2", "222"},
-                                                        },
-                                                        {
-                                                            {"3", "333"},
-                                                        }};
-  upstream_request_->encodeMetadata(metadata_map_vector[0]);
-  upstream_request_->encodeMetadata(metadata_map_vector[1]);
-  upstream_request_->encodeHeaders(default_response_headers_, false);
-  upstream_request_->encodeMetadata(metadata_map_vector[2]);
-  upstream_request_->encodeData(12, false);
-  upstream_request_->encodeMetadata(metadata_map_vector[3]);
-  upstream_request_->encodeData(12, true);
-
-  // Verifies multiple metadata are received by the client.
-  response->waitForEndStream();
-  ASSERT_TRUE(response->complete());
-  for (const auto& metadata_map : metadata_map_vector) {
-    for (const auto& metadata : metadata_map) {
-      EXPECT_EQ(response->metadata_map().find(metadata.first)->second, metadata.second);
-    }
-  }
-  EXPECT_EQ(response->metadata_map().size(), metadata_map_vector.size());
-}
-
-void HttpIntegrationTest::testEnvoyProxyInvalidMetadata() {
-  initialize();
-  codec_client_ = makeHttpConnection(lookupPort("http"));
-
-  // Sends a request.
-  auto response = codec_client_->makeRequestWithBody(default_request_headers_, 10);
-  waitForNextUpstreamRequest();
-
-  // Sends over-sized metadata before response header.
-  const std::string key = "key";
-  std::string value = std::string(1024 * 1024, 'a');
-  Http::MetadataMap metadata_map = {{key, value}};
-  upstream_request_->encodeMetadata(metadata_map);
-  upstream_request_->encodeHeaders(default_response_headers_, false);
-  upstream_request_->encodeMetadata(metadata_map);
-  upstream_request_->encodeData(12, false);
-  upstream_request_->encodeMetadata(metadata_map);
-  upstream_request_->encodeData(12, true);
-
-  // Verifies metadata is not received by the client.
-  response->waitForEndStream();
-  ASSERT_TRUE(response->complete());
-  EXPECT_EQ(response->metadata_map().size(), 0);
-}
-
-void HttpIntegrationTest::testEnvoyMultipleMetadataReachSizeLimit() {
-  initialize();
-  codec_client_ = makeHttpConnection(lookupPort("http"));
-
-  // Sends a request.
-  auto response = codec_client_->makeRequestWithBody(default_request_headers_, 10);
-  waitForNextUpstreamRequest();
-
-  // Sends multiple metadata after response header until max size limit is reached.
-  const std::string key = "key";
-  std::string value = std::string(10000, 'a');
-  Http::MetadataMap metadata_map = {{key, value}};
-  upstream_request_->encodeHeaders(default_response_headers_, false);
-  for (int i = 0; i < 200; i++) {
-    upstream_request_->encodeMetadata(metadata_map);
-  }
-  upstream_request_->encodeData(12, true);
-
-  // Verifies reset is received.
-  response->waitForReset();
-  ASSERT_FALSE(response->complete());
 }
 
 void HttpIntegrationTest::testEnvoyHandling100Continue(bool additional_continue_from_upstream,
@@ -1266,7 +863,7 @@ void HttpIntegrationTest::testEnvoyHandling100Continue(bool additional_continue_
     // from upstream!
     upstream_request_->encode100ContinueHeaders(Http::TestHeaderMapImpl{{":status", "100"}});
   }
-  upstream_request_->encodeHeaders(default_response_headers_, false);
+  upstream_request_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "200"}}, false);
   upstream_request_->encodeData(12, true);
 
   response->waitForEndStream();
@@ -1335,7 +932,7 @@ void HttpIntegrationTest::testEnvoyProxying100Continue(bool continue_before_upst
     response->waitForContinueHeaders();
   }
   // Now send the rest of the response.
-  upstream_request_->encodeHeaders(default_response_headers_, true);
+  upstream_request_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "200"}}, true);
   response->waitForEndStream();
   EXPECT_TRUE(response->complete());
   ASSERT(response->continue_headers() != nullptr);
@@ -1357,10 +954,15 @@ void HttpIntegrationTest::testIdleTimeoutBasic() {
   initialize();
 
   codec_client_ = makeHttpConnection(lookupPort("http"));
-  auto response = codec_client_->makeRequestWithBody(default_request_headers_, 1024);
+  auto response =
+      codec_client_->makeRequestWithBody(Http::TestHeaderMapImpl{{":method", "GET"},
+                                                                 {":path", "/test/long/url"},
+                                                                 {":scheme", "http"},
+                                                                 {":authority", "host"}},
+                                         1024);
   waitForNextUpstreamRequest();
 
-  upstream_request_->encodeHeaders(default_response_headers_, false);
+  upstream_request_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "200"}}, false);
   upstream_request_->encodeData(512, true);
   response->waitForEndStream();
 
@@ -1390,10 +992,15 @@ void HttpIntegrationTest::testIdleTimeoutWithTwoRequests() {
   codec_client_ = makeHttpConnection(lookupPort("http"));
 
   // Request 1.
-  auto response = codec_client_->makeRequestWithBody(default_request_headers_, 1024);
+  auto response =
+      codec_client_->makeRequestWithBody(Http::TestHeaderMapImpl{{":method", "GET"},
+                                                                 {":path", "/test/long/url"},
+                                                                 {":scheme", "http"},
+                                                                 {":authority", "host"}},
+                                         1024);
   waitForNextUpstreamRequest();
 
-  upstream_request_->encodeHeaders(default_response_headers_, false);
+  upstream_request_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "200"}}, false);
   upstream_request_->encodeData(512, true);
   response->waitForEndStream();
 
@@ -1403,9 +1010,13 @@ void HttpIntegrationTest::testIdleTimeoutWithTwoRequests() {
   test_server_->waitForCounterGe("cluster.cluster_0.upstream_rq_200", 1);
 
   // Request 2.
-  response = codec_client_->makeRequestWithBody(default_request_headers_, 512);
+  response = codec_client_->makeRequestWithBody(Http::TestHeaderMapImpl{{":method", "GET"},
+                                                                        {":path", "/test/long/url"},
+                                                                        {":scheme", "http"},
+                                                                        {":authority", "host"}},
+                                                512);
   waitForNextUpstreamRequest();
-  upstream_request_->encodeHeaders(default_response_headers_, false);
+  upstream_request_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "200"}}, false);
   upstream_request_->encodeData(1024, true);
   response->waitForEndStream();
 
@@ -1419,36 +1030,32 @@ void HttpIntegrationTest::testIdleTimeoutWithTwoRequests() {
   test_server_->waitForCounterGe("cluster.cluster_0.upstream_cx_idle_timeout", 1);
 }
 
-// This is a regression for https://github.com/envoyproxy/envoy/issues/2715 and validates that a
-// pending request is not sent on a connection that has been half-closed.
 void HttpIntegrationTest::testUpstreamDisconnectWithTwoRequests() {
-  config_helper_.addConfigModifier([](envoy::config::bootstrap::v2::Bootstrap& bootstrap) {
-    auto* static_resources = bootstrap.mutable_static_resources();
-    auto* cluster = static_resources->mutable_clusters(0);
-    // Ensure we only have one connection upstream, one request active at a time.
-    cluster->mutable_max_requests_per_connection()->set_value(1);
-    auto* circuit_breakers = cluster->mutable_circuit_breakers();
-    circuit_breakers->add_thresholds()->mutable_max_connections()->set_value(1);
-  });
   initialize();
   fake_upstreams_[0]->set_allow_unexpected_disconnects(true);
 
   codec_client_ = makeHttpConnection(lookupPort("http"));
 
   // Request 1.
-  auto response = codec_client_->makeRequestWithBody(default_request_headers_, 1024);
+  auto response =
+      codec_client_->makeRequestWithBody(Http::TestHeaderMapImpl{{":method", "GET"},
+                                                                 {":path", "/test/long/url"},
+                                                                 {":scheme", "http"},
+                                                                 {":authority", "host"}},
+                                         1024);
   waitForNextUpstreamRequest();
 
   // Request 2.
   IntegrationCodecClientPtr codec_client2 = makeHttpConnection(lookupPort("http"));
-  auto response2 = codec_client2->makeRequestWithBody(default_request_headers_, 512);
-
-  // Validate one request active, the other pending.
-  test_server_->waitForGaugeEq("cluster.cluster_0.upstream_rq_active", 1);
-  test_server_->waitForGaugeEq("cluster.cluster_0.upstream_rq_pending_active", 1);
+  auto response2 =
+      codec_client2->makeRequestWithBody(Http::TestHeaderMapImpl{{":method", "GET"},
+                                                                 {":path", "/test/long/url"},
+                                                                 {":scheme", "http"},
+                                                                 {":authority", "host"}},
+                                         512);
 
   // Response 1.
-  upstream_request_->encodeHeaders(default_response_headers_, false);
+  upstream_request_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "200"}}, false);
   upstream_request_->encodeData(512, true);
   ASSERT_TRUE(fake_upstream_connection_->close());
   response->waitForEndStream();
@@ -1463,7 +1070,7 @@ void HttpIntegrationTest::testUpstreamDisconnectWithTwoRequests() {
   ASSERT_TRUE(fake_upstream_connection_->waitForDisconnect());
   fake_upstream_connection_.reset();
   waitForNextUpstreamRequest();
-  upstream_request_->encodeHeaders(default_response_headers_, false);
+  upstream_request_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "200"}}, false);
   upstream_request_->encodeData(1024, true);
   response2->waitForEndStream();
   codec_client2->close();
@@ -1475,29 +1082,21 @@ void HttpIntegrationTest::testUpstreamDisconnectWithTwoRequests() {
   test_server_->waitForCounterGe("cluster.cluster_0.upstream_rq_200", 2);
 }
 
-void HttpIntegrationTest::testTwoRequests(bool network_backup) {
-  // if network_backup is false, this simply tests that Envoy can handle multiple
-  // requests on a connection.
-  //
-  // If network_backup is true, the first request will explicitly set the TCP level flow control
-  // as blocked as it finishes the encode and set a timer to unblock. The second stream should be
-  // created while the socket appears to be in the high watermark state, and regression tests that
-  // flow control will be corrected as the socket "becomes unblocked"
-  if (network_backup) {
-    config_helper_.addFilter(R"EOF(
-  name: pause-filter
-  config: {}
-  )EOF");
-  }
+void HttpIntegrationTest::testTwoRequests() {
   initialize();
 
   codec_client_ = makeHttpConnection(lookupPort("http"));
 
   // Request 1.
-  auto response = codec_client_->makeRequestWithBody(default_request_headers_, 1024);
+  auto response =
+      codec_client_->makeRequestWithBody(Http::TestHeaderMapImpl{{":method", "GET"},
+                                                                 {":path", "/test/long/url"},
+                                                                 {":scheme", "http"},
+                                                                 {":authority", "host"}},
+                                         1024);
   waitForNextUpstreamRequest();
 
-  upstream_request_->encodeHeaders(default_response_headers_, false);
+  upstream_request_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "200"}}, false);
   upstream_request_->encodeData(512, true);
   response->waitForEndStream();
 
@@ -1508,9 +1107,13 @@ void HttpIntegrationTest::testTwoRequests(bool network_backup) {
   EXPECT_EQ(512U, response->body().size());
 
   // Request 2.
-  response = codec_client_->makeRequestWithBody(default_request_headers_, 512);
+  response = codec_client_->makeRequestWithBody(Http::TestHeaderMapImpl{{":method", "GET"},
+                                                                        {":path", "/test/long/url"},
+                                                                        {":scheme", "http"},
+                                                                        {":authority", "host"}},
+                                                512);
   waitForNextUpstreamRequest();
-  upstream_request_->encodeHeaders(default_response_headers_, false);
+  upstream_request_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "200"}}, false);
   upstream_request_->encodeData(1024, true);
   response->waitForEndStream();
 
@@ -1572,7 +1175,7 @@ void HttpIntegrationTest::testHttp10Enabled() {
 
   std::unique_ptr<Http::TestHeaderMapImpl> upstream_headers =
       reinterpret_cast<AutonomousUpstream*>(fake_upstreams_.front().get())->lastRequestHeaders();
-  ASSERT_TRUE(upstream_headers != nullptr);
+  ASSERT_TRUE(upstream_headers.get() != nullptr);
   EXPECT_EQ(upstream_headers->Host()->value(), "default.com");
 
   sendRawHttpAndWaitForResponse(lookupPort("http"), "HEAD / HTTP/1.0\r\n\r\n", &response, false);
@@ -1597,7 +1200,7 @@ void HttpIntegrationTest::testHttp10WithHostAndKeepAlive() {
 
   std::unique_ptr<Http::TestHeaderMapImpl> upstream_headers =
       reinterpret_cast<AutonomousUpstream*>(fake_upstreams_.front().get())->lastRequestHeaders();
-  ASSERT_TRUE(upstream_headers != nullptr);
+  ASSERT_TRUE(upstream_headers.get() != nullptr);
   EXPECT_EQ(upstream_headers->Host()->value(), "foo.com");
 }
 
@@ -1614,7 +1217,7 @@ void HttpIntegrationTest::testHttp09Enabled() {
 
   std::unique_ptr<Http::TestHeaderMapImpl> upstream_headers =
       reinterpret_cast<AutonomousUpstream*>(fake_upstreams_.front().get())->lastRequestHeaders();
-  ASSERT_TRUE(upstream_headers != nullptr);
+  ASSERT_TRUE(upstream_headers.get() != nullptr);
   EXPECT_EQ(upstream_headers->Host()->value(), "default.com");
 }
 
@@ -1693,7 +1296,7 @@ void HttpIntegrationTest::testInlineHeaders() {
 
   std::unique_ptr<Http::TestHeaderMapImpl> upstream_headers =
       reinterpret_cast<AutonomousUpstream*>(fake_upstreams_.front().get())->lastRequestHeaders();
-  ASSERT_TRUE(upstream_headers != nullptr);
+  ASSERT_TRUE(upstream_headers.get() != nullptr);
   EXPECT_EQ(upstream_headers->Host()->value(), "foo.com");
   EXPECT_EQ(upstream_headers->CacheControl()->value(), "public,123");
   ASSERT_TRUE(upstream_headers->get(Envoy::Http::LowerCaseString("foo")) != nullptr);
@@ -1857,160 +1460,6 @@ void HttpIntegrationTest::testUpstreamProtocolError() {
   EXPECT_STREQ("503", response->headers().Status()->value().c_str());
 }
 
-void HttpIntegrationTest::testHeadersOnlyFilterEncoding() {
-  config_helper_.addFilter(R"EOF(
-name: encode-headers-only
-)EOF");
-  initialize();
-
-  codec_client_ = makeHttpConnection(lookupPort("http"));
-  auto response =
-      codec_client_->makeRequestWithBody(Http::TestHeaderMapImpl{{":method", "GET"},
-                                                                 {":path", "/test/long/url"},
-                                                                 {":scheme", "http"},
-                                                                 {":authority", "host"}},
-                                         128);
-  waitForNextUpstreamRequest();
-  upstream_request_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "503"}}, false);
-  response->waitForEndStream();
-  EXPECT_TRUE(upstream_request_->waitForEndStream(*dispatcher_));
-  if (upstreamProtocol() == FakeHttpConnection::Type::HTTP1) {
-    ASSERT_TRUE(fake_upstream_connection_->waitForDisconnect());
-  } else {
-    ASSERT_TRUE(upstream_request_->waitForReset());
-    ASSERT_TRUE(fake_upstream_connection_->close());
-    ASSERT_TRUE(fake_upstream_connection_->waitForDisconnect());
-  }
-
-  EXPECT_TRUE(response->complete());
-  EXPECT_STREQ("503", response->headers().Status()->value().c_str());
-  EXPECT_EQ(0, response->body().size());
-}
-
-void HttpIntegrationTest::testHeadersOnlyFilterDecoding() {
-  config_helper_.addFilter(R"EOF(
-name: decode-headers-only
-)EOF");
-  initialize();
-
-  codec_client_ = makeHttpConnection(lookupPort("http"));
-  auto response =
-      codec_client_->makeRequestWithBody(Http::TestHeaderMapImpl{{":method", "POST"},
-                                                                 {":path", "/test/long/url"},
-                                                                 {":scheme", "http"},
-                                                                 {":authority", "host"}},
-                                         128);
-  waitForNextUpstreamRequest();
-  upstream_request_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "503"}}, false);
-  upstream_request_->encodeData(128, true);
-  response->waitForEndStream();
-
-  EXPECT_TRUE(response->complete());
-  EXPECT_STREQ("503", response->headers().Status()->value().c_str());
-  EXPECT_EQ(128, response->body().size());
-}
-
-void HttpIntegrationTest::testHeadersOnlyFilterEncodingIntermediateFilters() {
-  config_helper_.addFilter(R"EOF(
-name: passthrough-filter
-)EOF");
-  config_helper_.addFilter(R"EOF(
-name: encode-headers-only
-)EOF");
-  config_helper_.addFilter(R"EOF(
-name: passthrough-filter
-)EOF");
-  initialize();
-
-  codec_client_ = makeHttpConnection(lookupPort("http"));
-  auto response =
-      codec_client_->makeRequestWithBody(Http::TestHeaderMapImpl{{":method", "GET"},
-                                                                 {":path", "/test/long/url"},
-                                                                 {":scheme", "http"},
-                                                                 {":authority", "host"}},
-                                         128);
-  waitForNextUpstreamRequest();
-  upstream_request_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "503"}}, false);
-  response->waitForEndStream();
-  if (upstreamProtocol() == FakeHttpConnection::Type::HTTP1) {
-    ASSERT_TRUE(fake_upstream_connection_->waitForDisconnect());
-  } else {
-    ASSERT_TRUE(upstream_request_->waitForReset());
-    ASSERT_TRUE(fake_upstream_connection_->close());
-    ASSERT_TRUE(fake_upstream_connection_->waitForDisconnect());
-  }
-
-  EXPECT_TRUE(response->complete());
-  EXPECT_STREQ("503", response->headers().Status()->value().c_str());
-  EXPECT_EQ(0, response->body().size());
-}
-
-void HttpIntegrationTest::testHeadersOnlyFilterDecodingIntermediateFilters() {
-  config_helper_.addFilter(R"EOF(
-name: passthrough-filter
-)EOF");
-  config_helper_.addFilter(R"EOF(
-name: decode-headers-only
-)EOF");
-  config_helper_.addFilter(R"EOF(
-name: passthrough-filter
-)EOF");
-  initialize();
-
-  codec_client_ = makeHttpConnection(lookupPort("http"));
-  auto response =
-      codec_client_->makeRequestWithBody(Http::TestHeaderMapImpl{{":method", "POST"},
-                                                                 {":path", "/test/long/url"},
-                                                                 {":scheme", "http"},
-                                                                 {":authority", "host"}},
-                                         128);
-  waitForNextUpstreamRequest();
-  upstream_request_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "503"}}, false);
-  upstream_request_->encodeData(128, true);
-  response->waitForEndStream();
-
-  EXPECT_TRUE(response->complete());
-  EXPECT_STREQ("503", response->headers().Status()->value().c_str());
-  EXPECT_EQ(128, response->body().size());
-}
-
-// Verifies behavior when request data is encoded after the request has been
-// turned into a headers-only request and the response has already begun.
-void HttpIntegrationTest::testHeadersOnlyFilterInterleaved() {
-  config_helper_.addFilter(R"EOF(
-name: decode-headers-only
-)EOF");
-  initialize();
-
-  codec_client_ = makeHttpConnection(lookupPort("http"));
-
-  // First send the request headers. The filter should turn this into a header-only
-  // request.
-  auto encoder_decoder =
-      codec_client_->startRequest(Http::TestHeaderMapImpl{{":method", "GET"},
-                                                          {":path", "/test/long/url"},
-                                                          {":scheme", "http"},
-                                                          {":authority", "host"}});
-  request_encoder_ = &encoder_decoder.first;
-  auto response = std::move(encoder_decoder.second);
-
-  // Wait for the upstream request and begin sending a response with end_stream = false.
-  waitForNextUpstreamRequest();
-  upstream_request_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "503"}}, false);
-
-  // Simulate additional data after the request has been turned into a headers only request.
-  Buffer::OwnedImpl data(std::string(128, 'a'));
-  request_encoder_->encodeData(data, false);
-
-  // End the response.
-  upstream_request_->encodeData(128, true);
-
-  response->waitForEndStream();
-  EXPECT_TRUE(response->complete());
-  EXPECT_STREQ("503", response->headers().Status()->value().c_str());
-  EXPECT_EQ(0, upstream_request_->body().length());
-}
-
 void HttpIntegrationTest::testDownstreamResetBeforeResponseComplete() {
   initialize();
   codec_client_ = makeHttpConnection(lookupPort("http"));
@@ -2029,7 +1478,7 @@ void HttpIntegrationTest::testDownstreamResetBeforeResponseComplete() {
 
   EXPECT_EQ(upstream_request_->headers().get(Http::Headers::get().Cookie)->value(), "a=b; c=d");
 
-  upstream_request_->encodeHeaders(default_response_headers_, false);
+  upstream_request_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "200"}}, false);
   upstream_request_->encodeData(512, false);
 
   response->waitForBodyData(512);
@@ -2069,7 +1518,7 @@ void HttpIntegrationTest::testTrailers(uint64_t request_size, uint64_t response_
   codec_client_->sendData(*request_encoder_, request_size, false);
   codec_client_->sendTrailers(*request_encoder_, request_trailers);
   waitForNextUpstreamRequest();
-  upstream_request_->encodeHeaders(default_response_headers_, false);
+  upstream_request_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "200"}}, false);
   upstream_request_->encodeData(response_size, false);
   upstream_request_->encodeTrailers(response_trailers);
   response->waitForEndStream();
@@ -2087,12 +1536,4 @@ void HttpIntegrationTest::testTrailers(uint64_t request_size, uint64_t response_
     EXPECT_THAT(*response->trailers(), HeaderMapEqualRef(&response_trailers));
   }
 }
-
-std::string HttpIntegrationTest::listenerStatPrefix(const std::string& stat_name) {
-  if (version_ == Network::Address::IpVersion::v4) {
-    return "listener.127.0.0.1_0." + stat_name;
-  }
-  return "listener.[__1]_0." + stat_name;
-}
-
 } // namespace Envoy

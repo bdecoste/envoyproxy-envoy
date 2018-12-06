@@ -1,7 +1,5 @@
 #include "common/upstream/thread_aware_lb_impl.h"
 
-#include <memory>
-
 namespace Envoy {
 namespace Upstream {
 
@@ -25,17 +23,14 @@ void ThreadAwareLoadBalancerBase::refresh() {
 
   for (const auto& host_set : priority_set_.hostSetsPerPriority()) {
     const uint32_t priority = host_set->priority();
-    (*per_priority_state_vector)[priority] = std::make_unique<PerPriorityState>();
+    (*per_priority_state_vector)[priority].reset(new PerPriorityState);
     const auto& per_priority_state = (*per_priority_state_vector)[priority];
-    // Copy panic flag from LoadBalancerBase. It is calculated when there is a change
-    // in hosts set or hosts' health.
-    per_priority_state->global_panic_ = per_priority_panic_[priority];
-    per_priority_state->current_lb_ =
-        createLoadBalancer(*host_set, per_priority_state->global_panic_);
+    per_priority_state->current_lb_ = createLoadBalancer(*host_set);
+    per_priority_state->global_panic_ = isGlobalPanic(*host_set);
   }
 
   {
-    absl::WriterMutexLock lock(&factory_->mutex_);
+    std::unique_lock<std::shared_timed_mutex> lock(factory_->mutex_);
     factory_->per_priority_load_ = per_priority_load;
     factory_->per_priority_state_ = per_priority_state_vector;
   }
@@ -47,7 +42,6 @@ ThreadAwareLoadBalancerBase::LoadBalancerImpl::chooseHost(LoadBalancerContext* c
   if (per_priority_state_ == nullptr) {
     return nullptr;
   }
-
   // If there is no hash in the context, just choose a random value (this effectively becomes
   // the random LB but it won't crash if someone configures it this way).
   // computeHashKey() may be computed on demand, so get it only once.
@@ -70,7 +64,7 @@ LoadBalancerPtr ThreadAwareLoadBalancerBase::LoadBalancerFactoryImpl::create() {
 
   // We must protect current_lb_ via a RW lock since it is accessed and written to by multiple
   // threads. All complex processing has already been precalculated however.
-  absl::ReaderMutexLock lock(&mutex_);
+  std::shared_lock<std::shared_timed_mutex> lock(mutex_);
   lb->per_priority_load_ = per_priority_load_;
   lb->per_priority_state_ = per_priority_state_;
 

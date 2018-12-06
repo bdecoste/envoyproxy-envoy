@@ -29,7 +29,6 @@ api_proto_library_internal(
     ],
     deps = [
         "//envoy/api/v2/core:address",
-        "//envoy/type/matcher:string",
     ],
 )
 
@@ -38,6 +37,5 @@ api_go_proto_library(
     proto = ":stats",
     deps = [
         "//envoy/api/v2/core:address_go_proto",
-        "//envoy/type/matcher:string_go_proto",
     ],
 )

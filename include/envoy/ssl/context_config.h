@@ -5,7 +5,6 @@
 #include <vector>
 
 #include "envoy/common/pure.h"
-#include "envoy/ssl/certificate_validation_context_config.h"
 #include "envoy/ssl/tls_certificate_config.h"
 
 namespace Envoy {
@@ -26,6 +25,11 @@ public:
   virtual const std::string& alpnProtocols() const PURE;
 
   /**
+   * The alternate list of ALPN protocols served via kill switch. @see alpnProtocols().
+   */
+  virtual const std::string& altAlpnProtocols() const PURE;
+
+  /**
    * The ':' delimited list of supported cipher suites
    */
   virtual const std::string& cipherSuites() const PURE;
@@ -36,16 +40,51 @@ public:
   virtual const std::string& ecdhCurves() const PURE;
 
   /**
-   * @return std::vector<std::reference_wrapper<const TlsCertificateConfig>> TLS
-   * certificate configs.
+   * @return The CA certificate to use for peer validation.
    */
-  virtual std::vector<std::reference_wrapper<const TlsCertificateConfig>>
-  tlsCertificates() const PURE;
+  virtual const std::string& caCert() const PURE;
 
   /**
-   * @return CertificateValidationContextConfig the certificate validation context config.
+   * @return Path of the CA certificate to use for peer validation or "<inline>"
+   * if the CA certificate was inlined.
    */
-  virtual const CertificateValidationContextConfig* certificateValidationContext() const PURE;
+  virtual const std::string& caCertPath() const PURE;
+
+  /**
+   * @return The CRL to check if a cert is revoked.
+   */
+  virtual const std::string& certificateRevocationList() const PURE;
+
+  /**
+   * @return Path of the certificate revocation list, or "<inline>" if the CRL
+   * was inlined.
+   */
+  virtual const std::string& certificateRevocationListPath() const PURE;
+
+  /**
+   * @return TlsCertificateConfig the certificate config used to identify the local side.
+   */
+  virtual const TlsCertificateConfig* tlsCertificate() const PURE;
+
+  /**
+   * @return The subject alt names to be verified, if enabled. Otherwise, ""
+   */
+  virtual const std::vector<std::string>& verifySubjectAltNameList() const PURE;
+
+  /**
+   * @return A list of a hex-encoded SHA-256 certificate hashes to be verified.
+   */
+  virtual const std::vector<std::string>& verifyCertificateHashList() const PURE;
+
+  /**
+   * @return A list of a hex-encoded SHA-256 SPKI hashes to be verified.
+   */
+  virtual const std::vector<std::string>& verifyCertificateSpkiList() const PURE;
+
+  /**
+   * @return whether to ignore expired certificates (both too new and too old).
+   */
+  virtual bool allowExpiredCertificate() const PURE;
 
   /**
    * @return The minimum TLS protocol version to negotiate.
@@ -56,19 +95,6 @@ public:
    * @return The maximum TLS protocol version to negotiate.
    */
   virtual unsigned maxProtocolVersion() const PURE;
-
-  /**
-   * @return true if the ContextConfig is able to provide secrets to create SSL context,
-   * and false if dynamic secrets are expected but are not downloaded from SDS server yet.
-   */
-  virtual bool isReady() const PURE;
-
-  /**
-   * Add secret callback into context config. When dynamic secrets are in use and new secrets
-   * are downloaded from SDS server, this callback is invoked to update SSL context.
-   * @param callback callback that is executed by context config.
-   */
-  virtual void setSecretUpdateCallback(std::function<void()> callback) PURE;
 };
 
 class ClientContextConfig : public virtual ContextConfig {
@@ -83,11 +109,6 @@ public:
    * @return true if server-initiated TLS renegotiation will be allowed.
    */
   virtual bool allowRenegotiation() const PURE;
-
-  /**
-   * @return The maximum number of session keys to store.
-   */
-  virtual size_t maxSessionKeys() const PURE;
 };
 
 typedef std::unique_ptr<ClientContextConfig> ClientContextConfigPtr;

@@ -7,15 +7,11 @@
 
 #include "envoy/access_log/access_log.h"
 #include "envoy/event/dispatcher.h"
-#include "envoy/grpc/status.h"
 #include "envoy/http/codec.h"
 #include "envoy/http/header_map.h"
 #include "envoy/router/router.h"
 #include "envoy/ssl/connection.h"
 #include "envoy/tracing/http_tracer.h"
-#include "envoy/upstream/upstream.h"
-
-#include "absl/types/optional.h"
 
 namespace Envoy {
 namespace Http {
@@ -30,10 +26,7 @@ enum class FilterHeadersStatus {
   // Do not iterate to any of the remaining filters in the chain. Returning
   // FilterDataStatus::Continue from decodeData()/encodeData() or calling
   // continueDecoding()/continueEncoding() MUST be called if continued filter iteration is desired.
-  StopIteration,
-  // Continue iteration to remaining filters, but ignore any subsequent data or trailers. This
-  // results in creating a header only request/response.
-  ContinueAndEndStream
+  StopIteration
 };
 
 /**
@@ -119,14 +112,6 @@ public:
   virtual Router::RouteConstSharedPtr route() PURE;
 
   /**
-   * Returns the clusterInfo for the cached route.
-   * This method is to avoid multiple look ups in the filter chain, it also provides a consistent
-   * view of clusterInfo after a route is picked/repicked.
-   * NOTE: Cached clusterInfo and route will be updated the same time.
-   */
-  virtual Upstream::ClusterInfoConstSharedPtr clusterInfo() PURE;
-
-  /**
    * Clears the route cache for the current request. This must be called when a filter has modified
    * the headers in a way that would affect routing.
    */
@@ -138,10 +123,10 @@ public:
   virtual uint64_t streamId() PURE;
 
   /**
-   * @return streamInfo for logging purposes. Individual filter may add specific information to be
+   * @return requestInfo for logging purposes. Individual filter may add specific information to be
    * put into the access log.
    */
-  virtual StreamInfo::StreamInfo& streamInfo() PURE;
+  virtual RequestInfo::RequestInfo& requestInfo() PURE;
 
   /**
    * @return span context used for tracing purposes. Individual filters may add or modify
@@ -227,11 +212,9 @@ public:
    *                  type, or encoded in the grpc-message header.
    * @param modify_headers supplies an optional callback function that can modify the
    *                       response headers.
-   * @param grpc_status the gRPC status code to override the httpToGrpcStatus mapping with.
    */
-  virtual void sendLocalReply(Code response_code, absl::string_view body_text,
-                              std::function<void(HeaderMap& headers)> modify_headers,
-                              const absl::optional<Grpc::Status::GrpcStatus> grpc_status) PURE;
+  virtual void sendLocalReply(Code response_code, const std::string& body_text,
+                              std::function<void(HeaderMap& headers)> modify_headers) PURE;
 
   /**
    * Called with 100-Continue headers to be encoded.
@@ -267,13 +250,6 @@ public:
    * @param trailers supplies the trailers to encode.
    */
   virtual void encodeTrailers(HeaderMapPtr&& trailers) PURE;
-
-  /**
-   * Called with metadata to be encoded.
-   *
-   * @param metadata_map supplies the unique_ptr of the metadata to be encoded.
-   */
-  virtual void encodeMetadata(MetadataMapPtr&& metadata_map) PURE;
 
   /**
    * Called when the buffer for a decoder filter or any buffers the filter sends data to go over
@@ -504,7 +480,7 @@ public:
 
   /**
    * Called with trailers to be encoded, implicitly ending the stream.
-   * @param trailers supplies the trailers to be encoded.
+   * @param trailers supplies the trailes to be encoded.
    */
   virtual FilterTrailersStatus encodeTrailers(HeaderMap& trailers) PURE;
 
@@ -520,7 +496,7 @@ typedef std::shared_ptr<StreamEncoderFilter> StreamEncoderFilterSharedPtr;
 /**
  * A filter that handles both encoding and decoding.
  */
-class StreamFilter : public virtual StreamDecoderFilter, public virtual StreamEncoderFilter {};
+class StreamFilter : public StreamDecoderFilter, public StreamEncoderFilter {};
 
 typedef std::shared_ptr<StreamFilter> StreamFilterSharedPtr;
 
@@ -587,15 +563,12 @@ public:
   /**
    * Called when a new upgrade stream is created on the connection.
    * @param upgrade supplies the upgrade header from downstream
-   * @param per_route_upgrade_map supplies the upgrade map, if any, for this route.
    * @param callbacks supplies the "sink" that is used for actually creating the filter chain. @see
    *                  FilterChainFactoryCallbacks.
    * @return true if upgrades of this type are allowed and the filter chain has been created.
    *    returns false if this upgrade type is not configured, and no filter chain is created.
    */
-  typedef std::map<std::string, bool> UpgradeMap;
   virtual bool createUpgradeFilterChain(absl::string_view upgrade,
-                                        const UpgradeMap* per_route_upgrade_map,
                                         FilterChainFactoryCallbacks& callbacks) PURE;
 };
 

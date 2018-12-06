@@ -13,8 +13,8 @@
 namespace Envoy {
 namespace Grpc {
 
-GoogleAsyncClientThreadLocal::GoogleAsyncClientThreadLocal(Api::Api& api)
-    : completion_thread_(api.createThread([this] { completionThread(); })) {}
+GoogleAsyncClientThreadLocal::GoogleAsyncClientThreadLocal()
+    : completion_thread_(new Thread::Thread([this] { completionThread(); })) {}
 
 GoogleAsyncClientThreadLocal::~GoogleAsyncClientThreadLocal() {
   // Force streams to shutdown and invoke TryCancel() to start the drain of
@@ -205,8 +205,7 @@ void GoogleAsyncStreamImpl::resetStream() {
 }
 
 void GoogleAsyncStreamImpl::writeQueued() {
-  if (!call_initialized_ || finish_pending_ || write_pending_ || write_pending_queue_.empty() ||
-      draining_cq_) {
+  if (!call_initialized_ || finish_pending_ || write_pending_ || write_pending_queue_.empty()) {
     return;
   }
   write_pending_ = true;
@@ -388,7 +387,7 @@ GoogleAsyncRequestImpl::GoogleAsyncRequestImpl(
       callbacks_(callbacks) {
   current_span_ = parent_span.spawnChild(Tracing::EgressConfig::get(),
                                          "async " + parent.stat_prefix_ + " egress",
-                                         parent.timeSource().systemTime());
+                                         ProdSystemTimeSource::instance_.currentTime());
   current_span_->setTag(Tracing::Tags::get().UPSTREAM_CLUSTER, parent.stat_prefix_);
   current_span_->setTag(Tracing::Tags::get().COMPONENT, Tracing::Tags::get().PROXY);
 }

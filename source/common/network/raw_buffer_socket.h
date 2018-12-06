@@ -29,7 +29,7 @@ private:
 class RawBufferSocketFactory : public TransportSocketFactory {
 public:
   // Network::TransportSocketFactory
-  TransportSocketPtr createTransportSocket(TransportSocketOptionsSharedPtr options) const override;
+  TransportSocketPtr createTransportSocket() const override;
   bool implementsSecureTransport() const override;
 };
 

@@ -89,11 +89,9 @@ public:
    * Constructor. It adds itself and a newly-created Zipkin::Tracer object to a thread-local store.
    * Also, it associates the given random-number generator to the Zipkin::Tracer object it creates.
    */
-  Driver(const envoy::config::trace::v2::ZipkinConfig& zipkin_config,
-         Upstream::ClusterManager& cluster_manager, Stats::Store& stats,
+  Driver(const Json::Object& config, Upstream::ClusterManager& cluster_manager, Stats::Store& stats,
          ThreadLocal::SlotAllocator& tls, Runtime::Loader& runtime,
-         const LocalInfo::LocalInfo& localinfo, Runtime::RandomGenerator& random_generator,
-         TimeSource& time_source);
+         const LocalInfo::LocalInfo& localinfo, Runtime::RandomGenerator& random_generator);
 
   /**
    * This function is inherited from the abstract Driver class.
@@ -132,7 +130,6 @@ private:
   ThreadLocal::SlotPtr tls_;
   Runtime::Loader& runtime_;
   const LocalInfo::LocalInfo& local_info_;
-  TimeSource& time_source_;
 };
 
 /**

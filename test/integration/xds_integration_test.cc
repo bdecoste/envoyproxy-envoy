@@ -10,8 +10,7 @@ namespace {
 class XdsIntegrationTest : public HttpIntegrationTest,
                            public testing::TestWithParam<Network::Address::IpVersion> {
 public:
-  XdsIntegrationTest()
-      : HttpIntegrationTest(Http::CodecClient::Type::HTTP2, GetParam(), realTime()) {
+  XdsIntegrationTest() : HttpIntegrationTest(Http::CodecClient::Type::HTTP2, GetParam()) {
     setUpstreamProtocol(FakeHttpConnection::Type::HTTP2);
   }
 
@@ -19,11 +18,11 @@ public:
     registerPort("upstream_0", fake_upstreams_.back()->localAddress()->ip()->port());
     createApiTestServer(
         {
-            "test/config/integration/server_xds.bootstrap.yaml",
-            "test/config/integration/server_xds.cds.yaml",
-            "test/config/integration/server_xds.eds.yaml",
-            "test/config/integration/server_xds.lds.yaml",
-            "test/config/integration/server_xds.rds.yaml",
+            .bootstrap_path_ = "test/config/integration/server_xds.bootstrap.yaml",
+            .cds_path_ = "test/config/integration/server_xds.cds.yaml",
+            .eds_path_ = "test/config/integration/server_xds.eds.yaml",
+            .lds_path_ = "test/config/integration/server_xds.lds.yaml",
+            .rds_path_ = "test/config/integration/server_xds.rds.yaml",
         },
         {"http"});
   }

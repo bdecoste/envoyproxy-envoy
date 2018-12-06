@@ -1,7 +1,5 @@
 #include "extensions/filters/common/lua/lua.h"
 
-#include <memory>
-
 #include "envoy/common/exception.h"
 
 #include "common/common/assert.h"
@@ -87,7 +85,7 @@ uint64_t ThreadLocalState::registerGlobal(const std::string& global) {
 
 CoroutinePtr ThreadLocalState::createCoroutine() {
   lua_State* state = tls_slot_->getTyped<LuaThreadLocal>().state_.get();
-  return std::make_unique<Coroutine>(std::make_pair(lua_newthread(state), state));
+  return CoroutinePtr{new Coroutine({lua_newthread(state), state})};
 }
 
 ThreadLocalState::LuaThreadLocal::LuaThreadLocal(const std::string& code) : state_(lua_open()) {

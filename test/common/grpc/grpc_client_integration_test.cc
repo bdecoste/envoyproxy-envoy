@@ -13,8 +13,7 @@ namespace {
 
 // Parameterize the loopback test server socket address and gRPC client type.
 INSTANTIATE_TEST_CASE_P(IpVersionsClientType, GrpcClientIntegrationTest,
-                        GRPC_CLIENT_INTEGRATION_PARAMS,
-                        GrpcClientIntegrationParamTest::protocolTestParamsToString);
+                        GRPC_CLIENT_INTEGRATION_PARAMS);
 
 // Validate that a simple request-reply stream works.
 TEST_P(GrpcClientIntegrationTest, BasicStream) {
@@ -329,8 +328,7 @@ TEST_P(GrpcClientIntegrationTest, CancelRequest) {
 
 // Parameterize the loopback test server socket address and gRPC client type.
 INSTANTIATE_TEST_CASE_P(SslIpVersionsClientType, GrpcSslClientIntegrationTest,
-                        GRPC_CLIENT_INTEGRATION_PARAMS,
-                        GrpcClientIntegrationParamTest::protocolTestParamsToString);
+                        GRPC_CLIENT_INTEGRATION_PARAMS);
 
 // Validate that a simple request-reply unary RPC works with SSL.
 TEST_P(GrpcSslClientIntegrationTest, BasicSslRequest) {
@@ -392,8 +390,7 @@ public:
 
 // Parameterize the loopback test server socket address and gRPC client type.
 INSTANTIATE_TEST_CASE_P(SslIpVersionsClientType, GrpcAccessTokenClientIntegrationTest,
-                        GRPC_CLIENT_INTEGRATION_PARAMS,
-                        GrpcClientIntegrationParamTest::protocolTestParamsToString);
+                        GRPC_CLIENT_INTEGRATION_PARAMS);
 
 // Validate that a simple request-reply unary RPC works with AccessToken auth.
 TEST_P(GrpcAccessTokenClientIntegrationTest, AccessTokenAuthRequest) {

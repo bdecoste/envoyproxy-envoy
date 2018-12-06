@@ -10,7 +10,6 @@ api_proto_library_internal(
         "//envoy/api/v2/core:address",
         "//envoy/api/v2/route",
         "//envoy/type/matcher:metadata",
-        "//envoy/type/matcher:string",
     ],
 )
 
@@ -21,6 +20,5 @@ api_go_proto_library(
         "//envoy/api/v2/core:address_go_proto",
         "//envoy/api/v2/route:route_go_proto",
         "//envoy/type/matcher:metadata_go_proto",
-        "//envoy/type/matcher:string_go_proto",
     ],
 )

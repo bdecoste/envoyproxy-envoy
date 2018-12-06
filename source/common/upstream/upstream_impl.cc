@@ -119,23 +119,12 @@ parseExtensionProtocolOptions(const envoy::api::v2::Cluster& config) {
   for (const auto& iter : config.extension_protocol_options()) {
     const std::string& name = iter.first;
     const ProtobufWkt::Struct& config_struct = iter.second;
-    Server::Configuration::ProtocolOptionsFactory* factory = nullptr;
 
-    factory = Registry::FactoryRegistry<
-        Server::Configuration::NamedNetworkFilterConfigFactory>::getFactory(name);
-    if (factory == nullptr) {
-      factory = Registry::FactoryRegistry<
-          Server::Configuration::NamedHttpFilterConfigFactory>::getFactory(name);
-    }
+    auto& factory = Envoy::Config::Utility::getAndCheckFactory<
+        Server::Configuration::NamedNetworkFilterConfigFactory>(name);
 
-    if (factory == nullptr) {
-      throw EnvoyException(fmt::format(
-          "Didn't find a registered network or http filter implementation for name: '{}'", name));
-    }
-
-    auto object = factory->createProtocolOptionsConfig(
-        *Envoy::Config::Utility::translateToFactoryProtocolOptionsConfig(config_struct, name,
-                                                                         *factory));
+    auto object = factory.createProtocolOptionsConfig(
+        *Envoy::Config::Utility::translateToFactoryProtocolOptionsConfig(config_struct, factory));
     if (object) {
       options[name] = object;
     }
@@ -146,24 +135,22 @@ parseExtensionProtocolOptions(const envoy::api::v2::Cluster& config) {
 
 } // namespace
 
-Host::CreateConnectionData HostImpl::createConnection(
-    Event::Dispatcher& dispatcher, const Network::ConnectionSocket::OptionsSharedPtr& options,
-    Network::TransportSocketOptionsSharedPtr transport_socket_options) const {
-  return {createConnection(dispatcher, *cluster_, address_, options, transport_socket_options),
-          shared_from_this()};
+Host::CreateConnectionData
+HostImpl::createConnection(Event::Dispatcher& dispatcher,
+                           const Network::ConnectionSocket::OptionsSharedPtr& options) const {
+  return {createConnection(dispatcher, *cluster_, address_, options), shared_from_this()};
 }
 
 Host::CreateConnectionData
 HostImpl::createHealthCheckConnection(Event::Dispatcher& dispatcher) const {
-  return {createConnection(dispatcher, *cluster_, healthCheckAddress(), nullptr, nullptr),
+  return {createConnection(dispatcher, *cluster_, healthCheckAddress(), nullptr),
           shared_from_this()};
 }
 
 Network::ClientConnectionPtr
 HostImpl::createConnection(Event::Dispatcher& dispatcher, const ClusterInfo& cluster,
                            Network::Address::InstanceConstSharedPtr address,
-                           const Network::ConnectionSocket::OptionsSharedPtr& options,
-                           Network::TransportSocketOptionsSharedPtr transport_socket_options) {
+                           const Network::ConnectionSocket::OptionsSharedPtr& options) {
   Network::ConnectionSocket::OptionsSharedPtr connection_options;
   if (cluster.clusterSocketOptions() != nullptr) {
     if (options) {
@@ -179,8 +166,7 @@ HostImpl::createConnection(Event::Dispatcher& dispatcher, const ClusterInfo& clu
   }
 
   Network::ClientConnectionPtr connection = dispatcher.createClientConnection(
-      address, cluster.sourceAddress(),
-      cluster.transportSocketFactory().createTransportSocket(transport_socket_options),
+      address, cluster.sourceAddress(), cluster.transportSocketFactory().createTransportSocket(),
       connection_options);
   connection->setBufferLimits(cluster.perConnectionBufferLimitBytes());
   return connection;
@@ -276,9 +262,7 @@ double HostSetImpl::effectiveLocalityWeight(uint32_t index) const {
   ASSERT(hosts_per_locality_ != nullptr);
   const auto& locality_hosts = hosts_per_locality_->get()[index];
   const auto& locality_healthy_hosts = healthy_hosts_per_locality_->get()[index];
-  if (locality_hosts.empty()) {
-    return 0.0;
-  }
+  ASSERT(!locality_hosts.empty());
   const double locality_healthy_ratio = 1.0 * locality_healthy_hosts.size() / locality_hosts.size();
   const uint32_t weight = (*locality_weights_)[index];
   // Health ranges from 0-1.0, and is the ratio of healthy hosts to total hosts, modified by the
@@ -329,15 +313,13 @@ ClusterInfoImpl::ClusterInfoImpl(const envoy::api::v2::Cluster& config,
       features_(parseFeatures(config)),
       http2_settings_(Http::Utility::parseHttp2Settings(config.http2_protocol_options())),
       extension_protocol_options_(parseExtensionProtocolOptions(config)),
-      resource_managers_(config, runtime, name_, *stats_scope_),
+      resource_managers_(config, runtime, name_),
       maintenance_mode_runtime_key_(fmt::format("upstream.maintenance_mode.{}", name_)),
       source_address_(getSourceAddress(config, bind_config)),
-      lb_least_request_config_(config.least_request_lb_config()),
       lb_ring_hash_config_(config.ring_hash_lb_config()),
       lb_original_dst_config_(config.original_dst_lb_config()), added_via_api_(added_via_api),
       lb_subset_(LoadBalancerSubsetInfoImpl(config.lb_subset_config())),
-      metadata_(config.metadata()), typed_metadata_(config.metadata()),
-      common_lb_config_(config.common_lb_config()),
+      metadata_(config.metadata()), common_lb_config_(config.common_lb_config()),
       cluster_socket_options_(parseClusterSocketOptions(config, bind_config)),
       drain_connections_on_host_removal_(config.drain_connections_on_host_removal()) {
 
@@ -380,11 +362,6 @@ ClusterInfoImpl::ClusterInfoImpl(const envoy::api::v2::Cluster& config,
     idle_timeout_ = std::chrono::milliseconds(
         DurationUtil::durationToMilliseconds(config.common_http_protocol_options().idle_timeout()));
   }
-
-  // TODO(htuch): Remove this temporary workaround when we have
-  // https://github.com/lyft/protoc-gen-validate/issues/97 resolved. This just provides early
-  // validation of sanity of fields that we should catch at config ingestion.
-  DurationUtil::durationToMilliseconds(common_lb_config_.update_merge_window());
 }
 
 ProtocolOptionsConfigConstSharedPtr
@@ -436,8 +413,7 @@ ClusterSharedPtr ClusterImplBase::create(
     Ssl::ContextManager& ssl_context_manager, Runtime::Loader& runtime,
     Runtime::RandomGenerator& random, Event::Dispatcher& dispatcher,
     AccessLog::AccessLogManager& log_manager, const LocalInfo::LocalInfo& local_info,
-    Outlier::EventLoggerSharedPtr outlier_event_logger, bool added_via_api,
-    Upstream::EdsSubscriptionFactory& eds_subscription_factory) {
+    Outlier::EventLoggerSharedPtr outlier_event_logger, bool added_via_api) {
   std::unique_ptr<ClusterImplBase> new_cluster;
 
   // We make this a shared pointer to deal with the distinct ownership
@@ -463,18 +439,18 @@ ClusterSharedPtr ClusterImplBase::create(
 
   switch (cluster.type()) {
   case envoy::api::v2::Cluster::STATIC:
-    new_cluster = std::make_unique<StaticClusterImpl>(cluster, runtime, factory_context,
-                                                      std::move(stats_scope), added_via_api);
+    new_cluster.reset(new StaticClusterImpl(cluster, runtime, factory_context,
+                                            std::move(stats_scope), added_via_api));
     break;
   case envoy::api::v2::Cluster::STRICT_DNS:
-    new_cluster = std::make_unique<StrictDnsClusterImpl>(cluster, runtime, selected_dns_resolver,
-                                                         factory_context, std::move(stats_scope),
-                                                         added_via_api);
+    new_cluster.reset(new StrictDnsClusterImpl(cluster, runtime, selected_dns_resolver,
+                                               factory_context, std::move(stats_scope),
+                                               added_via_api));
     break;
   case envoy::api::v2::Cluster::LOGICAL_DNS:
-    new_cluster =
-        std::make_unique<LogicalDnsCluster>(cluster, runtime, selected_dns_resolver, tls,
-                                            factory_context, std::move(stats_scope), added_via_api);
+    new_cluster.reset(new LogicalDnsCluster(cluster, runtime, selected_dns_resolver, tls,
+                                            factory_context, std::move(stats_scope),
+                                            added_via_api));
     break;
   case envoy::api::v2::Cluster::ORIGINAL_DST:
     if (cluster.lb_policy() != envoy::api::v2::Cluster::ORIGINAL_DST_LB) {
@@ -485,8 +461,8 @@ ClusterSharedPtr ClusterImplBase::create(
       throw EnvoyException(fmt::format(
           "cluster: cluster type 'original_dst' may not be used with lb_subset_config"));
     }
-    new_cluster = std::make_unique<OriginalDstCluster>(cluster, runtime, factory_context,
-                                                       std::move(stats_scope), added_via_api);
+    new_cluster.reset(new OriginalDstCluster(cluster, runtime, factory_context,
+                                             std::move(stats_scope), added_via_api));
     break;
   case envoy::api::v2::Cluster::EDS:
     if (!cluster.has_eds_cluster_config()) {
@@ -494,9 +470,8 @@ ClusterSharedPtr ClusterImplBase::create(
     }
 
     // We map SDS to EDS, since EDS provides backwards compatibility with SDS.
-    new_cluster =
-        std::make_unique<EdsClusterImpl>(cluster, runtime, factory_context, std::move(stats_scope),
-                                         added_via_api, eds_subscription_factory);
+    new_cluster.reset(new EdsClusterImpl(cluster, runtime, factory_context, std::move(stats_scope),
+                                         added_via_api));
     break;
   default:
     NOT_REACHED_GCOVR_EXCL_LINE;
@@ -522,7 +497,6 @@ ClusterImplBase::ClusterImplBase(
     Server::Configuration::TransportSocketFactoryContext& factory_context,
     Stats::ScopePtr&& stats_scope, bool added_via_api)
     : runtime_(runtime) {
-  factory_context.setInitManager(init_manager_);
   auto socket_factory = createTransportSocketFactory(cluster, factory_context);
   info_ = std::make_unique<ClusterInfoImpl>(cluster, factory_context.clusterManager().bindConfig(),
                                             runtime, std::move(socket_factory),
@@ -586,11 +560,6 @@ void ClusterImplBase::onPreInitComplete() {
   }
   initialization_started_ = true;
 
-  ENVOY_LOG(debug, "initializing secondary cluster {} completed", info()->name());
-  init_manager_.initialize([this]() { onInitDone(); });
-}
-
-void ClusterImplBase::onInitDone() {
   if (health_checker_ && pending_initialize_health_checks_ == 0) {
     for (auto& host_set : prioritySet().hostSetsPerPriority()) {
       pending_initialize_health_checks_ += host_set->hosts().size();
@@ -688,24 +657,16 @@ ClusterImplBase::resolveProtoAddress(const envoy::api::v2::core::Address& addres
 
 ClusterInfoImpl::ResourceManagers::ResourceManagers(const envoy::api::v2::Cluster& config,
                                                     Runtime::Loader& runtime,
-                                                    const std::string& cluster_name,
-                                                    Stats::Scope& stats_scope) {
-  managers_[enumToInt(ResourcePriority::Default)] = load(
-      config, runtime, cluster_name, stats_scope, envoy::api::v2::core::RoutingPriority::DEFAULT);
+                                                    const std::string& cluster_name) {
+  managers_[enumToInt(ResourcePriority::Default)] =
+      load(config, runtime, cluster_name, envoy::api::v2::core::RoutingPriority::DEFAULT);
   managers_[enumToInt(ResourcePriority::High)] =
-      load(config, runtime, cluster_name, stats_scope, envoy::api::v2::core::RoutingPriority::HIGH);
-}
-
-ClusterCircuitBreakersStats
-ClusterInfoImpl::generateCircuitBreakersStats(Stats::Scope& scope, const std::string& stat_prefix) {
-  std::string prefix(fmt::format("circuit_breakers.{}.", stat_prefix));
-  return {ALL_CLUSTER_CIRCUIT_BREAKERS_STATS(POOL_GAUGE_PREFIX(scope, prefix))};
+      load(config, runtime, cluster_name, envoy::api::v2::core::RoutingPriority::HIGH);
 }
 
 ResourceManagerImplPtr
 ClusterInfoImpl::ResourceManagers::load(const envoy::api::v2::Cluster& config,
                                         Runtime::Loader& runtime, const std::string& cluster_name,
-                                        Stats::Scope& stats_scope,
                                         const envoy::api::v2::core::RoutingPriority& priority) {
   uint64_t max_connections = 1024;
   uint64_t max_pending_requests = 1024;
@@ -740,9 +701,8 @@ ClusterInfoImpl::ResourceManagers::load(const envoy::api::v2::Cluster& config,
     max_requests = PROTOBUF_GET_WRAPPED_OR_DEFAULT(*it, max_requests, max_requests);
     max_retries = PROTOBUF_GET_WRAPPED_OR_DEFAULT(*it, max_retries, max_retries);
   }
-  return std::make_unique<ResourceManagerImpl>(
-      runtime, runtime_prefix, max_connections, max_pending_requests, max_requests, max_retries,
-      ClusterInfoImpl::generateCircuitBreakersStats(stats_scope, priority_name));
+  return ResourceManagerImplPtr{new ResourceManagerImpl(
+      runtime, runtime_prefix, max_connections, max_pending_requests, max_requests, max_retries)};
 }
 
 PriorityStateManager::PriorityStateManager(ClusterImplBase& cluster,
@@ -756,7 +716,7 @@ void PriorityStateManager::initializePriorityFor(
     priority_state_.resize(priority + 1);
   }
   if (priority_state_[priority].first == nullptr) {
-    priority_state_[priority].first = std::make_unique<HostVector>();
+    priority_state_[priority].first.reset(new HostVector());
   }
   if (locality_lb_endpoint.has_locality() && locality_lb_endpoint.has_load_balancing_weight()) {
     priority_state_[priority].second[locality_lb_endpoint.locality()] =
@@ -769,10 +729,10 @@ void PriorityStateManager::registerHostForPriority(
     const envoy::api::v2::endpoint::LocalityLbEndpoints& locality_lb_endpoint,
     const envoy::api::v2::endpoint::LbEndpoint& lb_endpoint,
     const absl::optional<Upstream::Host::HealthFlag> health_checker_flag) {
-  const HostSharedPtr host(
-      new HostImpl(parent_.info(), hostname, address, lb_endpoint.metadata(),
-                   lb_endpoint.load_balancing_weight().value(), locality_lb_endpoint.locality(),
-                   lb_endpoint.endpoint().health_check_config(), locality_lb_endpoint.priority()));
+  const HostSharedPtr host(new HostImpl(parent_.info(), hostname, address, lb_endpoint.metadata(),
+                                        lb_endpoint.load_balancing_weight().value(),
+                                        locality_lb_endpoint.locality(),
+                                        lb_endpoint.endpoint().health_check_config()));
   registerHostForPriority(host, locality_lb_endpoint, lb_endpoint, health_checker_flag);
 }
 
@@ -907,12 +867,10 @@ void StaticClusterImpl::startPreInit() {
   onPreInitComplete();
 }
 
-bool BaseDynamicClusterImpl::updateDynamicHostList(const HostVector& new_hosts,
-                                                   HostVector& current_priority_hosts,
-                                                   HostVector& hosts_added_to_current_priority,
-                                                   HostVector& hosts_removed_from_current_priority,
-                                                   HostMap& updated_hosts,
-                                                   const HostMap& all_hosts) {
+bool BaseDynamicClusterImpl::updateDynamicHostList(
+    const HostVector& new_hosts, HostVector& current_priority_hosts,
+    HostVector& hosts_added_to_current_priority, HostVector& hosts_removed_from_current_priority,
+    std::unordered_map<std::string, HostSharedPtr>& updated_hosts) {
   uint64_t max_host_weight = 1;
 
   // Did hosts change?
@@ -935,7 +893,7 @@ bool BaseDynamicClusterImpl::updateDynamicHostList(const HostVector& new_hosts,
   // new host list and raise a change notification. This uses an N^2 search given that this does not
   // happen very often and the list sizes should be small (see
   // https://github.com/envoyproxy/envoy/issues/2874). We also check for duplicates here. It's
-  // possible for DNS to return the same address multiple times, and a bad EDS implementation could
+  // possible for DNS to return the same address multiple times, and a bad SDS implementation could
   // do the same thing.
 
   // Keep track of hosts we see in new_hosts that we are able to match up with an existing host.
@@ -948,8 +906,8 @@ bool BaseDynamicClusterImpl::updateDynamicHostList(const HostVector& new_hosts,
     }
 
     // To match a new host with an existing host means comparing their addresses.
-    auto existing_host = all_hosts.find(host->address()->asString());
-    const bool existing_host_found = existing_host != all_hosts.end();
+    auto existing_host = all_hosts_.find(host->address()->asString());
+    const bool existing_host_found = existing_host != all_hosts_.end();
 
     // Check if in-place host update should be skipped, i.e. when the following criteria are met
     // (currently there is only one criterion, but we might add more in the future):
@@ -1003,11 +961,6 @@ bool BaseDynamicClusterImpl::updateDynamicHostList(const HostVector& new_hosts,
         hosts_changed = true;
       }
 
-      // Did the priority change?
-      if (host->priority() != existing_host->second->priority()) {
-        existing_host->second->priority(host->priority());
-      }
-
       existing_host->second->weight(host->weight());
       final_hosts.push_back(existing_host->second);
       updated_hosts[existing_host->second->address()->asString()] = existing_host->second;
@@ -1029,22 +982,13 @@ bool BaseDynamicClusterImpl::updateDynamicHostList(const HostVector& new_hosts,
 
   // Remove hosts from current_priority_hosts that were matched to an existing host in the previous
   // loop.
-  for (auto itr = current_priority_hosts.begin(); itr != current_priority_hosts.end();) {
-    auto existing_itr = existing_hosts_for_current_priority.find((*itr)->address()->asString());
-
-    if (existing_itr != existing_hosts_for_current_priority.end()) {
-      existing_hosts_for_current_priority.erase(existing_itr);
-      itr = current_priority_hosts.erase(itr);
-    } else {
-      itr++;
-    }
-  }
-
-  // If we saw existing hosts during this iteration from a different priority, then we've moved
-  // a host from another priority into this one, so we should mark the priority as having changed.
-  if (!existing_hosts_for_current_priority.empty()) {
-    hosts_changed = true;
-  }
+  current_priority_hosts.erase(std::remove_if(current_priority_hosts.begin(),
+                                              current_priority_hosts.end(),
+                                              [&existing_hosts_for_current_priority](auto host) {
+                                                return existing_hosts_for_current_priority.count(
+                                                    host->address()->asString());
+                                              }),
+                               current_priority_hosts.end());
 
   // The remaining hosts are hosts that are not referenced in the config update. We remove them from
   // the priority if any of the following is true:
@@ -1145,11 +1089,6 @@ void StrictDnsClusterImpl::updateAllHosts(const HostVector& hosts_added,
                                           uint32_t current_priority) {
   PriorityStateManager priority_state_manager(*this, local_info_);
   // At this point we know that we are different so make a new host list and notify.
-  //
-  // TODO(dio): The uniqueness of a host address resolved in STRICT_DNS cluster per priority is not
-  // guaranteed. Need a clear agreement on the behavior here, whether it is allowable to have
-  // duplicated hosts inside a priority. And if we want to enforce this behavior, it should be done
-  // inside the priority state manager.
   for (const ResolveTargetPtr& target : resolve_targets_) {
     priority_state_manager.initializePriorityFor(target->locality_lb_endpoint_);
     for (const HostSharedPtr& host : target->hosts_) {
@@ -1187,7 +1126,7 @@ void StrictDnsClusterImpl::ResolveTarget::startResolve() {
 
   active_query_ = parent_.dns_resolver_->resolve(
       dns_address_, parent_.dns_lookup_family_,
-      [this](const std::list<Network::Address::InstanceConstSharedPtr>&& address_list) -> void {
+      [this](std::list<Network::Address::InstanceConstSharedPtr>&& address_list) -> void {
         active_query_ = nullptr;
         ENVOY_LOG(debug, "async DNS resolution complete for {}", dns_address_);
         parent_.info_->stats().update_success_.inc();
@@ -1203,24 +1142,18 @@ void StrictDnsClusterImpl::ResolveTarget::startResolve() {
           new_hosts.emplace_back(new HostImpl(
               parent_.info_, dns_address_, Network::Utility::getAddressWithPort(*address, port_),
               lb_endpoint_.metadata(), lb_endpoint_.load_balancing_weight().value(),
-              locality_lb_endpoint_.locality(), lb_endpoint_.endpoint().health_check_config(),
-              locality_lb_endpoint_.priority()));
+              locality_lb_endpoint_.locality(), lb_endpoint_.endpoint().health_check_config()));
         }
 
         HostVector hosts_added;
         HostVector hosts_removed;
         if (parent_.updateDynamicHostList(new_hosts, hosts_, hosts_added, hosts_removed,
-                                          updated_hosts, all_hosts_)) {
+                                          updated_hosts)) {
           ENVOY_LOG(debug, "DNS hosts have changed for {}", dns_address_);
-          ASSERT(std::all_of(hosts_.begin(), hosts_.end(), [&](const auto& host) {
-            return host->priority() == locality_lb_endpoint_.priority();
-          }));
           parent_.updateAllHosts(hosts_added, hosts_removed, locality_lb_endpoint_.priority());
-        } else {
-          parent_.info_->stats().update_no_rebuild_.inc();
         }
 
-        all_hosts_ = std::move(updated_hosts);
+        parent_.updateHostMap(std::move(updated_hosts));
 
         // If there is an initialize callback, fire it now. Note that if the cluster refers to
         // multiple DNS names, this will return initialized after a single DNS resolution

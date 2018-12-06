@@ -1,7 +1,5 @@
 #include "extensions/filters/http/lua/lua_filter.h"
 
-#include <memory>
-
 #include "envoy/http/codes.h"
 
 #include "common/buffer/buffer_impl.h"
@@ -125,7 +123,7 @@ int StreamHandleWrapper::luaRespond(lua_State* state) {
 
   Buffer::InstancePtr body;
   if (raw_body != nullptr) {
-    body = std::make_unique<Buffer::OwnedImpl>(raw_body, body_size);
+    body.reset(new Buffer::OwnedImpl(raw_body, body_size));
     headers->insertContentLength().value(body_size);
   }
 
@@ -181,7 +179,7 @@ int StreamHandleWrapper::luaHttpCall(lua_State* state) {
   }
 
   if (body != nullptr) {
-    message->body() = std::make_unique<Buffer::OwnedImpl>(body, body_size);
+    message->body().reset(new Buffer::OwnedImpl(body, body_size));
     message->headers().insertContentLength().value(body_size);
   }
 
@@ -191,7 +189,7 @@ int StreamHandleWrapper::luaHttpCall(lua_State* state) {
   }
 
   http_request_ = filter_.clusterManager().httpAsyncClientForCluster(cluster).send(
-      std::move(message), *this, Http::AsyncClient::RequestOptions().setTimeout(timeout));
+      std::move(message), *this, timeout);
   if (http_request_) {
     state_ = State::HttpCall;
     return lua_yield(state, 0);
@@ -254,7 +252,7 @@ void StreamHandleWrapper::onFailure(Http::AsyncClient::FailureReason) {
   Http::MessagePtr response_message(new Http::ResponseMessageImpl(Http::HeaderMapPtr{
       new Http::HeaderMapImpl{{Http::Headers::get().Status,
                                std::to_string(enumToInt(Http::Code::ServiceUnavailable))}}}));
-  response_message->body() = std::make_unique<Buffer::OwnedImpl>("upstream failure");
+  response_message->body().reset(new Buffer::OwnedImpl("upstream failure"));
   onSuccess(std::move(response_message));
 }
 
@@ -369,12 +367,12 @@ int StreamHandleWrapper::luaMetadata(lua_State* state) {
   return 1;
 }
 
-int StreamHandleWrapper::luaStreamInfo(lua_State* state) {
+int StreamHandleWrapper::luaRequestInfo(lua_State* state) {
   ASSERT(state_ == State::Running);
-  if (stream_info_wrapper_.get() != nullptr) {
-    stream_info_wrapper_.pushStack();
+  if (request_info_wrapper_.get() != nullptr) {
+    request_info_wrapper_.pushStack();
   } else {
-    stream_info_wrapper_.reset(StreamInfoWrapper::create(state, callbacks_.streamInfo()), true);
+    request_info_wrapper_.reset(RequestInfoWrapper::create(state, callbacks_.requestInfo()), true);
   }
   return 1;
 }
@@ -436,7 +434,7 @@ FilterConfig::FilterConfig(const std::string& lua_code, ThreadLocal::SlotAllocat
   lua_state_.registerType<Filters::Common::Lua::SslConnectionWrapper>();
   lua_state_.registerType<HeaderMapWrapper>();
   lua_state_.registerType<HeaderMapIterator>();
-  lua_state_.registerType<StreamInfoWrapper>();
+  lua_state_.registerType<RequestInfoWrapper>();
   lua_state_.registerType<DynamicMetadataMapWrapper>();
   lua_state_.registerType<DynamicMetadataMapIterator>();
   lua_state_.registerType<StreamHandleWrapper>();

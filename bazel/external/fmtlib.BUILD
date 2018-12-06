@@ -1,12 +1,10 @@
 cc_library(
     name = "fmtlib",
-    srcs = glob([
-        "fmt/*.cc",
-    ]),
     hdrs = glob([
-        "include/fmt/*.h",
+        "fmt/*.cc",
+        "fmt/*.h",
     ]),
     defines = ["FMT_HEADER_ONLY"],
-    includes = ["include"],
+    includes = ["."],
     visibility = ["//visibility:public"],
 )

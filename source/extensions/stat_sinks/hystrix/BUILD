@@ -35,7 +35,6 @@ envoy_cc_library(
         "//include/envoy/stats:stats_interface",
         "//source/common/buffer:buffer_lib",
         "//source/common/common:logger_lib",
-        "//source/common/config:well_known_names",
         "//source/common/http:headers_lib",
     ],
 )

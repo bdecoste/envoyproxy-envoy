@@ -1,5 +1,4 @@
 #include <cstdint>
-#include <memory>
 #include <string>
 #include <unordered_map>
 
@@ -23,12 +22,15 @@ using testing::Return;
 namespace Envoy {
 namespace Upstream {
 
-class TestLoadBalancerContext : public LoadBalancerContextBase {
+class TestLoadBalancerContext : public LoadBalancerContext {
 public:
   TestLoadBalancerContext(uint64_t hash_key) : hash_key_(hash_key) {}
 
   // Upstream::LoadBalancerContext
   absl::optional<uint64_t> computeHashKey() override { return hash_key_; }
+  const Router::MetadataMatchCriteria* metadataMatchCriteria() override { return nullptr; }
+  const Network::Connection* downstreamConnection() const override { return nullptr; }
+  const Http::HeaderMap* downstreamHeaders() const override { return nullptr; }
 
   absl::optional<uint64_t> hash_key_;
 };
@@ -38,12 +40,12 @@ public:
   RingHashLoadBalancerTest() : stats_(ClusterInfoImpl::generateStats(stats_store_)) {}
 
   void init() {
-    lb_ = std::make_unique<RingHashLoadBalancer>(priority_set_, stats_, runtime_, random_, config_,
-                                                 common_config_);
+    lb_.reset(new RingHashLoadBalancer(priority_set_, stats_, runtime_, random_, config_,
+                                       common_config_));
     lb_->initialize();
   }
 
-  // Run all tests against both priority 0 and priority 1 host sets, to ensure
+  // Run all tests aginst both priority 0 and priority 1 host sets, to ensure
   // all the load balancers have equivalent functonality for failover host sets.
   MockHostSet& hostSet() { return GetParam() ? host_set_ : failover_host_set_; }
 
@@ -82,6 +84,7 @@ TEST_P(RingHashLoadBalancerTest, Basic) {
 
   config_ = (envoy::api::v2::Cluster::RingHashLbConfig());
   config_.value().mutable_minimum_ring_size()->set_value(12);
+  config_.value().mutable_deprecated_v1()->mutable_use_std_hash()->set_value(false);
 
   init();
 
@@ -148,6 +151,7 @@ TEST_P(RingHashFailoverTest, BasicFailover) {
 
   config_ = (envoy::api::v2::Cluster::RingHashLbConfig());
   config_.value().mutable_minimum_ring_size()->set_value(12);
+  config_.value().mutable_deprecated_v1()->mutable_use_std_hash()->set_value(false);
   init();
 
   LoadBalancerPtr lb = lb_->factory()->create();
@@ -189,8 +193,8 @@ TEST_P(RingHashLoadBalancerTest, BasicWithStdHash) {
   hostSet().healthy_hosts_ = hostSet().hosts_;
   hostSet().runCallbacks({}, {});
 
+  // use_std_hash defaults to true so don't set it here.
   config_ = (envoy::api::v2::Cluster::RingHashLbConfig());
-  config_.value().mutable_deprecated_v1()->mutable_use_std_hash()->set_value(true);
   config_.value().mutable_minimum_ring_size()->set_value(12);
   init();
 
@@ -240,6 +244,7 @@ TEST_P(RingHashLoadBalancerTest, UnevenHosts) {
 
   config_ = (envoy::api::v2::Cluster::RingHashLbConfig());
   config_.value().mutable_minimum_ring_size()->set_value(3);
+  config_.value().mutable_deprecated_v1()->mutable_use_std_hash()->set_value(false);
   init();
 
   // hash ring:

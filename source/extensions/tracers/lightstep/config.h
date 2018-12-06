@@ -1,8 +1,10 @@
 #pragma once
 
-#include "envoy/config/trace/v2/trace.pb.validate.h"
+#include <string>
 
-#include "extensions/tracers/common/factory_base.h"
+#include "envoy/server/instance.h"
+
+#include "server/configuration_impl.h"
 
 namespace Envoy {
 namespace Extensions {
@@ -12,16 +14,13 @@ namespace Lightstep {
 /**
  * Config registration for the lightstep tracer. @see TracerFactory.
  */
-class LightstepTracerFactory
-    : public Common::FactoryBase<envoy::config::trace::v2::LightstepConfig> {
+class LightstepTracerFactory : public Server::Configuration::TracerFactory {
 public:
-  LightstepTracerFactory();
+  // TracerFactory
+  Tracing::HttpTracerPtr createHttpTracer(const Json::Object& json_config,
+                                          Server::Instance& server) override;
 
-private:
-  // FactoryBase
-  Tracing::HttpTracerPtr
-  createHttpTracerTyped(const envoy::config::trace::v2::LightstepConfig& proto_config,
-                        Server::Instance& server) override;
+  std::string name() override;
 };
 
 } // namespace Lightstep

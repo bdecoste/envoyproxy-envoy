@@ -17,7 +17,6 @@
 #include "test/mocks/runtime/mocks.h"
 #include "test/mocks/upstream/mocks.h"
 #include "test/test_common/printers.h"
-#include "test/test_common/test_time.h"
 #include "test/test_common/utility.h"
 
 #include "gmock/gmock.h"
@@ -80,8 +79,7 @@ public:
     test_client.codec_ = new NiceMock<Http::MockClientConnection>();
     test_client.connect_timer_ = new NiceMock<Event::MockTimer>(&mock_dispatcher_);
     std::shared_ptr<Upstream::MockClusterInfo> cluster{new NiceMock<Upstream::MockClusterInfo>()};
-    test_client.client_dispatcher_ =
-        std::make_unique<Event::DispatcherImpl>(test_time_.timeSystem());
+    test_client.client_dispatcher_.reset(new Event::DispatcherImpl);
     Network::ClientConnectionPtr connection{test_client.connection_};
     test_client.codec_client_ = new CodecClientForTest(
         std::move(connection), test_client.codec_,
@@ -112,7 +110,6 @@ public:
     EXPECT_FALSE(upstream_ready_enabled_);
   }
 
-  DangerousDeprecatedTestTime test_time_;
   Event::MockDispatcher& mock_dispatcher_;
   NiceMock<Event::MockTimer>* mock_upstream_ready_timer_;
   std::vector<TestCodecClient> test_clients_;
@@ -208,7 +205,8 @@ struct ActiveTestRequest {
  * Verify that connections are drained when requested.
  */
 TEST_F(Http1ConnPoolImplTest, DrainConnections) {
-  cluster_->resetResourceManager(2, 1024, 1024, 1);
+  cluster_->resource_manager_.reset(
+      new Upstream::ResourceManagerImpl(runtime_, "fake_key", 2, 1024, 1024, 1));
   InSequence s;
 
   ActiveTestRequest r1(*this, 0, ActiveTestRequest::Type::CreateConnection);
@@ -293,9 +291,8 @@ TEST_F(Http1ConnPoolImplTest, MultipleRequestAndResponse) {
  * Test when we overflow max pending requests.
  */
 TEST_F(Http1ConnPoolImplTest, MaxPendingRequests) {
-  cluster_->resetResourceManager(1, 1, 1024, 1);
-
-  EXPECT_EQ(0U, cluster_->circuit_breakers_stats_.rq_pending_open_.value());
+  cluster_->resource_manager_.reset(
+      new Upstream::ResourceManagerImpl(runtime_, "fake_key", 1, 1, 1024, 1));
 
   NiceMock<Http::MockStreamDecoder> outer_decoder;
   ConnPoolCallbacks callbacks;
@@ -308,8 +305,6 @@ TEST_F(Http1ConnPoolImplTest, MaxPendingRequests) {
   EXPECT_CALL(callbacks2.pool_failure_, ready());
   Http::ConnectionPool::Cancellable* handle2 = conn_pool_.newStream(outer_decoder2, callbacks2);
   EXPECT_EQ(nullptr, handle2);
-
-  EXPECT_EQ(1U, cluster_->circuit_breakers_stats_.rq_pending_open_.value());
 
   handle->cancel();
 
@@ -436,8 +431,6 @@ TEST_F(Http1ConnPoolImplTest, DisconnectWhileBound) {
 TEST_F(Http1ConnPoolImplTest, MaxConnections) {
   InSequence s;
 
-  EXPECT_EQ(0U, cluster_->circuit_breakers_stats_.cx_open_.value());
-
   // Request 1 should kick off a new connection.
   NiceMock<Http::MockStreamDecoder> outer_decoder1;
   ConnPoolCallbacks callbacks;
@@ -451,7 +444,6 @@ TEST_F(Http1ConnPoolImplTest, MaxConnections) {
   ConnPoolCallbacks callbacks2;
   handle = conn_pool_.newStream(outer_decoder2, callbacks2);
   EXPECT_EQ(1U, cluster_->stats_.upstream_cx_overflow_.value());
-  EXPECT_EQ(1U, cluster_->circuit_breakers_stats_.cx_open_.value());
 
   EXPECT_NE(nullptr, handle);
 
@@ -615,9 +607,10 @@ TEST_F(Http1ConnPoolImplTest, MaxRequestsPerConnection) {
 }
 
 TEST_F(Http1ConnPoolImplTest, ConcurrentConnections) {
-  cluster_->resetResourceManager(2, 1024, 1024, 1);
   InSequence s;
 
+  cluster_->resource_manager_.reset(
+      new Upstream::ResourceManagerImpl(runtime_, "fake_key", 2, 1024, 1024, 1));
   ActiveTestRequest r1(*this, 0, ActiveTestRequest::Type::CreateConnection);
   r1.startRequest();
 

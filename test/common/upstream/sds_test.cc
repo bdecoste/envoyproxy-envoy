@@ -77,8 +77,8 @@ protected:
         sds_cluster_.alt_stat_name().empty() ? sds_cluster_.name() : sds_cluster_.alt_stat_name()));
     Envoy::Server::Configuration::TransportSocketFactoryContextImpl factory_context(
         ssl_context_manager_, *scope, cm_, local_info_, dispatcher_, random_, stats_);
-    cluster_.reset(new EdsClusterImpl(sds_cluster_, runtime_, factory_context, std::move(scope),
-                                      false, eds_subscription_factory_));
+    cluster_.reset(
+        new EdsClusterImpl(sds_cluster_, runtime_, factory_context, std::move(scope), false));
     EXPECT_EQ(Cluster::InitializePhase::Secondary, cluster_->initializePhase());
   }
 
@@ -105,12 +105,12 @@ protected:
 
   void setupPoolFailure() {
     EXPECT_CALL(cm_, httpAsyncClientForCluster("sds")).WillOnce(ReturnRef(cm_.async_client_));
-    EXPECT_CALL(cm_.async_client_, send_(_, _,
-                                         Http::AsyncClient::RequestOptions().setTimeout(
-                                             std::chrono::milliseconds(1000))))
+    EXPECT_CALL(
+        cm_.async_client_,
+        send_(_, _, absl::optional<std::chrono::milliseconds>(std::chrono::milliseconds(1000))))
         .WillOnce(
             Invoke([](Http::MessagePtr&, Http::AsyncClient::Callbacks& callbacks,
-                      const Http::AsyncClient::RequestOptions&) -> Http::AsyncClient::Request* {
+                      absl::optional<std::chrono::milliseconds>) -> Http::AsyncClient::Request* {
               callbacks.onSuccess(Http::MessagePtr{new Http::ResponseMessageImpl(
                   Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "503"}}})});
               return nullptr;
@@ -119,9 +119,9 @@ protected:
 
   void setupRequest() {
     EXPECT_CALL(cm_, httpAsyncClientForCluster("sds")).WillOnce(ReturnRef(cm_.async_client_));
-    EXPECT_CALL(cm_.async_client_, send_(_, _,
-                                         Http::AsyncClient::RequestOptions().setTimeout(
-                                             std::chrono::milliseconds(1000))))
+    EXPECT_CALL(
+        cm_.async_client_,
+        send_(_, _, absl::optional<std::chrono::milliseconds>(std::chrono::milliseconds(1000))))
         .WillOnce(DoAll(WithArg<1>(SaveArgAddress(&callbacks_)), Return(&request_)));
   }
 
@@ -138,7 +138,6 @@ protected:
   Http::MockAsyncClientRequest request_;
   NiceMock<Runtime::MockLoader> runtime_;
   NiceMock<LocalInfo::MockLocalInfo> local_info_;
-  NiceMock<MockEdsSubscriptionFactory> eds_subscription_factory_;
 };
 
 TEST_F(SdsTest, Shutdown) {
@@ -160,7 +159,7 @@ TEST_F(SdsTest, RequestTimeout) {
   EXPECT_CALL(cm_, httpAsyncClientForCluster("sds")).WillOnce(ReturnRef(cm_.async_client_));
   EXPECT_CALL(
       cm_.async_client_,
-      send_(_, _, Http::AsyncClient::RequestOptions().setTimeout(std::chrono::milliseconds(5000))))
+      send_(_, _, absl::optional<std::chrono::milliseconds>(std::chrono::milliseconds(5000))))
       .WillOnce(DoAll(WithArg<1>(SaveArgAddress(&callbacks_)), Return(&request_)));
 
   cluster_->initialize([] {});
@@ -178,8 +177,8 @@ TEST_F(SdsTest, NoHealthChecker) {
 
   Http::MessagePtr message(new Http::ResponseMessageImpl(
       Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "200"}}}));
-  message->body() = std::make_unique<Buffer::OwnedImpl>(Filesystem::fileReadToEnd(
-      TestEnvironment::runfilesPath("test/common/upstream/test_data/sds_response.json")));
+  message->body().reset(new Buffer::OwnedImpl(Filesystem::fileReadToEnd(
+      TestEnvironment::runfilesPath("test/common/upstream/test_data/sds_response.json"))));
 
   EXPECT_CALL(membership_updated_, ready()).Times(2);
   EXPECT_CALL(*timer_, enableTimer(_));
@@ -214,11 +213,11 @@ TEST_F(SdsTest, NoHealthChecker) {
   setupRequest();
   timer_->callback_();
 
-  message = std::make_unique<Http::ResponseMessageImpl>(
-      Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "200"}}});
-  message->body() =
-      std::make_unique<Buffer::OwnedImpl>(Filesystem::fileReadToEnd(TestEnvironment::runfilesPath(
-          "test/common/upstream/test_data/sds_response_weight_change.json")));
+  message.reset(new Http::ResponseMessageImpl(
+      Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "200"}}}));
+  message->body().reset(
+      new Buffer::OwnedImpl(Filesystem::fileReadToEnd(TestEnvironment::runfilesPath(
+          "test/common/upstream/test_data/sds_response_weight_change.json"))));
   EXPECT_CALL(membership_updated_, ready());
   EXPECT_CALL(*timer_, enableTimer(_));
   callbacks_->onSuccess(std::move(message));
@@ -269,8 +268,8 @@ TEST_F(SdsTest, NoHealthChecker) {
   timer_->callback_();
 
   EXPECT_CALL(*timer_, enableTimer(_));
-  message = std::make_unique<Http::ResponseMessageImpl>(
-      Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "503"}}});
+  message.reset(new Http::ResponseMessageImpl(
+      Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "503"}}}));
   callbacks_->onSuccess(std::move(message));
   EXPECT_EQ(13UL, cluster_->prioritySet().hostSetsPerPriority()[0]->hosts().size());
   EXPECT_EQ(50U, canary_host->weight());
@@ -304,8 +303,8 @@ TEST_F(SdsTest, HealthChecker) {
   // all the hosts to load in unhealthy.
   Http::MessagePtr message(new Http::ResponseMessageImpl(
       Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "200"}}}));
-  message->body() = std::make_unique<Buffer::OwnedImpl>(Filesystem::fileReadToEnd(
-      TestEnvironment::runfilesPath("test/common/upstream/test_data/sds_response.json")));
+  message->body().reset(new Buffer::OwnedImpl(Filesystem::fileReadToEnd(
+      TestEnvironment::runfilesPath("test/common/upstream/test_data/sds_response.json"))));
 
   EXPECT_CALL(*health_checker, addHostCheckCompleteCb(_));
   EXPECT_CALL(*timer_, enableTimer(_));
@@ -381,10 +380,10 @@ TEST_F(SdsTest, HealthChecker) {
   timer_->callback_();
 
   EXPECT_CALL(*timer_, enableTimer(_));
-  message = std::make_unique<Http::ResponseMessageImpl>(
-      Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "200"}}});
-  message->body() = std::make_unique<Buffer::OwnedImpl>(Filesystem::fileReadToEnd(
-      TestEnvironment::runfilesPath("test/common/upstream/test_data/sds_response_2.json")));
+  message.reset(new Http::ResponseMessageImpl(
+      Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "200"}}}));
+  message->body().reset(new Buffer::OwnedImpl(Filesystem::fileReadToEnd(
+      TestEnvironment::runfilesPath("test/common/upstream/test_data/sds_response_2.json"))));
   callbacks_->onSuccess(std::move(message));
   EXPECT_EQ(14UL, cluster_->prioritySet().hostSetsPerPriority()[0]->hosts().size());
   EXPECT_EQ(13UL, cluster_->prioritySet().hostSetsPerPriority()[0]->healthyHosts().size());
@@ -410,10 +409,10 @@ TEST_F(SdsTest, HealthChecker) {
   setupRequest();
   timer_->callback_();
   EXPECT_CALL(*timer_, enableTimer(_));
-  message = std::make_unique<Http::ResponseMessageImpl>(
-      Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "200"}}});
-  message->body() = std::make_unique<Buffer::OwnedImpl>(Filesystem::fileReadToEnd(
-      TestEnvironment::runfilesPath("test/common/upstream/test_data/sds_response_2.json")));
+  message.reset(new Http::ResponseMessageImpl(
+      Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "200"}}}));
+  message->body().reset(new Buffer::OwnedImpl(Filesystem::fileReadToEnd(
+      TestEnvironment::runfilesPath("test/common/upstream/test_data/sds_response_2.json"))));
   callbacks_->onSuccess(std::move(message));
   EXPECT_EQ(13UL, cluster_->prioritySet().hostSetsPerPriority()[0]->hosts().size());
   EXPECT_EQ(12UL, cluster_->prioritySet().hostSetsPerPriority()[0]->healthyHosts().size());
@@ -438,10 +437,10 @@ TEST_F(SdsTest, HealthChecker) {
   setupRequest();
   timer_->callback_();
   EXPECT_CALL(*timer_, enableTimer(_));
-  message = std::make_unique<Http::ResponseMessageImpl>(
-      Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "200"}}});
-  message->body() = std::make_unique<Buffer::OwnedImpl>(Filesystem::fileReadToEnd(
-      TestEnvironment::runfilesPath("test/common/upstream/test_data/sds_response_3.json")));
+  message.reset(new Http::ResponseMessageImpl(
+      Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "200"}}}));
+  message->body().reset(new Buffer::OwnedImpl(Filesystem::fileReadToEnd(
+      TestEnvironment::runfilesPath("test/common/upstream/test_data/sds_response_3.json"))));
   callbacks_->onSuccess(std::move(message));
   EXPECT_EQ(13UL, cluster_->prioritySet().hostSetsPerPriority()[0]->hosts().size());
   EXPECT_EQ(12UL, cluster_->prioritySet().hostSetsPerPriority()[0]->healthyHosts().size());
@@ -474,7 +473,7 @@ TEST_F(SdsTest, Failure) {
 
   Http::MessagePtr message(new Http::ResponseMessageImpl(
       Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "200"}}}));
-  message->body() = std::make_unique<Buffer::OwnedImpl>(bad_response_json);
+  message->body().reset(new Buffer::OwnedImpl(bad_response_json));
 
   EXPECT_CALL(*timer_, enableTimer(_));
   callbacks_->onSuccess(std::move(message));
@@ -492,7 +491,7 @@ TEST_F(SdsTest, FailureArray) {
 
   Http::MessagePtr message(new Http::ResponseMessageImpl(
       Http::HeaderMapPtr{new Http::TestHeaderMapImpl{{":status", "200"}}}));
-  message->body() = std::make_unique<Buffer::OwnedImpl>(bad_response_json);
+  message->body().reset(new Buffer::OwnedImpl(bad_response_json));
 
   EXPECT_CALL(*timer_, enableTimer(_));
   callbacks_->onSuccess(std::move(message));

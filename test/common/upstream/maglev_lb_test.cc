@@ -1,5 +1,3 @@
-#include <memory>
-
 #include "common/upstream/maglev_lb.h"
 
 #include "test/common/upstream/utility.h"
@@ -8,12 +6,15 @@
 namespace Envoy {
 namespace Upstream {
 
-class TestLoadBalancerContext : public LoadBalancerContextBase {
+class TestLoadBalancerContext : public LoadBalancerContext {
 public:
   TestLoadBalancerContext(uint64_t hash_key) : hash_key_(hash_key) {}
 
   // Upstream::LoadBalancerContext
   absl::optional<uint64_t> computeHashKey() override { return hash_key_; }
+  const Router::MetadataMatchCriteria* metadataMatchCriteria() override { return nullptr; }
+  const Network::Connection* downstreamConnection() const override { return nullptr; }
+  const Http::HeaderMap* downstreamHeaders() const override { return nullptr; }
 
   absl::optional<uint64_t> hash_key_;
 };
@@ -25,8 +26,8 @@ public:
   MaglevLoadBalancerTest() : stats_(ClusterInfoImpl::generateStats(stats_store_)) {}
 
   void init(uint32_t table_size) {
-    lb_ = std::make_unique<MaglevLoadBalancer>(priority_set_, stats_, runtime_, random_,
-                                               common_config_, table_size);
+    lb_.reset(new MaglevLoadBalancer(priority_set_, stats_, runtime_, random_, common_config_,
+                                     table_size));
     lb_->initialize();
   }
 

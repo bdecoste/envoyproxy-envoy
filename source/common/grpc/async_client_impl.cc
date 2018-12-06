@@ -11,10 +11,9 @@ namespace Envoy {
 namespace Grpc {
 
 AsyncClientImpl::AsyncClientImpl(Upstream::ClusterManager& cm,
-                                 const envoy::api::v2::core::GrpcService& config,
-                                 TimeSource& time_source)
+                                 const envoy::api::v2::core::GrpcService& config)
     : cm_(cm), remote_cluster_name_(config.envoy_grpc().cluster_name()),
-      initial_metadata_(config.initial_metadata()), time_source_(time_source) {}
+      initial_metadata_(config.initial_metadata()) {}
 
 AsyncClientImpl::~AsyncClientImpl() {
   while (!active_streams_.empty()) {
@@ -69,9 +68,8 @@ void AsyncStreamImpl::initialize(bool buffer_body_for_retry) {
 
   auto& http_async_client = parent_.cm_.httpAsyncClientForCluster(parent_.remote_cluster_name_);
   dispatcher_ = &http_async_client.dispatcher();
-  stream_ = http_async_client.start(
-      *this, Http::AsyncClient::StreamOptions().setTimeout(timeout_).setBufferBodyForRetry(
-                 buffer_body_for_retry));
+  stream_ = http_async_client.start(*this, absl::optional<std::chrono::milliseconds>(timeout_),
+                                    buffer_body_for_retry);
 
   if (stream_ == nullptr) {
     callbacks_.onRemoteClose(Status::GrpcStatus::Unavailable, EMPTY_STRING);
@@ -104,9 +102,7 @@ void AsyncStreamImpl::onHeaders(Http::HeaderMapPtr&& headers, bool end_stream) {
     // https://github.com/grpc/grpc/blob/master/doc/http-grpc-status-mapping.md requires that
     // grpc-status be used if available.
     if (end_stream && grpc_status) {
-      // There is actually no use-after-move problem here,
-      // because it will only be executed when end_stream is equal to true.
-      onTrailers(std::move(headers)); // NOLINT(bugprone-use-after-move)
+      onTrailers(std::move(headers));
       return;
     }
     // Technically this should be
@@ -211,7 +207,7 @@ AsyncRequestImpl::AsyncRequestImpl(AsyncClientImpl& parent,
 
   current_span_ = parent_span.spawnChild(Tracing::EgressConfig::get(),
                                          "async " + parent.remote_cluster_name_ + " egress",
-                                         parent.time_source_.systemTime());
+                                         ProdSystemTimeSource::instance_.currentTime());
   current_span_->setTag(Tracing::Tags::get().UPSTREAM_CLUSTER, parent.remote_cluster_name_);
   current_span_->setTag(Tracing::Tags::get().COMPONENT, Tracing::Tags::get().PROXY);
 }

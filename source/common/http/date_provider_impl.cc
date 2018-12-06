@@ -10,14 +10,14 @@ DateFormatter DateProviderImplBase::date_formatter_("%a, %d %b %Y %H:%M:%S GMT")
 
 TlsCachingDateProviderImpl::TlsCachingDateProviderImpl(Event::Dispatcher& dispatcher,
                                                        ThreadLocal::SlotAllocator& tls)
-    : DateProviderImplBase(dispatcher.timeSystem()), tls_(tls.allocateSlot()),
+    : tls_(tls.allocateSlot()),
       refresh_timer_(dispatcher.createTimer([this]() -> void { onRefreshDate(); })) {
 
   onRefreshDate();
 }
 
 void TlsCachingDateProviderImpl::onRefreshDate() {
-  std::string new_date_string = date_formatter_.now(time_source_);
+  std::string new_date_string = date_formatter_.now();
   tls_->set([new_date_string](Event::Dispatcher&) -> ThreadLocal::ThreadLocalObjectSharedPtr {
     return std::make_shared<ThreadLocalCachedDate>(new_date_string);
   });
@@ -30,7 +30,7 @@ void TlsCachingDateProviderImpl::setDateHeader(HeaderMap& headers) {
 }
 
 void SlowDateProviderImpl::setDateHeader(HeaderMap& headers) {
-  headers.insertDate().value(date_formatter_.now(time_source_));
+  headers.insertDate().value(date_formatter_.now());
 }
 
 } // namespace Http

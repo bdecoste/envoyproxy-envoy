@@ -14,7 +14,6 @@
 #include "gtest/gtest.h"
 
 using testing::_;
-using testing::Const;
 using testing::Invoke;
 using testing::Return;
 using testing::ReturnPointee;
@@ -93,9 +92,6 @@ template <class T> static void initializeMockConnection(T& connection) {
   ON_CALL(connection, write(_, _)).WillByDefault(Invoke([](Buffer::Instance& buffer, bool) -> void {
     buffer.drain(buffer.length());
   }));
-
-  ON_CALL(connection, streamInfo()).WillByDefault(ReturnRef(connection.stream_info_));
-  ON_CALL(Const(connection), streamInfo()).WillByDefault(ReturnRef(connection.stream_info_));
 }
 
 MockConnection::MockConnection() {
@@ -195,11 +191,8 @@ MockSocketOption::MockSocketOption() {
 
 MockSocketOption::~MockSocketOption() {}
 
-MockConnectionSocket::MockConnectionSocket()
-    : local_address_(new Address::Ipv4Instance(80)),
-      remote_address_(new Address::Ipv4Instance(80)) {
+MockConnectionSocket::MockConnectionSocket() : local_address_(new Address::Ipv4Instance(80)) {
   ON_CALL(*this, localAddress()).WillByDefault(ReturnRef(local_address_));
-  ON_CALL(*this, remoteAddress()).WillByDefault(ReturnRef(remote_address_));
 }
 
 MockConnectionSocket::~MockConnectionSocket() {}
@@ -210,24 +203,11 @@ MockListener::~MockListener() { onDestroy(); }
 MockConnectionHandler::MockConnectionHandler() {}
 MockConnectionHandler::~MockConnectionHandler() {}
 
-MockIp::MockIp() {}
-MockIp::~MockIp() {}
-
-MockResolvedAddress::~MockResolvedAddress() {}
-
-MockTransportSocket::MockTransportSocket() {
-  ON_CALL(*this, setTransportSocketCallbacks(_))
-      .WillByDefault(Invoke([&](TransportSocketCallbacks& callbacks) { callbacks_ = &callbacks; }));
-}
+MockTransportSocket::MockTransportSocket() {}
 MockTransportSocket::~MockTransportSocket() {}
 
 MockTransportSocketFactory::MockTransportSocketFactory() {}
 MockTransportSocketFactory::~MockTransportSocketFactory() {}
-
-MockTransportSocketCallbacks::MockTransportSocketCallbacks() {
-  ON_CALL(*this, connection()).WillByDefault(ReturnRef(connection_));
-}
-MockTransportSocketCallbacks::~MockTransportSocketCallbacks() {}
 
 } // namespace Network
 } // namespace Envoy

@@ -35,7 +35,6 @@ public:
 
   // Init::Manager
   MOCK_METHOD1(registerTarget, void(Target& target));
-  MOCK_CONST_METHOD0(state, State());
 
   std::list<Target*> targets_;
   ReadyWatcher initialized_;

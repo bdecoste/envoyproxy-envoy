@@ -1,8 +1,8 @@
 #pragma once
 
-#include "envoy/config/trace/v2/trace.pb.validate.h"
+#include "envoy/server/instance.h"
 
-#include "extensions/tracers/common/factory_base.h"
+#include "server/configuration_impl.h"
 
 namespace Envoy {
 namespace Extensions {
@@ -12,15 +12,12 @@ namespace Zipkin {
 /**
  * Config registration for the zipkin tracer. @see TracerFactory.
  */
-class ZipkinTracerFactory : public Common::FactoryBase<envoy::config::trace::v2::ZipkinConfig> {
+class ZipkinTracerFactory : public Server::Configuration::TracerFactory {
 public:
-  ZipkinTracerFactory();
-
-private:
-  // FactoryBase
-  Tracing::HttpTracerPtr
-  createHttpTracerTyped(const envoy::config::trace::v2::ZipkinConfig& proto_config,
-                        Server::Instance& server) override;
+  // TracerFactory
+  Tracing::HttpTracerPtr createHttpTracer(const Json::Object& json_config,
+                                          Server::Instance& server) override;
+  std::string name() override;
 };
 
 } // namespace Zipkin

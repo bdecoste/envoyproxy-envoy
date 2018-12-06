@@ -13,16 +13,20 @@ namespace Extensions {
 namespace Tracers {
 namespace Zipkin {
 
-ZipkinTracerFactory::ZipkinTracerFactory() : FactoryBase(TracerNames::get().Zipkin) {}
+Tracing::HttpTracerPtr ZipkinTracerFactory::createHttpTracer(const Json::Object& json_config,
+                                                             Server::Instance& server) {
 
-Tracing::HttpTracerPtr ZipkinTracerFactory::createHttpTracerTyped(
-    const envoy::config::trace::v2::ZipkinConfig& proto_config, Server::Instance& server) {
-  Tracing::DriverPtr zipkin_driver = std::make_unique<Zipkin::Driver>(
-      proto_config, server.clusterManager(), server.stats(), server.threadLocal(), server.runtime(),
-      server.localInfo(), server.random(), server.timeSystem());
+  Envoy::Runtime::RandomGenerator& rand = server.random();
 
-  return std::make_unique<Tracing::HttpTracerImpl>(std::move(zipkin_driver), server.localInfo());
+  Tracing::DriverPtr zipkin_driver(new Zipkin::Driver(json_config, server.clusterManager(),
+                                                      server.stats(), server.threadLocal(),
+                                                      server.runtime(), server.localInfo(), rand));
+
+  return Tracing::HttpTracerPtr(
+      new Tracing::HttpTracerImpl(std::move(zipkin_driver), server.localInfo()));
 }
+
+std::string ZipkinTracerFactory::name() { return TracerNames::get().Zipkin; }
 
 /**
  * Static registration for the lightstep tracer. @see RegisterFactory.

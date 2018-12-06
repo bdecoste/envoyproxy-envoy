@@ -10,7 +10,6 @@ envoy_package()
 
 envoy_cc_library(
     name = "metadatamatchcriteria_lib",
-    srcs = ["metadatamatchcriteria_impl.cc"],
     hdrs = ["metadatamatchcriteria_impl.h"],
     deps = [
         "//include/envoy/router:router_interface",
@@ -29,7 +28,6 @@ envoy_cc_library(
         ":metadatamatchcriteria_lib",
         ":retry_state_lib",
         ":router_ratelimit_lib",
-        "//include/envoy/config:typed_metadata_interface",
         "//include/envoy/http:header_map_interface",
         "//include/envoy/router:router_interface",
         "//include/envoy/runtime:runtime_interface",
@@ -46,6 +44,7 @@ envoy_cc_library(
         "//source/common/http:header_utility_lib",
         "//source/common/http:headers_lib",
         "//source/common/http:utility_lib",
+        "//source/common/http/websocket:ws_handler_lib",
         "//source/common/protobuf:utility_lib",
     ],
 )
@@ -173,9 +172,8 @@ envoy_cc_library(
         "//source/common/http:headers_lib",
         "//source/common/http:message_lib",
         "//source/common/http:utility_lib",
-        "//source/common/stream_info:stream_info_lib",
+        "//source/common/request_info:request_info_lib",
         "//source/common/tracing:http_tracer_lib",
-        "//source/common/upstream:load_balancer_lib",
         "@envoy_api//envoy/config/filter/http/router/v2:router_cc",
     ],
 )
@@ -216,7 +214,6 @@ envoy_cc_library(
         ":header_formatter_lib",
         "//include/envoy/http:header_map_interface",
         "//source/common/config:base_json_lib",
-        "//source/common/http:headers_lib",
         "//source/common/protobuf:utility_lib",
     ],
 )
@@ -227,22 +224,11 @@ envoy_cc_library(
     hdrs = ["header_formatter.h"],
     external_deps = ["abseil_optional"],
     deps = [
-        "//include/envoy/router:string_accessor_interface",
-        "//include/envoy/stream_info:filter_state_interface",
-        "//include/envoy/stream_info:stream_info_interface",
         "//source/common/access_log:access_log_formatter_lib",
         "//source/common/common:minimal_logger_lib",
         "//source/common/common:utility_lib",
         "//source/common/config:metadata_lib",
         "//source/common/http:header_map_lib",
         "//source/common/json:json_loader_lib",
-    ],
-)
-
-envoy_cc_library(
-    name = "string_accessor_lib",
-    hdrs = ["string_accessor_impl.h"],
-    deps = [
-        "//include/envoy/router:string_accessor_interface",
     ],
 )

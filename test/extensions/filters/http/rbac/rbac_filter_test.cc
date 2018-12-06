@@ -27,17 +27,13 @@ public:
     envoy::config::filter::http::rbac::v2::RBAC config;
 
     envoy::config::rbac::v2alpha::Policy policy;
-    auto policy_rules = policy.add_permissions()->mutable_or_rules();
-    policy_rules->add_rules()->mutable_requested_server_name()->set_regex(".*cncf.io");
-    policy_rules->add_rules()->set_destination_port(123);
+    policy.add_permissions()->set_destination_port(123);
     policy.add_principals()->set_any(true);
     config.mutable_rules()->set_action(envoy::config::rbac::v2alpha::RBAC::ALLOW);
     (*config.mutable_rules()->mutable_policies())["foo"] = policy;
 
     envoy::config::rbac::v2alpha::Policy shadow_policy;
-    auto shadow_policy_rules = shadow_policy.add_permissions()->mutable_or_rules();
-    shadow_policy_rules->add_rules()->mutable_requested_server_name()->set_exact("xyz.cncf.io");
-    shadow_policy_rules->add_rules()->set_destination_port(456);
+    shadow_policy.add_permissions()->set_destination_port(456);
     shadow_policy.add_principals()->set_any(true);
     config.mutable_shadow_rules()->set_action(envoy::config::rbac::v2alpha::RBAC::ALLOW);
     (*config.mutable_shadow_rules()->mutable_policies())["bar"] = shadow_policy;
@@ -49,7 +45,7 @@ public:
 
   void SetUp() {
     EXPECT_CALL(callbacks_, connection()).WillRepeatedly(Return(&connection_));
-    EXPECT_CALL(callbacks_, streamInfo()).WillRepeatedly(ReturnRef(req_info_));
+    EXPECT_CALL(callbacks_, requestInfo()).WillRepeatedly(ReturnRef(req_info_));
     filter_.setDecoderFilterCallbacks(callbacks_);
   }
 
@@ -58,29 +54,15 @@ public:
     ON_CALL(connection_, localAddress()).WillByDefault(ReturnRef(address_));
   }
 
-  void setRequestedServerName(std::string server_name) {
-    requested_server_name_ = server_name;
-    ON_CALL(connection_, requestedServerName()).WillByDefault(Return(requested_server_name_));
-  }
-
-  void setMetadata() {
-    ON_CALL(req_info_, setDynamicMetadata(HttpFilterNames::get().Rbac, _))
-        .WillByDefault(Invoke([this](const std::string&, const ProtobufWkt::Struct& obj) {
-          req_info_.metadata_.mutable_filter_metadata()->insert(
-              Protobuf::MapPair<Envoy::ProtobufTypes::String, ProtobufWkt::Struct>(
-                  HttpFilterNames::get().Rbac, obj));
-        }));
-  }
-
   NiceMock<Http::MockStreamDecoderFilterCallbacks> callbacks_;
   NiceMock<Network::MockConnection> connection_{};
-  NiceMock<Envoy::StreamInfo::MockStreamInfo> req_info_;
+  NiceMock<Envoy::RequestInfo::MockRequestInfo> req_info_;
   Stats::IsolatedStoreImpl store_;
   RoleBasedAccessControlFilterConfigSharedPtr config_;
 
+  envoy::api::v2::core::Metadata metadata_;
   RoleBasedAccessControlFilter filter_;
   Network::Address::InstanceConstSharedPtr address_;
-  std::string requested_server_name_;
   Http::TestHeaderMapImpl headers_;
 };
 
@@ -96,24 +78,8 @@ TEST_F(RoleBasedAccessControlFilterTest, Allowed) {
   EXPECT_EQ(Http::FilterTrailersStatus::Continue, filter_.decodeTrailers(headers_));
 }
 
-TEST_F(RoleBasedAccessControlFilterTest, RequestedServerName) {
-  setDestinationPort(999);
-  setRequestedServerName("www.cncf.io");
-
-  EXPECT_EQ(Http::FilterHeadersStatus::Continue, filter_.decodeHeaders(headers_, false));
-  EXPECT_EQ(1U, config_->stats().allowed_.value());
-  EXPECT_EQ(0U, config_->stats().denied_.value());
-  EXPECT_EQ(0U, config_->stats().shadow_allowed_.value());
-  EXPECT_EQ(1U, config_->stats().shadow_denied_.value());
-
-  Buffer::OwnedImpl data("");
-  EXPECT_EQ(Http::FilterDataStatus::Continue, filter_.decodeData(data, false));
-  EXPECT_EQ(Http::FilterTrailersStatus::Continue, filter_.decodeTrailers(headers_));
-}
-
 TEST_F(RoleBasedAccessControlFilterTest, Denied) {
   setDestinationPort(456);
-  setMetadata();
 
   Http::TestHeaderMapImpl response_headers{
       {":status", "403"},
@@ -126,10 +92,6 @@ TEST_F(RoleBasedAccessControlFilterTest, Denied) {
   EXPECT_EQ(Http::FilterHeadersStatus::StopIteration, filter_.decodeHeaders(headers_, true));
   EXPECT_EQ(1U, config_->stats().denied_.value());
   EXPECT_EQ(1U, config_->stats().shadow_allowed_.value());
-
-  auto filter_meta = req_info_.dynamicMetadata().filter_metadata().at(HttpFilterNames::get().Rbac);
-  EXPECT_EQ("allowed", filter_meta.fields().at("shadow_engine_result").string_value());
-  EXPECT_EQ("bar", filter_meta.fields().at("shadow_effective_policy_id").string_value());
 }
 
 TEST_F(RoleBasedAccessControlFilterTest, RouteLocalOverride) {

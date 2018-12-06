@@ -19,7 +19,9 @@ static_resources:
               routes:
               - match:
                   prefix: "/"
-                  grpc: {}
+                  headers:
+                  - name: content-type
+                    exact_match: application/grpc
                 route:
                   cluster: local_service_grpc
           http_filters:

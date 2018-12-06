@@ -1,9 +1,5 @@
 #pragma once
 
-#include <string>
-
-#include "common/common/macros.h"
-
 namespace Envoy {
 namespace Http {
 

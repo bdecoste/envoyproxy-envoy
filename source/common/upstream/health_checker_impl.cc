@@ -50,7 +50,7 @@ HealthCheckerFactory::create(const envoy::api::v2::core::HealthCheck& hc_config,
   HealthCheckEventLoggerPtr event_logger;
   if (!hc_config.event_log_path().empty()) {
     event_logger = std::make_unique<HealthCheckEventLoggerImpl>(
-        log_manager, dispatcher.timeSystem(), hc_config.event_log_path());
+        log_manager, ProdSystemTimeSource::instance_, hc_config.event_log_path());
   }
   switch (hc_config.health_checker_case()) {
   case envoy::api::v2::core::HealthCheck::HealthCheckerCase::kHttpHealthCheck:
@@ -90,8 +90,7 @@ HttpHealthCheckerImpl::HttpHealthCheckerImpl(const Cluster& cluster,
     : HealthCheckerImplBase(cluster, config, dispatcher, runtime, random, std::move(event_logger)),
       path_(config.http_health_check().path()), host_value_(config.http_health_check().host()),
       request_headers_parser_(
-          Router::HeaderParser::configure(config.http_health_check().request_headers_to_add(),
-                                          config.http_health_check().request_headers_to_remove())),
+          Router::HeaderParser::configure(config.http_health_check().request_headers_to_add())),
       codec_client_type_(codecClientType(config.http_health_check().use_http2())) {
   if (!config.http_health_check().service_name().empty()) {
     service_name_ = config.http_health_check().service_name();
@@ -154,11 +153,11 @@ void HttpHealthCheckerImpl::HttpActiveHealthCheckSession::onInterval() {
       {Http::Headers::get().Path, parent_.path_},
       {Http::Headers::get().UserAgent, Http::Headers::get().UserAgentValues.EnvoyHealthChecker}};
   Router::FilterUtility::setUpstreamScheme(request_headers, *parent_.cluster_.info());
-  StreamInfo::StreamInfoImpl stream_info(protocol_, parent_.dispatcher_.timeSystem());
-  stream_info.setDownstreamLocalAddress(local_address_);
-  stream_info.setDownstreamRemoteAddress(local_address_);
-  stream_info.onUpstreamHostSelected(host_);
-  parent_.request_headers_parser_->evaluateHeaders(request_headers, stream_info);
+  RequestInfo::RequestInfoImpl request_info(protocol_);
+  request_info.setDownstreamLocalAddress(local_address_);
+  request_info.setDownstreamRemoteAddress(local_address_);
+  request_info.onUpstreamHostSelected(host_);
+  parent_.request_headers_parser_->evaluateHeaders(request_headers, request_info);
   request_encoder_->encodeHeaders(request_headers, true);
   request_encoder_ = nullptr;
 }
@@ -200,7 +199,6 @@ void HttpHealthCheckerImpl::HttpActiveHealthCheckSession::onResponseComplete() {
   if (isHealthCheckSucceeded()) {
     handleSuccess();
   } else {
-    host_->setActiveHealthFailureType(Host::ActiveHealthFailureType::UNHEALTHY);
     handleFailure(envoy::data::core::v2alpha::HealthCheckFailureType::ACTIVE);
   }
 
@@ -216,16 +214,12 @@ void HttpHealthCheckerImpl::HttpActiveHealthCheckSession::onResponseComplete() {
 }
 
 void HttpHealthCheckerImpl::HttpActiveHealthCheckSession::onTimeout() {
-  if (client_) {
-    host_->setActiveHealthFailureType(Host::ActiveHealthFailureType::TIMEOUT);
-    ENVOY_CONN_LOG(debug, "connection/stream timeout health_flags={}", *client_,
-                   HostUtility::healthFlagsToString(*host_));
+  ENVOY_CONN_LOG(debug, "connection/stream timeout health_flags={}", *client_,
+                 HostUtility::healthFlagsToString(*host_));
 
-    // If there is an active request it will get reset, so make sure we ignore the reset.
-    expect_reset_ = true;
-
-    client_->close();
-  }
+  // If there is an active request it will get reset, so make sure we ignore the reset.
+  expect_reset_ = true;
+  client_->close();
 }
 
 Http::CodecClient::Type HttpHealthCheckerImpl::codecClientType(bool use_http2) {
@@ -301,8 +295,6 @@ void TcpHealthCheckerImpl::TcpActiveHealthCheckSession::onData(Buffer::Instance&
     if (!parent_.reuse_connection_) {
       client_->close(Network::ConnectionCloseType::NoFlush);
     }
-  } else {
-    host_->setActiveHealthFailureType(Host::ActiveHealthFailureType::UNHEALTHY);
   }
 }
 
@@ -359,7 +351,6 @@ void TcpHealthCheckerImpl::TcpActiveHealthCheckSession::onInterval() {
 }
 
 void TcpHealthCheckerImpl::TcpActiveHealthCheckSession::onTimeout() {
-  host_->setActiveHealthFailureType(Host::ActiveHealthFailureType::TIMEOUT);
   client_->close(Network::ConnectionCloseType::NoFlush);
 }
 

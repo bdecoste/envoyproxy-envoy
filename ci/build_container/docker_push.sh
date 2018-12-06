@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Do not ever set -x here, it is a security hazard as it will place the credentials below in the
-# CircleCI logs.
+# Travis logs.
 set -e
 
 # push the envoy image on merge to master
@@ -27,7 +27,7 @@ then
         cd ci/build_container
         docker login -u "$DOCKERHUB_USERNAME" -p "$DOCKERHUB_PASSWORD"
 
-        for distro in ubuntu
+        for distro in ubuntu centos
         do
             echo "Updating envoyproxy/envoy-build-${distro} image"
             LINUX_DISTRO=$distro ./docker_build.sh

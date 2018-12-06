@@ -18,8 +18,7 @@ namespace {
 class LoadStatsIntegrationTest : public HttpIntegrationTest,
                                  public testing::TestWithParam<Network::Address::IpVersion> {
 public:
-  LoadStatsIntegrationTest()
-      : HttpIntegrationTest(Http::CodecClient::Type::HTTP1, GetParam(), realTime()) {
+  LoadStatsIntegrationTest() : HttpIntegrationTest(Http::CodecClient::Type::HTTP1, GetParam()) {
     // We rely on some fairly specific load balancing picks in this test, so
     // determinizie the schedule.
     setDeterministic();
@@ -97,8 +96,7 @@ public:
   }
 
   void createUpstreams() override {
-    fake_upstreams_.emplace_back(
-        new FakeUpstream(0, FakeHttpConnection::Type::HTTP2, version_, timeSystem()));
+    fake_upstreams_.emplace_back(new FakeUpstream(0, FakeHttpConnection::Type::HTTP2, version_));
     load_report_upstream_ = fake_upstreams_.back().get();
     HttpIntegrationTest::createUpstreams();
   }
@@ -166,9 +164,6 @@ public:
       return;
     } else if (loadstats_request.cluster_stats_size() == 0) {
       loadstats_request.CopyFrom(local_loadstats_request);
-      ASSERT_TRUE(loadstats_request.has_node());
-      ASSERT_FALSE(loadstats_request.node().id().empty());
-      ASSERT_FALSE(loadstats_request.node().cluster().empty());
       return;
     }
 

@@ -1,11 +1,9 @@
 #include "extensions/stat_sinks/metrics_service/grpc_metrics_service_impl.h"
 
-#include "test/mocks/common.h"
 #include "test/mocks/grpc/mocks.h"
 #include "test/mocks/local_info/mocks.h"
 #include "test/mocks/stats/mocks.h"
 #include "test/mocks/thread_local/mocks.h"
-#include "test/test_common/simulated_time_system.h"
 
 using namespace std::chrono_literals;
 using testing::_;
@@ -30,7 +28,7 @@ public:
       return Grpc::AsyncClientPtr{async_client_};
     }));
     streamer_ = std::make_unique<GrpcMetricsStreamerImpl>(Grpc::AsyncClientFactoryPtr{factory_},
-                                                          local_info_);
+                                                          tls_, local_info_);
   }
 
   void expectStreamStart(MockMetricsStream& stream, MetricsServiceCallbacks** callbacks_to_set) {
@@ -42,6 +40,7 @@ public:
         }));
   }
 
+  NiceMock<ThreadLocal::MockInstance> tls_;
   LocalInfo::MockLocalInfo local_info_;
   Grpc::MockAsyncClient* async_client_{new Grpc::MockAsyncClient};
   Grpc::MockAsyncClientFactory* factory_{new Grpc::MockAsyncClientFactory};
@@ -99,10 +98,9 @@ class MetricsServiceSinkTest : public testing::Test {};
 
 TEST(MetricsServiceSinkTest, CheckSendCall) {
   NiceMock<Stats::MockSource> source;
-  Event::SimulatedTimeSystem time_system;
   std::shared_ptr<MockGrpcMetricsStreamer> streamer_{new MockGrpcMetricsStreamer()};
 
-  MetricsServiceSink sink(streamer_, time_system);
+  MetricsServiceSink sink(streamer_);
 
   auto counter = std::make_shared<NiceMock<Stats::MockCounter>>();
   counter->name_ = "test_counter";
@@ -127,10 +125,9 @@ TEST(MetricsServiceSinkTest, CheckSendCall) {
 
 TEST(MetricsServiceSinkTest, CheckStatsCount) {
   NiceMock<Stats::MockSource> source;
-  Event::SimulatedTimeSystem time_system;
   std::shared_ptr<TestGrpcMetricsStreamer> streamer_{new TestGrpcMetricsStreamer()};
 
-  MetricsServiceSink sink(streamer_, time_system);
+  MetricsServiceSink sink(streamer_);
 
   auto counter = std::make_shared<NiceMock<Stats::MockCounter>>();
   counter->name_ = "test_counter";

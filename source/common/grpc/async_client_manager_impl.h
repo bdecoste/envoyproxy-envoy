@@ -1,6 +1,5 @@
 #pragma once
 
-#include "envoy/api/api.h"
 #include "envoy/grpc/async_client_manager.h"
 #include "envoy/singleton/manager.h"
 #include "envoy/stats/scope.h"
@@ -13,15 +12,13 @@ namespace Grpc {
 class AsyncClientFactoryImpl : public AsyncClientFactory {
 public:
   AsyncClientFactoryImpl(Upstream::ClusterManager& cm,
-                         const envoy::api::v2::core::GrpcService& config, bool skip_cluster_check,
-                         TimeSource& time_source);
+                         const envoy::api::v2::core::GrpcService& config, bool skip_cluster_check);
 
   AsyncClientPtr create() override;
 
 private:
   Upstream::ClusterManager& cm_;
   const envoy::api::v2::core::GrpcService config_;
-  TimeSource& time_source_;
 };
 
 class GoogleAsyncClientFactoryImpl : public AsyncClientFactory {
@@ -41,8 +38,7 @@ private:
 
 class AsyncClientManagerImpl : public AsyncClientManager {
 public:
-  AsyncClientManagerImpl(Upstream::ClusterManager& cm, ThreadLocal::Instance& tls,
-                         TimeSource& time_source, Api::Api& api);
+  AsyncClientManagerImpl(Upstream::ClusterManager& cm, ThreadLocal::Instance& tls);
 
   // Grpc::AsyncClientManager
   AsyncClientFactoryPtr factoryForGrpcService(const envoy::api::v2::core::GrpcService& config,
@@ -53,7 +49,6 @@ private:
   Upstream::ClusterManager& cm_;
   ThreadLocal::Instance& tls_;
   ThreadLocal::SlotPtr google_tls_slot_;
-  TimeSource& time_source_;
 };
 
 } // namespace Grpc

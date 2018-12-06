@@ -4,16 +4,11 @@
 
 #include <algorithm>
 #include <list>
-#include <memory>
 #include <string>
 
-#include "envoy/buffer/buffer.h"
-
 #include "common/common/macros.h"
-#include "common/http/header_map_impl.h"
 
 #include "extensions/filters/network/thrift_proxy/thrift.h"
-#include "extensions/filters/network/thrift_proxy/tracing.h"
 
 #include "absl/types/optional.h"
 
@@ -21,6 +16,82 @@ namespace Envoy {
 namespace Extensions {
 namespace NetworkFilters {
 namespace ThriftProxy {
+
+/**
+ * Header is a name-value pair in Thrift transport or protocol headers.
+ */
+class Header {
+public:
+  Header(const std::string key, const std::string value) : key_(key), value_(value) {}
+  Header(const Header& rhs) : key_(rhs.key_), value_(rhs.value_) {}
+
+  const std::string& key() const { return key_; }
+  const std::string& value() const { return value_; }
+
+private:
+  std::string key_;
+  std::string value_;
+};
+
+// TODO(zuercher): replace this with Http::HeaderMap[Impl]
+/*
+ * HeaderMap contains Thrift transport and/or protocol-level headers.
+ */
+class HeaderMap {
+public:
+  HeaderMap() {}
+  HeaderMap(const std::initializer_list<std::pair<std::string, std::string>>& values);
+  HeaderMap(const HeaderMap& rhs);
+
+  /**
+   * @return true if the HeaderMap is empty
+   */
+  bool empty() const { return headers_.empty(); }
+
+  /**
+   * @return uint32_t the number of headers in the map
+   */
+  uint32_t size() const { return headers_.size(); }
+
+  /**
+   * @param header Header to move into the HeaderMap
+   */
+  void add(Header&& header) { headers_.emplace_back(std::move(header)); }
+
+  /**
+   * Clears all Headers from the HeaderMap.
+   */
+  void clear() { headers_.clear(); }
+
+  /**
+   * Retrieves a Header from the HeaderMap.
+   * @param key std::string containing the key to lookup
+   * @return Header* corresponding to key or nullptr if not found.
+   */
+  Header* get(const std::string& key);
+
+  /**
+   * Const iterators for the HeaderMap.
+   */
+  std::list<Header>::const_iterator begin() const noexcept { return headers_.begin(); }
+  std::list<Header>::const_iterator end() const noexcept { return headers_.end(); }
+  std::list<Header>::const_iterator cbegin() const noexcept { return headers_.cbegin(); }
+  std::list<Header>::const_iterator cend() const noexcept { return headers_.cend(); }
+
+  /**
+   * For testing. Equality is based on equality of the backing list. This is an exact match
+   * comparison (order matters).
+   */
+  bool operator==(const HeaderMap& rhs) const;
+
+  /**
+   * @return an empty HeaderMap
+   */
+  static const HeaderMap& emptyHeaderMap() { CONSTRUCT_ON_FIRST_USE(HeaderMap, HeaderMap({})); }
+
+private:
+  std::list<Header> headers_;
+};
 
 /**
  * MessageMetadata encapsulates metadata about Thrift messages. The various fields are considered
@@ -52,21 +123,11 @@ public:
   MessageType messageType() const { return msg_type_.value(); }
   void setMessageType(MessageType msg_type) { msg_type_ = msg_type; }
 
+  void addHeader(Header&& header) { headers_.add(std::move(header)); }
   /**
    * @return HeaderMap of current headers (never throws)
    */
-  const Http::HeaderMap& headers() const { return headers_; }
-  Http::HeaderMap& headers() { return headers_; }
-
-  /**
-   * @return SpanList an immutable list of Spans
-   */
-  const SpanList& spans() const { return spans_; }
-
-  /**
-   * @return SpanList& a reference to a mutable list of Spans
-   */
-  SpanList& mutable_spans() { return spans_; }
+  const HeaderMap& headers() const { return headers_; }
 
   bool hasAppException() const { return app_ex_type_.has_value(); }
   void setAppException(AppExceptionType app_ex_type, const std::string& message) {
@@ -76,60 +137,18 @@ public:
   AppExceptionType appExceptionType() const { return app_ex_type_.value(); }
   const std::string& appExceptionMessage() const { return app_ex_msg_.value(); }
 
-  bool isProtocolUpgradeMessage() const { return protocol_upgrade_message_; }
-  void setProtocolUpgradeMessage(bool upgrade_message) {
-    protocol_upgrade_message_ = upgrade_message;
-  }
-
-  absl::optional<int64_t> traceId() const { return trace_id_; }
-  void setTraceId(int64_t trace_id) { trace_id_ = trace_id; }
-
-  absl::optional<int64_t> traceIdHigh() const { return trace_id_high_; }
-  void setTraceIdHigh(int64_t trace_id_high) { trace_id_high_ = trace_id_high; }
-
-  absl::optional<int64_t> spanId() const { return span_id_; }
-  void setSpanId(int64_t span_id) { span_id_ = span_id; }
-
-  absl::optional<int64_t> parentSpanId() const { return parent_span_id_; }
-  void setParentSpanId(int64_t parent_span_id) { parent_span_id_ = parent_span_id; }
-
-  absl::optional<int64_t> flags() const { return flags_; }
-  void setFlags(int64_t flags) { flags_ = flags; }
-
-  absl::optional<bool> sampled() const { return sampled_; }
-  void setSampled(bool sampled) { sampled_ = sampled; }
-
 private:
   absl::optional<uint32_t> frame_size_{};
   absl::optional<ProtocolType> proto_{};
   absl::optional<std::string> method_name_{};
   absl::optional<int32_t> seq_id_{};
   absl::optional<MessageType> msg_type_{};
-  Http::HeaderMapImpl headers_;
+  HeaderMap headers_;
   absl::optional<AppExceptionType> app_ex_type_;
   absl::optional<std::string> app_ex_msg_;
-  bool protocol_upgrade_message_{false};
-  SpanList spans_;
-  absl::optional<int64_t> trace_id_;
-  absl::optional<int64_t> trace_id_high_;
-  absl::optional<int64_t> span_id_;
-  absl::optional<int64_t> parent_span_id_;
-  absl::optional<int64_t> flags_;
-  absl::optional<bool> sampled_;
 };
 
 typedef std::shared_ptr<MessageMetadata> MessageMetadataSharedPtr;
-
-/**
- * Constant Thrift headers. All lower case.
- */
-class HeaderValues {
-public:
-  const Http::LowerCaseString ClientId{":client-id"};
-  const Http::LowerCaseString Dest{":dest"};
-  const Http::LowerCaseString MethodName{":method-name"};
-};
-typedef ConstSingleton<HeaderValues> Headers;
 
 } // namespace ThriftProxy
 } // namespace NetworkFilters

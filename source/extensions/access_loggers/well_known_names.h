@@ -1,7 +1,5 @@
 #pragma once
 
-#include <string>
-
 #include "common/singleton/const_singleton.h"
 
 namespace Envoy {

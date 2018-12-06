@@ -125,9 +125,6 @@ message CertificateValidationContext {
   // <envoy_api_field_auth.CertificateValidationContext.verify_subject_alt_name>`) is also
   // specified.
   //
-  // It can optionally contain certificate revocation lists, in which case Envoy will verify
-  // that the presented peer certificate has not been revoked by one of the included CRLs.
-  //
   // See :ref:`the TLS overview <arch_overview_ssl_enabling_verification>` for a list of common
   // system CA locations.
   core.DataSource trusted_ca = 1;
@@ -229,46 +226,27 @@ message CommonTlsContext {
   // Multiple TLS certificates can be associated with the same context.
   // E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
   //
-  // Only a single TLS certificate is supported in client contexts. In server contexts, the first
-  // RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
-  // used for clients that support ECDSA.
-  repeated TlsCertificate tls_certificates = 2;
+  // .. attention::
+  //
+  //   Although this is a list, currently only a single certificate is supported. This will be
+  //   relaxed in the future.
+  repeated TlsCertificate tls_certificates = 2 [(validate.rules).repeated .max_items = 1];
 
-  // Configs for fetching TLS certificates via SDS API.
+  // [#not-implemented-hide:]
   repeated SdsSecretConfig tls_certificate_sds_secret_configs = 6;
-
-  message CombinedCertificateValidationContext {
-    // How to validate peer certificates.
-    CertificateValidationContext default_validation_context = 1
-        [(validate.rules).message.required = true];
-
-    // Config for fetching validation context via SDS API.
-    SdsSecretConfig validation_context_sds_secret_config = 2
-        [(validate.rules).message.required = true];
-  };
 
   oneof validation_context_type {
     // How to validate peer certificates.
     CertificateValidationContext validation_context = 3;
 
-    // Config for fetching validation context via SDS API.
+    // [#not-implemented-hide:]
     SdsSecretConfig validation_context_sds_secret_config = 7;
-
-    // Combined certificate validation context holds a default CertificateValidationContext
-    // and SDS config. When SDS server returns dynamic CertificateValidationContext, both dynamic
-    // and default CertificateValidationContext are merged into a new CertificateValidationContext
-    // for validation. This merge is done by Message::MergeFrom(), so dynamic
-    // CertificateValidationContext overwrites singular fields in default
-    // CertificateValidationContext, and concatenates repeated fields to default
-    // CertificateValidationContext, and logical OR is applied to boolean fields.
-    CombinedCertificateValidationContext combined_validation_context = 8;
   }
 
   // Supplies the list of ALPN protocols that the listener should expose. In
   // practice this is likely to be set to one of two values (see the
-  // :ref:`codec_type
-  // <envoy_api_field_config.filter.network.http_connection_manager.v2.HttpConnectionManager.codec_type>`
-  // parameter in the HTTP connection manager for more information):
+  // :ref:`codec_type <config_http_conn_man_codec_type>` parameter in the HTTP connection
+  // manager for more information):
   //
   // * "h2,http/1.1" If the listener is going to support both HTTP/2 and HTTP/1.1.
   // * "http/1.1" If the listener is only going to support HTTP/1.1.
@@ -276,7 +254,15 @@ message CommonTlsContext {
   // There is no default for this parameter. If empty, Envoy will not expose ALPN.
   repeated string alpn_protocols = 4;
 
-  reserved 5;
+  // These fields are deprecated and only are used during the interim v1 -> v2
+  // transition period for internal purposes. They should not be used outside of
+  // the Envoy binary. [#not-implemented-hide:]
+  message DeprecatedV1 {
+    string alt_alpn_protocols = 1;
+  }
+
+  // [#not-implemented-hide:]
+  DeprecatedV1 deprecated_v1 = 5 [deprecated = true];
 }
 
 message UpstreamTlsContext {
@@ -292,12 +278,6 @@ message UpstreamTlsContext {
   //
   //   TLS renegotiation is considered insecure and shouldn't be used unless absolutely necessary.
   bool allow_renegotiation = 3;
-
-  // Maximum number of session keys (Pre-Shared Keys for TLSv1.3+, Session IDs and Session Tickets
-  // for TLSv1.2 and older) to store for the purpose of session resumption.
-  //
-  // Defaults to 1, setting this to 0 disables session resumption.
-  google.protobuf.UInt32Value max_session_keys = 4;
 }
 
 message DownstreamTlsContext {
@@ -322,6 +302,7 @@ message DownstreamTlsContext {
 }
 
 // [#proto-status: experimental]
+// [#not-implemented-hide:]
 message SdsSecretConfig {
   // Name (FQDN, UUID, SPKI, SHA256, etc.) by which the secret can be uniquely referred to.
   // When both name and config are specified, then secret can be fetched and/or reloaded via SDS.
@@ -331,6 +312,7 @@ message SdsSecretConfig {
 }
 
 // [#proto-status: experimental]
+// [#not-implemented-hide:]
 message Secret {
   // Name (FQDN, UUID, SPKI, SHA256, etc.) by which the secret can be uniquely referred to.
   string name = 1;

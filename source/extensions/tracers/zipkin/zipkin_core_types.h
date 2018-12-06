@@ -3,7 +3,6 @@
 #include <memory>
 
 #include "envoy/common/pure.h"
-#include "envoy/common/time.h"
 #include "envoy/network/address.h"
 
 #include "common/common/hex.h"
@@ -305,9 +304,9 @@ public:
   /**
    * Default constructor. Creates an empty span.
    */
-  explicit Span(TimeSource& time_source)
+  Span()
       : trace_id_(0), name_(), id_(0), debug_(false), sampled_(false), monotonic_start_time_(0),
-        tracer_(nullptr), time_source_(time_source) {}
+        tracer_(nullptr) {}
 
   /**
    * Sets the span's trace id attribute.
@@ -562,7 +561,6 @@ private:
   absl::optional<uint64_t> trace_id_high_;
   int64_t monotonic_start_time_;
   TracerInterface* tracer_;
-  TimeSource& time_source_;
 };
 
 } // namespace Zipkin

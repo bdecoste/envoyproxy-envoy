@@ -4,7 +4,9 @@
 
 #include "envoy/buffer/buffer.h"
 
-#include "extensions/filters/network/thrift_proxy/transport.h"
+#include "extensions/filters/network/thrift_proxy/transport_impl.h"
+
+#include "absl/types/optional.h"
 
 namespace Envoy {
 namespace Extensions {

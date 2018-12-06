@@ -1,5 +1,3 @@
-#include <memory>
-
 #include "common/compressor/zlib_compressor_impl.h"
 #include "common/decompressor/zlib_decompressor_impl.h"
 #include "common/protobuf/utility.h"
@@ -65,7 +63,7 @@ protected:
     envoy::config::filter::http::gzip::v2::Gzip gzip;
     MessageUtil::loadFromJson(json, gzip);
     config_.reset(new GzipFilterConfig(gzip, "test.", stats_, runtime_));
-    filter_ = std::make_unique<GzipFilter>(config_);
+    filter_.reset(new GzipFilter(config_));
   }
 
   void verifyCompressedData() {
@@ -177,14 +175,14 @@ TEST_F(GzipFilterTest, hasCacheControlNoTransform) {
   }
 }
 
-// Verifies that compression is skipped when cache-control header has no-transform value.
+// Verifies that compression is skipped when cache-control header has no-tranform value.
 TEST_F(GzipFilterTest, hasCacheControlNoTransformNoCompression) {
   doRequest({{":method", "get"}, {"accept-encoding", "gzip;q=0, deflate"}}, true);
   doResponseNoCompression(
       {{":method", "get"}, {"content-length", "256"}, {"cache-control", "no-transform"}});
 }
 
-// Verifies that compression is NOT skipped when cache-control header does NOT have no-transform
+// Verifies that compression is NOT skipped when cache-control header does NOT have no-tranform
 // value.
 TEST_F(GzipFilterTest, hasCacheControlNoTransformCompression) {
   doRequest({{":method", "get"}, {"accept-encoding", "gzip, deflate"}}, true);

@@ -20,9 +20,7 @@ envoy_cc_library(
     ],
     external_deps = ["lightstep"],
     deps = [
-        "//source/common/config:utility_lib",
         "//source/common/tracing:http_tracer_lib",
-        "//source/extensions/tracers:well_known_names",
         "//source/extensions/tracers/common/ot:opentracing_driver_lib",
     ],
 )
@@ -34,6 +32,6 @@ envoy_cc_library(
     deps = [
         ":lightstep_tracer_lib",
         "//source/extensions/tracers:well_known_names",
-        "//source/extensions/tracers/common:factory_base_lib",
+        "//source/server:configuration_lib",
     ],
 )

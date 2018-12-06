@@ -1,7 +1,5 @@
 #pragma once
 
-#include <memory>
-
 #include "envoy/api/v2/core/base.pb.h"
 #include "envoy/config/subscription.h"
 
@@ -32,7 +30,7 @@ class HttpSubscriptionImpl : public Http::RestApiFetcher,
                              public Config::Subscription<ResourceType>,
                              Logger::Loggable<Logger::Id::config> {
 public:
-  HttpSubscriptionImpl(const LocalInfo::LocalInfo& local_info, Upstream::ClusterManager& cm,
+  HttpSubscriptionImpl(const envoy::api::v2::core::Node& node, Upstream::ClusterManager& cm,
                        const std::string& remote_cluster_name, Event::Dispatcher& dispatcher,
                        Runtime::RandomGenerator& random, std::chrono::milliseconds refresh_interval,
                        std::chrono::milliseconds request_timeout,
@@ -40,7 +38,7 @@ public:
       : Http::RestApiFetcher(cm, remote_cluster_name, dispatcher, random, refresh_interval,
                              request_timeout),
         stats_(stats) {
-    request_.mutable_node()->CopyFrom(local_info.node());
+    request_.mutable_node()->CopyFrom(node);
     ASSERT(service_method.options().HasExtension(google::api::http));
     const auto& http_rule = service_method.options().GetExtension(google::api::http);
     path_ = http_rule.post();
@@ -70,8 +68,7 @@ public:
     stats_.update_attempt_.inc();
     request.headers().insertMethod().value().setReference(Http::Headers::get().MethodValues.Post);
     request.headers().insertPath().value(path_);
-    request.body() =
-        std::make_unique<Buffer::OwnedImpl>(MessageUtil::getJsonStringFromMessage(request_));
+    request.body().reset(new Buffer::OwnedImpl(MessageUtil::getJsonStringFromMessage(request_)));
     request.headers().insertContentType().value().setReference(
         Http::Headers::get().ContentTypeValues.Json);
     request.headers().insertContentLength().value(request.body()->length());

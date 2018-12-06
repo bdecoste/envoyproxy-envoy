@@ -75,7 +75,6 @@ MockRouteEntry::MockRouteEntry() {
   ON_CALL(*this, includeVirtualHostRateLimits()).WillByDefault(Return(true));
   ON_CALL(*this, pathMatchCriterion()).WillByDefault(ReturnRef(path_match_criterion_));
   ON_CALL(*this, metadata()).WillByDefault(ReturnRef(metadata_));
-  ON_CALL(*this, upgradeMap()).WillByDefault(ReturnRef(upgrade_map_));
 }
 
 MockRouteEntry::~MockRouteEntry() {}

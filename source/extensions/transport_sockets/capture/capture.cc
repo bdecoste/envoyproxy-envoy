@@ -14,9 +14,8 @@ namespace Capture {
 CaptureSocket::CaptureSocket(
     const std::string& path_prefix,
     envoy::config::transport_socket::capture::v2alpha::FileSink::Format format,
-    Network::TransportSocketPtr&& transport_socket, Event::TimeSystem& time_system)
-    : path_prefix_(path_prefix), format_(format), transport_socket_(std::move(transport_socket)),
-      time_system_(time_system) {}
+    Network::TransportSocketPtr&& transport_socket)
+    : path_prefix_(path_prefix), format_(format), transport_socket_(std::move(transport_socket)) {}
 
 void CaptureSocket::setTransportSocketCallbacks(Network::TransportSocketCallbacks& callbacks) {
   callbacks_ = &callbacks;
@@ -62,7 +61,7 @@ Network::IoResult CaptureSocket::doRead(Buffer::Instance& buffer) {
     auto* event = trace_.add_events();
     event->mutable_timestamp()->MergeFrom(Protobuf::util::TimeUtil::NanosecondsToTimestamp(
         std::chrono::duration_cast<std::chrono::nanoseconds>(
-            time_system_.systemTime().time_since_epoch())
+            std::chrono::system_clock::now().time_since_epoch())
             .count()));
     event->mutable_read()->set_data(data, result.bytes_processed_);
   }
@@ -80,7 +79,7 @@ Network::IoResult CaptureSocket::doWrite(Buffer::Instance& buffer, bool end_stre
     auto* event = trace_.add_events();
     event->mutable_timestamp()->MergeFrom(Protobuf::util::TimeUtil::NanosecondsToTimestamp(
         std::chrono::duration_cast<std::chrono::nanoseconds>(
-            time_system_.systemTime().time_since_epoch())
+            std::chrono::system_clock::now().time_since_epoch())
             .count()));
     event->mutable_write()->set_data(data, result.bytes_processed_);
     event->mutable_write()->set_end_stream(end_stream);
@@ -95,15 +94,13 @@ const Ssl::Connection* CaptureSocket::ssl() const { return transport_socket_->ss
 CaptureSocketFactory::CaptureSocketFactory(
     const std::string& path_prefix,
     envoy::config::transport_socket::capture::v2alpha::FileSink::Format format,
-    Network::TransportSocketFactoryPtr&& transport_socket_factory, Event::TimeSystem& time_system)
+    Network::TransportSocketFactoryPtr&& transport_socket_factory)
     : path_prefix_(path_prefix), format_(format),
-      transport_socket_factory_(std::move(transport_socket_factory)), time_system_(time_system) {}
+      transport_socket_factory_(std::move(transport_socket_factory)) {}
 
-Network::TransportSocketPtr
-CaptureSocketFactory::createTransportSocket(Network::TransportSocketOptionsSharedPtr) const {
+Network::TransportSocketPtr CaptureSocketFactory::createTransportSocket() const {
   return std::make_unique<CaptureSocket>(path_prefix_, format_,
-                                         transport_socket_factory_->createTransportSocket(nullptr),
-                                         time_system_);
+                                         transport_socket_factory_->createTransportSocket());
 }
 
 bool CaptureSocketFactory::implementsSecureTransport() const {

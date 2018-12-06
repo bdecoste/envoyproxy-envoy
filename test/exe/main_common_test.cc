@@ -1,7 +1,15 @@
+// MainCommonTest works fine in coverage tests, but it appears to break SignalsTest when
+// run in the same process. It appears that MainCommon doesn't completely clean up after
+// itself, possibly due to a bug in SignalAction. So for now, we can test MainCommon
+// but can't measure its test coverage.
+//
+// TODO(issues/2580): Fix coverage tests when MainCommonTest is enabled.
+// TODO(issues/2649): This test needs to be parameterized on IP versions.
+#ifndef ENVOY_CONFIG_COVERAGE
+
 #include <unistd.h>
 
 #include "common/common/lock_guard.h"
-#include "common/common/mutex_tracer_impl.h"
 #include "common/common/thread.h"
 #include "common/runtime/runtime_impl.h"
 
@@ -9,7 +17,6 @@
 
 #include "server/options_impl.h"
 
-#include "test/test_common/contention.h"
 #include "test/test_common/environment.h"
 #include "test/test_common/utility.h"
 
@@ -31,13 +38,15 @@ namespace Envoy {
  * unique --base-id setting based on the pid and a random number. Maintains
  * an argv array that is terminated with nullptr. Identifies the config
  * file relative to $TEST_RUNDIR.
+ *
+ * TODO(jmarantz): Make these tests work with ipv6. See
+ * https://github.com/envoyproxy/envoy/issues/2649
  */
-class MainCommonTest : public testing::TestWithParam<Network::Address::IpVersion> {
+class MainCommonTest : public testing::Test {
 protected:
   MainCommonTest()
-      : config_file_(TestEnvironment::temporaryFileSubstitute(
-            "/test/config/integration/google_com_proxy_port_0.v2.yaml", TestEnvironment::ParamMap(),
-            TestEnvironment::PortMap(), GetParam())),
+      : config_file_(Envoy::TestEnvironment::getCheckedEnvVar("TEST_RUNDIR") +
+                     "/test/config/integration/google_com_proxy_port_0.v2.yaml"),
         random_string_(fmt::format("{}", computeBaseId())),
         argv_({"envoy-static", "--base-id", random_string_.c_str(), "-c", config_file_.c_str(),
                nullptr}) {}
@@ -74,7 +83,7 @@ protected:
     argv_.push_back(nullptr);
   }
 
-  // Adds options to make Envoy exit immediately after initialization.
+  // Adds options to make Envoy exit immediately after initializtion.
   void initOnly() {
     addArg("--mode");
     addArg("init_only");
@@ -86,26 +95,39 @@ protected:
 };
 
 // Exercise the codepath to instantiate MainCommon and destruct it, with hot restart.
-TEST_P(MainCommonTest, ConstructDestructHotRestartEnabled) {
+TEST_F(MainCommonTest, ConstructDestructHotRestartEnabled) {
+  if (!Envoy::TestEnvironment::shouldRunTestForIpVersion(Network::Address::IpVersion::v4)) {
+    return;
+  }
   VERBOSE_EXPECT_NO_THROW(MainCommon main_common(argc(), argv()));
 }
 
 // Exercise the codepath to instantiate MainCommon and destruct it, without hot restart.
-TEST_P(MainCommonTest, ConstructDestructHotRestartDisabled) {
+TEST_F(MainCommonTest, ConstructDestructHotRestartDisabled) {
+  if (!Envoy::TestEnvironment::shouldRunTestForIpVersion(Network::Address::IpVersion::v4)) {
+    return;
+  }
   addArg("--disable-hot-restart");
   VERBOSE_EXPECT_NO_THROW(MainCommon main_common(argc(), argv()));
 }
 
 // Exercise init_only explicitly.
-TEST_P(MainCommonTest, ConstructDestructHotRestartDisabledNoInit) {
+TEST_F(MainCommonTest, ConstructDestructHotRestartDisabledNoInit) {
+  if (!Envoy::TestEnvironment::shouldRunTestForIpVersion(Network::Address::IpVersion::v4)) {
+    return;
+  }
   addArg("--disable-hot-restart");
   initOnly();
   MainCommon main_common(argc(), argv());
   EXPECT_TRUE(main_common.run());
 }
 
-// Ensure that existing users of main_common() can link.
-TEST_P(MainCommonTest, LegacyMain) {
+// Ensurees that existing users of main_common() can link.
+TEST_F(MainCommonTest, LegacyMain) {
+  if (!Envoy::TestEnvironment::shouldRunTestForIpVersion(Network::Address::IpVersion::v4)) {
+    return;
+  }
+
 #ifdef ENVOY_HANDLE_SIGNALS
   // Enabled by default. Control with "bazel --define=signal_trace=disabled"
   Envoy::SignalAction handle_sigs;
@@ -127,10 +149,6 @@ TEST_P(MainCommonTest, LegacyMain) {
   }
   EXPECT_EQ(EXIT_SUCCESS, return_code);
 }
-
-INSTANTIATE_TEST_CASE_P(IpVersions, MainCommonTest,
-                        testing::ValuesIn(TestEnvironment::getIpVersionsForTest()),
-                        TestUtility::ipTestParamsToString);
 
 class AdminRequestTest : public MainCommonTest {
 protected:
@@ -157,8 +175,8 @@ protected:
 
   // Initiates Envoy running in its own thread.
   void startEnvoy() {
-    envoy_thread_ = Thread::threadFactoryForTest().createThread([this]() {
-      // Note: main_common_ is accessed in the testing thread, but
+    envoy_thread_ = std::make_unique<Thread::Thread>([this]() {
+      // Note: main_common_ is accesesed in the testing thread, but
       // is race-free, as MainCommon::run() does not return until
       // triggered with an adminRequest POST to /quitquitquit, which
       // is done in the testing thread.
@@ -192,7 +210,6 @@ protected:
     return envoy_return_;
   }
 
-  Stats::IsolatedStoreImpl stats_store_;
   std::unique_ptr<Thread::Thread> envoy_thread_;
   std::unique_ptr<MainCommon> main_common_;
   absl::Notification started_;
@@ -206,7 +223,10 @@ protected:
   bool pause_after_run_;
 };
 
-TEST_P(AdminRequestTest, AdminRequestGetStatsAndQuit) {
+TEST_F(AdminRequestTest, AdminRequestGetStatsAndQuit) {
+  if (!Envoy::TestEnvironment::shouldRunTestForIpVersion(Network::Address::IpVersion::v4)) {
+    return;
+  }
   startEnvoy();
   started_.WaitForNotification();
   EXPECT_THAT(adminRequest("/stats", "GET"), HasSubstr("filesystem.reopen_failed"));
@@ -216,7 +236,10 @@ TEST_P(AdminRequestTest, AdminRequestGetStatsAndQuit) {
 
 // This test is identical to the above one, except that instead of using an admin /quitquitquit,
 // we send ourselves a SIGTERM, which should have the same effect.
-TEST_P(AdminRequestTest, AdminRequestGetStatsAndKill) {
+TEST_F(AdminRequestTest, AdminRequestGetStatsAndKill) {
+  if (!Envoy::TestEnvironment::shouldRunTestForIpVersion(Network::Address::IpVersion::v4)) {
+    return;
+  }
   startEnvoy();
   started_.WaitForNotification();
   EXPECT_THAT(adminRequest("/stats", "GET"), HasSubstr("filesystem.reopen_failed"));
@@ -224,32 +247,10 @@ TEST_P(AdminRequestTest, AdminRequestGetStatsAndKill) {
   EXPECT_TRUE(waitForEnvoyToExit());
 }
 
-TEST_P(AdminRequestTest, AdminRequestContentionDisabled) {
-  startEnvoy();
-  started_.WaitForNotification();
-  EXPECT_THAT(adminRequest("/contention", "GET"), HasSubstr("not enabled"));
-  kill(getpid(), SIGTERM);
-  EXPECT_TRUE(waitForEnvoyToExit());
-}
-
-TEST_P(AdminRequestTest, AdminRequestContentionEnabled) {
-  addArg("--enable-mutex-tracing");
-  startEnvoy();
-  started_.WaitForNotification();
-
-  // Induce contention to guarantee a non-zero num_contentions count.
-  Thread::TestUtil::ContentionGenerator::generateContention(MutexTracerImpl::getOrCreateTracer());
-
-  std::string response = adminRequest("/contention", "GET");
-  EXPECT_THAT(response, Not(HasSubstr("not enabled")));
-  EXPECT_THAT(response, HasSubstr("\"num_contentions\":"));
-  EXPECT_THAT(response, Not(HasSubstr("\"num_contentions\": \"0\"")));
-
-  kill(getpid(), SIGTERM);
-  EXPECT_TRUE(waitForEnvoyToExit());
-}
-
-TEST_P(AdminRequestTest, AdminRequestBeforeRun) {
+TEST_F(AdminRequestTest, AdminRequestBeforeRun) {
+  if (!Envoy::TestEnvironment::shouldRunTestForIpVersion(Network::Address::IpVersion::v4)) {
+    return;
+  }
   // Induce the situation where the Envoy thread is active, and main_common_ is constructed,
   // but run() hasn't been issued yet. AdminRequests will not finish immediately, but will
   // do so at some point after run() is allowed to start.
@@ -296,7 +297,10 @@ private:
   std::atomic<uint64_t>& destroy_count_;
 };
 
-TEST_P(AdminRequestTest, AdminRequestAfterRun) {
+TEST_F(AdminRequestTest, AdminRequestAfterRun) {
+  if (!Envoy::TestEnvironment::shouldRunTestForIpVersion(Network::Address::IpVersion::v4)) {
+    return;
+  }
   startEnvoy();
   started_.WaitForNotification();
   // Induce the situation where Envoy is no longer in run(), but hasn't been
@@ -332,18 +336,6 @@ TEST_P(AdminRequestTest, AdminRequestAfterRun) {
   EXPECT_EQ(1, lambda_destroy_count);
 }
 
-// Verifies that the Logger::Registry is usable after constructing and
-// destructing MainCommon.
-TEST_P(MainCommonTest, ConstructDestructLogger) {
-  VERBOSE_EXPECT_NO_THROW(MainCommon main_common(argc(), argv()));
-
-  const std::string logger_name = "logger";
-  spdlog::details::log_msg log_msg(&logger_name, spdlog::level::level_enum::err);
-  Logger::Registry::getSink()->log(log_msg);
-}
-
-INSTANTIATE_TEST_CASE_P(IpVersions, AdminRequestTest,
-                        testing::ValuesIn(TestEnvironment::getIpVersionsForTest()),
-                        TestUtility::ipTestParamsToString);
-
 } // namespace Envoy
+
+#endif // ENVOY_CONFIG_COVERAGE

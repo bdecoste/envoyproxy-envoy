@@ -5,6 +5,7 @@
     "use_proxy_proto": true,
     "filters": [
     {
+      "type": "read",
       "name": "http_connection_manager",
       "config": {
         "codec_type": "http1",
@@ -66,7 +67,7 @@
           ]
         },
         "filters": [
-          { "name": "health_check",
+          { "type": "both", "name": "health_check",
             "config": {
               "pass_through_mode": false, "endpoint": "/healthcheck"
             }

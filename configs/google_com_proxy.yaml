@@ -2,6 +2,7 @@ listeners:
 - address: tcp://127.0.0.1:10000
   filters:
   - name: http_connection_manager
+    type: read
     config:
       codec_type: auto
       stat_prefix: ingress_http
@@ -15,7 +16,7 @@ listeners:
             host_rewrite: www.google.com
             cluster: service_google
       filters:
-      - { name: router, config: {} }
+      - { type: decoder, name: router, config: {} }
 
 admin:
   access_log_path: /tmp/admin_access.log

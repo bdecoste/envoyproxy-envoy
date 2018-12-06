@@ -17,30 +17,8 @@ using Envoy::Network::PostIoAction;
 namespace Envoy {
 namespace Ssl {
 
-namespace {
-// This SslSocket will be used when SSL secret is not fetched from SDS server.
-class NotReadySslSocket : public Network::TransportSocket {
-public:
-  // Network::TransportSocket
-  void setTransportSocketCallbacks(Network::TransportSocketCallbacks&) override {}
-  std::string protocol() const override { return EMPTY_STRING; }
-  bool canFlushClose() override { return true; }
-  void closeSocket(Network::ConnectionEvent) override {}
-  Network::IoResult doRead(Buffer::Instance&) override { return {PostIoAction::Close, 0, false}; }
-  Network::IoResult doWrite(Buffer::Instance&, bool) override {
-    return {PostIoAction::Close, 0, false};
-  }
-  void onConnected() override {}
-  const Ssl::Connection* ssl() const override { return nullptr; }
-};
-} // namespace
-
-SslSocket::SslSocket(ContextSharedPtr ctx, InitialState state,
-                     Network::TransportSocketOptionsSharedPtr transport_socket_options)
-    : ctx_(std::dynamic_pointer_cast<ContextImpl>(ctx)),
-      ssl_(ctx_->newSsl(transport_socket_options != nullptr
-                            ? transport_socket_options->serverNameOverride()
-                            : absl::nullopt)) {
+SslSocket::SslSocket(ContextSharedPtr ctx, InitialState state)
+    : ctx_(std::dynamic_pointer_cast<ContextImpl>(ctx)), ssl_(ctx_->newSsl()) {
   if (state == InitialState::Client) {
     SSL_set_connect_state(ssl_.get());
   } else {
@@ -247,9 +225,7 @@ std::string SslSocket::uriSanLocalCertificate() const {
   if (!cert) {
     return "";
   }
-  // TODO(PiotrSikora): Figure out if returning only one URI is valid limitation.
-  const std::vector<std::string>& san_uris = Utility::getSubjectAltNames(*cert, GEN_URI);
-  return (san_uris.size() > 0) ? san_uris[0] : "";
+  return getUriSanFromCertificate(cert);
 }
 
 std::vector<std::string> SslSocket::dnsSansLocalCertificate() const {
@@ -257,7 +233,7 @@ std::vector<std::string> SslSocket::dnsSansLocalCertificate() const {
   if (!cert) {
     return {};
   }
-  return Utility::getSubjectAltNames(*cert, GEN_DNS);
+  return getDnsSansFromCertificate(cert);
 }
 
 const std::string& SslSocket::sha256PeerCertificateDigest() const {
@@ -305,9 +281,7 @@ std::string SslSocket::uriSanPeerCertificate() const {
   if (!cert) {
     return "";
   }
-  // TODO(PiotrSikora): Figure out if returning only one URI is valid limitation.
-  const std::vector<std::string>& san_uris = Utility::getSubjectAltNames(*cert, GEN_URI);
-  return (san_uris.size() > 0) ? san_uris[0] : "";
+  return getUriSanFromCertificate(cert.get());
 }
 
 std::vector<std::string> SslSocket::dnsSansPeerCertificate() const {
@@ -315,7 +289,41 @@ std::vector<std::string> SslSocket::dnsSansPeerCertificate() const {
   if (!cert) {
     return {};
   }
-  return Utility::getSubjectAltNames(*cert, GEN_DNS);
+  return getDnsSansFromCertificate(cert.get());
+}
+
+std::string SslSocket::getUriSanFromCertificate(X509* cert) const {
+  bssl::UniquePtr<GENERAL_NAMES> san_names(
+      static_cast<GENERAL_NAMES*>(X509_get_ext_d2i(cert, NID_subject_alt_name, nullptr, nullptr)));
+  if (san_names == nullptr) {
+    return "";
+  }
+  // TODO(PiotrSikora): Figure out if returning only one URI is valid limitation.
+  for (const GENERAL_NAME* san : san_names.get()) {
+    if (san->type == GEN_URI) {
+      ASN1_STRING* str = san->d.uniformResourceIdentifier;
+      return std::string(reinterpret_cast<const char*>(ASN1_STRING_data(str)),
+                         ASN1_STRING_length(str));
+    }
+  }
+  return "";
+}
+
+std::vector<std::string> SslSocket::getDnsSansFromCertificate(X509* cert) const {
+  bssl::UniquePtr<GENERAL_NAMES> san_names(
+      static_cast<GENERAL_NAMES*>(X509_get_ext_d2i(cert, NID_subject_alt_name, nullptr, nullptr)));
+  if (san_names == nullptr) {
+    return {};
+  }
+  std::vector<std::string> dns_sans = {};
+  for (const GENERAL_NAME* san : san_names.get()) {
+    if (san->type == GEN_DNS) {
+      ASN1_STRING* dns = san->d.dNSName;
+      dns_sans.emplace_back(reinterpret_cast<const char*>(ASN1_STRING_data(dns)),
+                            ASN1_STRING_length(dns));
+    }
+  }
+  return dns_sans;
 }
 
 void SslSocket::closeSocket(Network::ConnectionEvent) {
@@ -342,12 +350,30 @@ std::string SslSocket::serialNumberPeerCertificate() const {
   return Utility::getSerialNumberFromCertificate(*cert.get());
 }
 
+std::string SslSocket::getSubjectFromCertificate(X509* cert) const {
+  bssl::UniquePtr<BIO> buf(BIO_new(BIO_s_mem()));
+  RELEASE_ASSERT(buf != nullptr, "");
+
+  // flags=XN_FLAG_RFC2253 is the documented parameter for single-line output in RFC 2253 format.
+  // Example from the RFC:
+  //   * Single value per Relative Distinguished Name (RDN): CN=Steve Kille,O=Isode Limited,C=GB
+  //   * Multivalue output in first RDN: OU=Sales+CN=J. Smith,O=Widget Inc.,C=US
+  //   * Quoted comma in Organization: CN=L. Eagle,O=Sue\, Grabbit and Runn,C=GB
+  X509_NAME_print_ex(buf.get(), X509_get_subject_name(cert), 0 /* indent */, XN_FLAG_RFC2253);
+
+  const uint8_t* data;
+  size_t data_len;
+  int rc = BIO_mem_contents(buf.get(), &data, &data_len);
+  ASSERT(rc == 1);
+  return std::string(reinterpret_cast<const char*>(data), data_len);
+}
+
 std::string SslSocket::subjectPeerCertificate() const {
   bssl::UniquePtr<X509> cert(SSL_get_peer_certificate(ssl_.get()));
   if (!cert) {
     return "";
   }
-  return Utility::getSubjectFromCertificate(*cert);
+  return getSubjectFromCertificate(cert.get());
 }
 
 std::string SslSocket::subjectLocalCertificate() const {
@@ -355,95 +381,34 @@ std::string SslSocket::subjectLocalCertificate() const {
   if (!cert) {
     return "";
   }
-  return Utility::getSubjectFromCertificate(*cert);
+  return getSubjectFromCertificate(cert);
 }
-
-namespace {
-SslSocketFactoryStats generateStats(const std::string& prefix, Stats::Scope& store) {
-  return {
-      ALL_SSL_SOCKET_FACTORY_STATS(POOL_COUNTER_PREFIX(store, prefix + "_ssl_socket_factory."))};
-}
-} // namespace
 
 ClientSslSocketFactory::ClientSslSocketFactory(ClientContextConfigPtr config,
                                                Ssl::ContextManager& manager,
                                                Stats::Scope& stats_scope)
-    : manager_(manager), stats_scope_(stats_scope), stats_(generateStats("client", stats_scope)),
-      config_(std::move(config)),
-      ssl_ctx_(manager_.createSslClientContext(stats_scope_, *config_)) {
-  config_->setSecretUpdateCallback([this]() { onAddOrUpdateSecret(); });
-}
+    : manager_(manager), stats_scope_(stats_scope), config_(std::move(config)),
+      ssl_ctx_(manager_.createSslClientContext(stats_scope_, *config_)) {}
 
-Network::TransportSocketPtr ClientSslSocketFactory::createTransportSocket(
-    Network::TransportSocketOptionsSharedPtr transport_socket_options) const {
-  // onAddOrUpdateSecret() could be invoked in the middle of checking the existence of ssl_ctx and
-  // creating SslSocket using ssl_ctx. Capture ssl_ctx_ into a local variable so that we check and
-  // use the same ssl_ctx to create SslSocket.
-  ClientContextSharedPtr ssl_ctx;
-  {
-    absl::ReaderMutexLock l(&ssl_ctx_mu_);
-    ssl_ctx = ssl_ctx_;
-  }
-  if (ssl_ctx) {
-    return std::make_unique<Ssl::SslSocket>(std::move(ssl_ctx), Ssl::InitialState::Client,
-                                            transport_socket_options);
-  } else {
-    ENVOY_LOG(debug, "Create NotReadySslSocket");
-    stats_.upstream_context_secrets_not_ready_.inc();
-    return std::make_unique<NotReadySslSocket>();
-  }
+Network::TransportSocketPtr ClientSslSocketFactory::createTransportSocket() const {
+  return std::make_unique<Ssl::SslSocket>(ssl_ctx_, Ssl::InitialState::Client);
 }
 
 bool ClientSslSocketFactory::implementsSecureTransport() const { return true; }
-
-void ClientSslSocketFactory::onAddOrUpdateSecret() {
-  ENVOY_LOG(debug, "Secret is updated.");
-  {
-    absl::WriterMutexLock l(&ssl_ctx_mu_);
-    ssl_ctx_ = manager_.createSslClientContext(stats_scope_, *config_);
-  }
-  stats_.ssl_context_update_by_sds_.inc();
-}
 
 ServerSslSocketFactory::ServerSslSocketFactory(ServerContextConfigPtr config,
                                                Ssl::ContextManager& manager,
                                                Stats::Scope& stats_scope,
                                                const std::vector<std::string>& server_names)
-    : manager_(manager), stats_scope_(stats_scope), stats_(generateStats("server", stats_scope)),
-      config_(std::move(config)), server_names_(server_names),
-      ssl_ctx_(manager_.createSslServerContext(stats_scope_, *config_, server_names_)) {
-  config_->setSecretUpdateCallback([this]() { onAddOrUpdateSecret(); });
-}
+    : manager_(manager), stats_scope_(stats_scope), config_(std::move(config)),
+      server_names_(server_names),
+      ssl_ctx_(manager_.createSslServerContext(stats_scope_, *config_, server_names_)) {}
 
-Network::TransportSocketPtr
-ServerSslSocketFactory::createTransportSocket(Network::TransportSocketOptionsSharedPtr) const {
-  // onAddOrUpdateSecret() could be invoked in the middle of checking the existence of ssl_ctx and
-  // creating SslSocket using ssl_ctx. Capture ssl_ctx_ into a local variable so that we check and
-  // use the same ssl_ctx to create SslSocket.
-  ServerContextSharedPtr ssl_ctx;
-  {
-    absl::ReaderMutexLock l(&ssl_ctx_mu_);
-    ssl_ctx = ssl_ctx_;
-  }
-  if (ssl_ctx) {
-    return std::make_unique<Ssl::SslSocket>(std::move(ssl_ctx), Ssl::InitialState::Server, nullptr);
-  } else {
-    ENVOY_LOG(debug, "Create NotReadySslSocket");
-    stats_.downstream_context_secrets_not_ready_.inc();
-    return std::make_unique<NotReadySslSocket>();
-  }
+Network::TransportSocketPtr ServerSslSocketFactory::createTransportSocket() const {
+  return std::make_unique<Ssl::SslSocket>(ssl_ctx_, Ssl::InitialState::Server);
 }
 
 bool ServerSslSocketFactory::implementsSecureTransport() const { return true; }
-
-void ServerSslSocketFactory::onAddOrUpdateSecret() {
-  ENVOY_LOG(debug, "Secret is updated.");
-  {
-    absl::WriterMutexLock l(&ssl_ctx_mu_);
-    ssl_ctx_ = manager_.createSslServerContext(stats_scope_, *config_, server_names_);
-  }
-  stats_.ssl_context_update_by_sds_.inc();
-}
 
 } // namespace Ssl
 } // namespace Envoy

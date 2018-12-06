@@ -22,7 +22,6 @@
 #include "test/test_common/environment.h"
 #include "test/test_common/network_utility.h"
 #include "test/test_common/printers.h"
-#include "test/test_common/test_time.h"
 #include "test/test_common/threadsafe_singleton_injector.h"
 #include "test/test_common/utility.h"
 
@@ -50,8 +49,7 @@ class ProxyProtocolTest : public testing::TestWithParam<Network::Address::IpVers
                           protected Logger::Loggable<Logger::Id::main> {
 public:
   ProxyProtocolTest()
-      : dispatcher_(test_time_.timeSystem()),
-        socket_(Network::Test::getCanonicalLoopbackAddress(GetParam()), nullptr, true),
+      : socket_(Network::Test::getCanonicalLoopbackAddress(GetParam()), nullptr, true),
         connection_handler_(new Server::ConnectionHandlerImpl(ENVOY_LOGGER(), dispatcher_)),
         name_("proxy"), filter_chain_(Network::Test::createEmptyFilterChainWithRawBufferSockets()) {
 
@@ -62,20 +60,16 @@ public:
     conn_->addConnectionCallbacks(connection_callbacks_);
   }
 
-  // Network::ListenerConfig
+  // Listener
   Network::FilterChainManager& filterChainManager() override { return *this; }
   Network::FilterChainFactory& filterChainFactory() override { return factory_; }
   Network::Socket& socket() override { return socket_; }
   bool bindToPort() override { return true; }
   bool handOffRestoredDestinationConnections() const override { return false; }
   uint32_t perConnectionBufferLimitBytes() override { return 0; }
-  std::chrono::milliseconds listenerFiltersTimeout() const override {
-    return std::chrono::milliseconds();
-  }
   Stats::Scope& listenerScope() override { return stats_store_; }
   uint64_t listenerTag() const override { return 1; }
   const std::string& name() const override { return name_; }
-  bool reverseWriteFilterOrder() const override { return true; }
 
   // Network::FilterChainManager
   const Network::FilterChain* findFilterChain(const Network::ConnectionSocket&) const override {
@@ -148,7 +142,6 @@ public:
     EXPECT_EQ(stats_store_.counter("downstream_cx_proxy_proto_error").value(), 1);
   }
 
-  DangerousDeprecatedTestTime test_time_;
   Event::DispatcherImpl dispatcher_;
   Network::TcpListenSocket socket_;
   Stats::IsolatedStoreImpl stats_store_;
@@ -459,9 +452,8 @@ TEST_P(ProxyProtocolTest, v1TooLong) {
   constexpr uint8_t buffer[] = {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '};
   connect(false);
   write("PROXY TCP4 1.2.3.4 2.3.4.5 100 100");
-  for (size_t i = 0; i < 256; i += sizeof(buffer)) {
+  for (size_t i = 0; i < 256; i += sizeof(buffer))
     write(buffer, sizeof(buffer));
-  }
   expectProxyProtoError();
 }
 
@@ -740,9 +732,8 @@ TEST_P(ProxyProtocolTest, v2PartialRead) {
 
   for (size_t i = 0; i < sizeof(buffer); i += 9) {
     write(&buffer[i], 9);
-    if (i == 0) {
+    if (i == 0)
       dispatcher_.run(Event::Dispatcher::RunType::NonBlock);
-    }
   }
 
   expectData("moredata");
@@ -869,8 +860,7 @@ class WildcardProxyProtocolTest : public testing::TestWithParam<Network::Address
                                   protected Logger::Loggable<Logger::Id::main> {
 public:
   WildcardProxyProtocolTest()
-      : dispatcher_(test_time_.timeSystem()),
-        socket_(Network::Test::getAnyAddress(GetParam()), nullptr, true),
+      : socket_(Network::Test::getAnyAddress(GetParam()), nullptr, true),
         local_dst_address_(Network::Utility::getAddressWithPort(
             *Network::Test::getCanonicalLoopbackAddress(GetParam()),
             socket_.localAddress()->ip()->port())),
@@ -897,13 +887,9 @@ public:
   bool bindToPort() override { return true; }
   bool handOffRestoredDestinationConnections() const override { return false; }
   uint32_t perConnectionBufferLimitBytes() override { return 0; }
-  std::chrono::milliseconds listenerFiltersTimeout() const override {
-    return std::chrono::milliseconds();
-  }
   Stats::Scope& listenerScope() override { return stats_store_; }
   uint64_t listenerTag() const override { return 1; }
   const std::string& name() const override { return name_; }
-  bool reverseWriteFilterOrder() const override { return true; }
 
   // Network::FilterChainManager
   const Network::FilterChain* findFilterChain(const Network::ConnectionSocket&) const override {
@@ -953,7 +939,6 @@ public:
     dispatcher_.run(Event::Dispatcher::RunType::Block);
   }
 
-  DangerousDeprecatedTestTime test_time_;
   Event::DispatcherImpl dispatcher_;
   Network::TcpListenSocket socket_;
   Network::Address::InstanceConstSharedPtr local_dst_address_;

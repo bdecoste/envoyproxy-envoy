@@ -10,6 +10,7 @@ envoy_package()
 
 envoy_cc_mock(
     name = "ratelimit_mocks",
+    srcs = ["mocks.cc"],
     hdrs = ["mocks.h"],
     deps = [
         "//include/envoy/ratelimit:ratelimit_interface",

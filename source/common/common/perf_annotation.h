@@ -15,7 +15,7 @@
 //   bazel --define=perf_annotation=enabled ...
 // or, in individual .cc files:
 //   #define ENVOY_PERF_ANNOTATION
-// In the absence of such directives, the support classes are built and tested.
+// In the absense of such directives, the support classes are built and tested.
 // However, the macros for instrumenting code for performance analysis will expand
 // to nothing.
 //
@@ -59,7 +59,7 @@
 #define PERF_CLEAR() Envoy::PerfAnnotationContext::clear()
 
 /**
- * Controls whether performances collection and reporting is thread safe. For now,
+ * Controls whether performacne collection and reporting is thread safe. For now,
  * leaving this enabled for predictability across multiiple applications, on the assumption
  * that an uncontended mutex lock has vanishingly small cost. In the future we may try
  * to make this system thread-unsafe if mutex contention disturbs the metrics.
@@ -85,9 +85,6 @@ public:
    */
   void record(std::chrono::nanoseconds duration, absl::string_view category,
               absl::string_view description);
-
-  /** @return MonotonicTime the current time */
-  MonotonicTime currentTime() { return time_source_.monotonicTime(); }
 
   /**
    * Renders the aggregated statistics as a string.
@@ -141,7 +138,6 @@ private:
 #else
   DurationStatsMap duration_stats_map_;
 #endif
-  RealTimeSource time_source_;
 };
 
 /**
@@ -166,8 +162,8 @@ public:
   void record(absl::string_view category, absl::string_view description);
 
 private:
-  PerfAnnotationContext* context_;
   MonotonicTime start_time_;
+  PerfAnnotationContext* context_;
 };
 
 } // namespace Envoy

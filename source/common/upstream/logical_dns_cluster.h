@@ -46,25 +46,13 @@ private:
         : HostImpl(cluster, hostname, address, parent.lbEndpoint().metadata(),
                    parent.lbEndpoint().load_balancing_weight().value(),
                    parent.localityLbEndpoint().locality(),
-                   parent.lbEndpoint().endpoint().health_check_config(),
-                   parent.localityLbEndpoint().priority()),
+                   parent.lbEndpoint().endpoint().health_check_config()),
           parent_(parent) {}
 
     // Upstream::Host
-    CreateConnectionData createConnection(
-        Event::Dispatcher& dispatcher, const Network::ConnectionSocket::OptionsSharedPtr& options,
-        Network::TransportSocketOptionsSharedPtr transport_socket_options) const override;
-
-    // Upstream::HostDescription
-    // Override setting health check address, since for logical DNS the registered host has 0.0.0.0
-    // as its address (see mattklein123's comment in logical_dns_cluster.cc why this is),
-    // while the health check address needs the resolved address to do the health checking, so we
-    // set it here.
-    void setHealthCheckAddress(Network::Address::InstanceConstSharedPtr address) override {
-      const auto& port_value = parent_.lbEndpoint().endpoint().health_check_config().port_value();
-      health_check_address_ =
-          port_value == 0 ? address : Network::Utility::getAddressWithPort(*address, port_value);
-    }
+    CreateConnectionData
+    createConnection(Event::Dispatcher& dispatcher,
+                     const Network::ConnectionSocket::OptionsSharedPtr& options) const override;
 
     LogicalDnsCluster& parent_;
   };
@@ -107,15 +95,12 @@ private:
     Network::Address::InstanceConstSharedPtr healthCheckAddress() const override {
       return health_check_address_;
     }
-    // Setting health check address is usually done at initialization. This is NOP by default.
-    void setHealthCheckAddress(Network::Address::InstanceConstSharedPtr) override {}
-    uint32_t priority() const override { return locality_lb_endpoint_.priority(); }
-    void priority(uint32_t priority) override { locality_lb_endpoint_.set_priority(priority); }
+    uint32_t priority() const { return locality_lb_endpoint_.priority(); }
     Network::Address::InstanceConstSharedPtr address_;
     HostConstSharedPtr logical_host_;
     const std::shared_ptr<envoy::api::v2::core::Metadata> metadata_;
     Network::Address::InstanceConstSharedPtr health_check_address_;
-    envoy::api::v2::endpoint::LocalityLbEndpoints locality_lb_endpoint_;
+    const envoy::api::v2::endpoint::LocalityLbEndpoints& locality_lb_endpoint_;
     const envoy::api::v2::endpoint::LbEndpoint& lb_endpoint_;
   };
 

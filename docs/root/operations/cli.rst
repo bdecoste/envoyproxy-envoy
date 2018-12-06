@@ -8,11 +8,13 @@ following are the command line options that Envoy supports.
 
 .. option:: -c <path string>, --config-path <path string>
 
-  *(optional)* The path to the v2 :ref:`JSON/YAML/proto3 configuration
+  *(optional)* The path to the v1 or v2 :ref:`JSON/YAML/proto3 configuration
   file <config>`. If this flag is missing, :option:`--config-yaml` is required.
   This will be parsed as a :ref:`v2 bootstrap configuration file
-  <config_overview_v2_bootstrap>`.
-  Valid extensions are ``.json``, ``.yaml``, ``.pb`` and ``.pb_text``, which indicate
+  <config_overview_v2_bootstrap>`. On failure, if :option:`--allow-deprecated-v1-api`,
+  is set, it will be considered as a :ref:`v1 JSON
+  configuration file <config_overview_v1>`. For v2 configuration files, valid
+  extensions are ``.json``, ``.yaml``, ``.pb`` and ``.pb_text``, which indicate
   JSON, YAML, `binary proto3
   <https://developers.google.com/protocol-buffers/docs/encoding>`_ and `text
   proto3
@@ -22,12 +24,11 @@ following are the command line options that Envoy supports.
 .. option:: --config-yaml <yaml string>
 
   *(optional)* The YAML string for a v2 bootstrap configuration. If :option:`--config-path` is also set,
-  the values in this YAML string will override and merge with the bootstrap loaded from :option:`--config-path`.
-  Because YAML is a superset of JSON, a JSON string may also be passed to :option:`--config-yaml`.
+   the values in this YAML string will override and merge with the bootstrap loaded from :option:`--config-path`.
+   Because YAML is a superset of JSON, a JSON string may also be passed to :option:`--config-yaml`.
+   :option:`--config-yaml` is not compatible with bootstrap v1.
 
-  Example overriding the node id on the command line:
-
-    .. code-block:: console
+   Example overriding the node id on the command line:
 
       ./envoy -c bootstrap.yaml --config-yaml "node: {id: 'node1'}"
 
@@ -35,6 +36,14 @@ following are the command line options that Envoy supports.
 
   *(deprecated)* This flag used to allow opting into only using a
   :ref:`v2 bootstrap configuration file <config_overview_v2_bootstrap>`. This is now set by default.
+
+.. option:: --allow-deprecated-v1-api
+
+  *(optional)* This flag determines whether the configuration file should only
+  be parsed as a :ref:`v2 bootstrap configuration file
+  <config_overview_v2_bootstrap>`. If specified when a v2 bootstrap
+  config parse fails, a second attempt to parse the config as a :ref:`v1 JSON
+  configuration file <config_overview_v1>` will be made.
 
 .. option:: --mode <string>
 
@@ -73,13 +82,6 @@ following are the command line options that Envoy supports.
 
   *(optional)* The logging level. Non developers should generally never set this option. See the
   help text for the available log levels and the default.
-
-.. option:: --component-log-level <string>
-
-  *(optional)* The comma separated list of logging level per component. Non developers should generally 
-  never set this option. For example, if you want `upstream` component to run at `debug` level and 
-  `connection` component to run at `trace` level, you should pass ``upstream:debug,connection:trace`` to 
-  this flag.
 
 .. option:: --log-path <path string>
 
@@ -147,10 +149,9 @@ following are the command line options that Envoy supports.
   method for specifying this value and will override any value set in bootstrap
   configuration. It should be set if any of the following features are used:
   :ref:`statsd <arch_overview_statistics>`, :ref:`health check cluster
-  verification <envoy_api_field_core.HealthCheck.HttpHealthCheck.service_name>`,
-  :ref:`runtime override directory <envoy_api_msg_config.bootstrap.v2.Runtime>`,
-  :ref:`user agent addition
-  <envoy_api_field_config.filter.network.http_connection_manager.v2.HttpConnectionManager.add_user_agent>`,
+  verification <config_cluster_manager_cluster_hc_service_name>`,
+  :ref:`runtime override directory <config_runtime_override_subdirectory>`,
+  :ref:`user agent addition <config_http_conn_man_add_user_agent>`,
   :ref:`HTTP global rate limiting <config_http_filters_rate_limit>`,
   :ref:`CDS <config_cluster_manager_cds>`, and :ref:`HTTP tracing
   <arch_overview_tracing>`, either via this CLI option or in the bootstrap
@@ -178,7 +179,7 @@ following are the command line options that Envoy supports.
   alternative method for specifying this value and will override any value set
   in bootstrap configuration. It should be set if discovery service routing is
   used and the discovery service exposes :ref:`zone data
-  <envoy_api_msg_endpoint.LocalityLbEndpoints>`, either via this CLI option or in
+  <config_cluster_manager_sds_api_host_az>`, either via this CLI option or in
   the bootstrap configuration. The meaning of zone is context dependent, e.g.
   `Availability Zone (AZ)
   <https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html>`_
@@ -233,17 +234,3 @@ following are the command line options that Envoy supports.
 
   *(optional)* This flag disables Envoy hot restart for builds that have it enabled. By default, hot
   restart is enabled.
-
-.. option:: --enable-mutex-tracing
-
-  *(optional)* This flag enables the collection of mutex contention statistics
-  (:ref:`MutexStats <envoy_api_msg_admin.v2alpha.MutexStats>`) as well as a contention endpoint
-  (:http:get:`/contention`). Mutex tracing is not enabled by default, since it incurs a slight performance
-  penalty for those Envoys which already experience mutex contention.
-
-.. option:: --allow-unknown-fields
-
-  *(optional)* This flag disables validation of protobuf configurations for unknown fields. By default, the 
-  validation is enabled. For most deployments, the default should be used which ensures configuration errors
-  are caught upfront and Envoy is configured as intended. However in cases where Envoy needs to accept configuration 
-  produced by newer control planes, effectively ignoring new features it does not know about yet, this can be disabled.

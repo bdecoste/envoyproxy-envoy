@@ -49,8 +49,7 @@ public:
       : MetricImpl(std::move(tag_extracted_name), std::move(tags)), parent_(parent), name_(name) {}
 
   // Stats:;Metric
-  std::string name() const override { return name_; }
-  const char* nameCStr() const override { return name_.c_str(); }
+  const std::string name() const override { return name_; }
 
   // Stats::Histogram
   void recordValue(uint64_t value) override { parent_.deliverHistogramToSinks(*this, value); }
@@ -62,22 +61,6 @@ private:
   Store& parent_;
 
   const std::string name_;
-};
-
-/**
- * Null histogram implementation.
- * No-ops on all calls and requires no underlying metric or data.
- */
-class NullHistogramImpl : public Histogram {
-public:
-  NullHistogramImpl() {}
-  ~NullHistogramImpl() {}
-  std::string name() const override { return ""; }
-  const char* nameCStr() const override { return ""; }
-  const std::string& tagExtractedName() const override { CONSTRUCT_ON_FIRST_USE(std::string, ""); }
-  const std::vector<Tag>& tags() const override { CONSTRUCT_ON_FIRST_USE(std::vector<Tag>, {}); }
-  void recordValue(uint64_t) override {}
-  bool used() const override { return false; }
 };
 
 } // namespace Stats

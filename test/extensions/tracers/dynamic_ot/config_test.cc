@@ -23,21 +23,19 @@ TEST(DynamicOtTracerConfigTest, DynamicOpentracingHttpTracer) {
   ON_CALL(*server.cluster_manager_.thread_local_cluster_.cluster_.info_, features())
       .WillByDefault(Return(Upstream::ClusterInfo::Features::HTTP2));
 
-  const std::string yaml_string = fmt::sprintf(R"EOF(
-  http:
-    name: envoy.dynamic.ot
-    config:
-      library: %s/external/io_opentracing_cpp/mocktracer/libmocktracer_plugin.so
-      config:
-        output_file: fake_file
+  const std::string valid_config = fmt::sprintf(R"EOF(
+  {
+    "library": "%s/external/io_opentracing_cpp/mocktracer/libmocktracer_plugin.so",
+    "config": {
+      "output_file" : "fake_file"
+    }
+  }
   )EOF",
-                                               TestEnvironment::runfilesDirectory());
-  envoy::config::trace::v2::Tracing configuration;
-  MessageUtil::loadFromYaml(yaml_string, configuration);
-
+                                                TestEnvironment::runfilesDirectory());
+  const Json::ObjectSharedPtr valid_json = Json::Factory::loadFromString(valid_config);
   DynamicOpenTracingTracerFactory factory;
-  auto message = Config::Utility::translateToFactoryConfig(configuration.http(), factory);
-  const Tracing::HttpTracerPtr tracer = factory.createHttpTracer(*message, server);
+
+  const Tracing::HttpTracerPtr tracer = factory.createHttpTracer(*valid_json, server);
   EXPECT_NE(nullptr, tracer);
 }
 

@@ -1,5 +1,3 @@
-#include <memory>
-
 #include "envoy/api/v2/eds.pb.h"
 #include "envoy/api/v2/endpoint/endpoint.pb.h"
 #include "envoy/service/discovery/v2/hds.pb.h"
@@ -26,12 +24,10 @@ namespace {
 class HdsIntegrationTest : public HttpIntegrationTest,
                            public testing::TestWithParam<Network::Address::IpVersion> {
 public:
-  HdsIntegrationTest()
-      : HttpIntegrationTest(Http::CodecClient::Type::HTTP1, GetParam(), realTime()) {}
+  HdsIntegrationTest() : HttpIntegrationTest(Http::CodecClient::Type::HTTP1, GetParam()) {}
 
   void createUpstreams() override {
-    fake_upstreams_.emplace_back(
-        new FakeUpstream(0, FakeHttpConnection::Type::HTTP2, version_, timeSystem()));
+    fake_upstreams_.emplace_back(new FakeUpstream(0, FakeHttpConnection::Type::HTTP2, version_));
     hds_upstream_ = fake_upstreams_.back().get();
     hds_upstream_->set_allow_unexpected_disconnects(true);
     HttpIntegrationTest::createUpstreams();
@@ -56,10 +52,8 @@ public:
     HttpIntegrationTest::initialize();
 
     // Endpoint connections
-    host_upstream_ =
-        std::make_unique<FakeUpstream>(0, FakeHttpConnection::Type::HTTP1, version_, timeSystem());
-    host2_upstream_ =
-        std::make_unique<FakeUpstream>(0, FakeHttpConnection::Type::HTTP1, version_, timeSystem());
+    host_upstream_.reset(new FakeUpstream(0, FakeHttpConnection::Type::HTTP1, version_));
+    host2_upstream_.reset(new FakeUpstream(0, FakeHttpConnection::Type::HTTP1, version_));
   }
 
   // Sets up a connection between Envoy and the management server.
@@ -124,7 +118,7 @@ public:
   // one HTTP health_check
   envoy::service::discovery::v2::HealthCheckSpecifier makeHttpHealthCheckSpecifier() {
     envoy::service::discovery::v2::HealthCheckSpecifier server_health_check_specifier_;
-    server_health_check_specifier_.mutable_interval()->set_nanos(100000000); // 0.1 seconds
+    server_health_check_specifier_.mutable_interval()->set_seconds(1);
 
     auto* health_check = server_health_check_specifier_.add_cluster_health_checks();
 
@@ -132,12 +126,12 @@ public:
     Network::Utility::addressToProtobufAddress(
         *host_upstream_->localAddress(),
         *health_check->add_locality_endpoints()->add_endpoints()->mutable_address());
-    health_check->mutable_locality_endpoints(0)->mutable_locality()->set_region("middle_earth");
-    health_check->mutable_locality_endpoints(0)->mutable_locality()->set_zone("shire");
-    health_check->mutable_locality_endpoints(0)->mutable_locality()->set_sub_zone("hobbiton");
+    health_check->mutable_locality_endpoints(0)->mutable_locality()->set_region("some_region");
+    health_check->mutable_locality_endpoints(0)->mutable_locality()->set_zone("some_zone");
+    health_check->mutable_locality_endpoints(0)->mutable_locality()->set_sub_zone("crete");
 
-    health_check->add_health_checks()->mutable_timeout()->set_seconds(MaxTimeout);
-    health_check->mutable_health_checks(0)->mutable_interval()->set_seconds(MaxTimeout);
+    health_check->add_health_checks()->mutable_timeout()->set_seconds(2);
+    health_check->mutable_health_checks(0)->mutable_interval()->set_seconds(1);
     health_check->mutable_health_checks(0)->mutable_unhealthy_threshold()->set_value(2);
     health_check->mutable_health_checks(0)->mutable_healthy_threshold()->set_value(2);
     health_check->mutable_health_checks(0)->mutable_grpc_health_check();
@@ -151,7 +145,7 @@ public:
   // one TCP health_check
   envoy::service::discovery::v2::HealthCheckSpecifier makeTcpHealthCheckSpecifier() {
     envoy::service::discovery::v2::HealthCheckSpecifier server_health_check_specifier_;
-    server_health_check_specifier_.mutable_interval()->set_nanos(100000000); // 0.1 seconds
+    server_health_check_specifier_.mutable_interval()->set_seconds(1);
 
     auto* health_check = server_health_check_specifier_.add_cluster_health_checks();
 
@@ -159,12 +153,12 @@ public:
     Network::Utility::addressToProtobufAddress(
         *host_upstream_->localAddress(),
         *health_check->add_locality_endpoints()->add_endpoints()->mutable_address());
-    health_check->mutable_locality_endpoints(0)->mutable_locality()->set_region("middle_earth");
-    health_check->mutable_locality_endpoints(0)->mutable_locality()->set_zone("eriador");
-    health_check->mutable_locality_endpoints(0)->mutable_locality()->set_sub_zone("rivendell");
+    health_check->mutable_locality_endpoints(0)->mutable_locality()->set_region("some_region");
+    health_check->mutable_locality_endpoints(0)->mutable_locality()->set_zone("some_zone");
+    health_check->mutable_locality_endpoints(0)->mutable_locality()->set_sub_zone("crete");
 
-    health_check->add_health_checks()->mutable_timeout()->set_seconds(MaxTimeout);
-    health_check->mutable_health_checks(0)->mutable_interval()->set_seconds(MaxTimeout);
+    health_check->add_health_checks()->mutable_timeout()->set_seconds(2);
+    health_check->mutable_health_checks(0)->mutable_interval()->set_seconds(1);
     health_check->mutable_health_checks(0)->mutable_unhealthy_threshold()->set_value(2);
     health_check->mutable_health_checks(0)->mutable_healthy_threshold()->set_value(2);
     auto* tcp_hc = health_check->mutable_health_checks(0)->mutable_tcp_health_check();
@@ -175,38 +169,22 @@ public:
   }
 
   // Checks if Envoy reported the health status of an endpoint correctly
-  bool checkEndpointHealthResponse(envoy::service::discovery::v2::EndpointHealth endpoint,
+  void checkEndpointHealthResponse(envoy::service::discovery::v2::EndpointHealth endpoint,
                                    envoy::api::v2::core::HealthStatus healthy,
                                    Network::Address::InstanceConstSharedPtr address) {
 
-    if (healthy != endpoint.health_status()) {
-      return false;
-    }
-    if (address->ip()->port() != endpoint.endpoint().address().socket_address().port_value()) {
-      return false;
-    }
-    // SocketAddress.address is a proto string, not std::string, so convert it before comparing.
-    if (address->ip()->addressAsString() !=
-        absl::string_view(endpoint.endpoint().address().socket_address().address())) {
-      return false;
-    }
-    return true;
+    EXPECT_EQ(healthy, endpoint.health_status());
+    EXPECT_EQ(address->ip()->port(), endpoint.endpoint().address().socket_address().port_value());
+    EXPECT_EQ(address->ip()->addressAsString(),
+              endpoint.endpoint().address().socket_address().address());
   }
 
   // Checks if the cluster counters are correct
-  void checkCounters(int requests, int responses, int successes, int failures) {
+  void checkCounters(int requests, int response_s, int successes, int failures) {
     EXPECT_EQ(requests, test_server_->counter("hds_delegate.requests")->value());
-    EXPECT_LE(responses, test_server_->counter("hds_delegate.responses")->value());
+    EXPECT_EQ(response_s, test_server_->counter("hds_delegate.responses")->value());
     EXPECT_EQ(successes, test_server_->counter("cluster.anna.health_check.success")->value());
     EXPECT_EQ(failures, test_server_->counter("cluster.anna.health_check.failure")->value());
-  }
-
-  void waitForEndpointHealthResponse(envoy::api::v2::core::HealthStatus healthy) {
-    ASSERT_TRUE(hds_stream_->waitForGrpcMessage(*dispatcher_, response_));
-    while (!checkEndpointHealthResponse(response_.endpoint_health_response().endpoints_health(0),
-                                        healthy, host_upstream_->localAddress())) {
-      ASSERT_TRUE(hds_stream_->waitForGrpcMessage(*dispatcher_, response_));
-    }
   }
 
   static constexpr uint32_t upstream_endpoints_ = 0;
@@ -223,7 +201,6 @@ public:
   FakeHttpConnectionPtr host2_fake_connection_;
   FakeRawConnectionPtr host_fake_raw_connection_;
 
-  static constexpr int MaxTimeout = 100;
   envoy::service::discovery::v2::HealthCheckRequest envoy_msg_;
   envoy::service::discovery::v2::HealthCheckRequestOrEndpointHealthResponse response_;
   envoy::service::discovery::v2::HealthCheckSpecifier server_health_check_specifier_;
@@ -257,9 +234,13 @@ TEST_P(HdsIntegrationTest, SingleEndpointHealthyHttp) {
   host_stream_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "200"}}, false);
   host_stream_->encodeData(1024, true);
 
-  // Receive updates until the one we expect arrives
-  waitForEndpointHealthResponse(envoy::api::v2::core::HealthStatus::HEALTHY);
+  // Envoy reports back to server
+  ASSERT_TRUE(hds_stream_->waitForGrpcMessage(*dispatcher_, response_));
 
+  // Check that the response is correct
+  checkEndpointHealthResponse(response_.endpoint_health_response().endpoints_health(0),
+                              envoy::api::v2::core::HealthStatus::HEALTHY,
+                              host_upstream_->localAddress());
   checkCounters(1, 2, 1, 0);
 
   // Clean up connections
@@ -272,7 +253,6 @@ TEST_P(HdsIntegrationTest, SingleEndpointHealthyHttp) {
 TEST_P(HdsIntegrationTest, SingleEndpointTimeoutHttp) {
   initialize();
   server_health_check_specifier_ = makeHttpHealthCheckSpecifier();
-
   server_health_check_specifier_.mutable_cluster_health_checks(0)
       ->mutable_health_checks(0)
       ->mutable_timeout()
@@ -280,8 +260,7 @@ TEST_P(HdsIntegrationTest, SingleEndpointTimeoutHttp) {
   server_health_check_specifier_.mutable_cluster_health_checks(0)
       ->mutable_health_checks(0)
       ->mutable_timeout()
-      ->set_nanos(100000000); // 0.1 seconds
-
+      ->set_nanos(800000000);
   // Server <--> Envoy
   waitForHdsStream();
   ASSERT_TRUE(hds_stream_->waitForGrpcMessage(*dispatcher_, envoy_msg_));
@@ -296,9 +275,14 @@ TEST_P(HdsIntegrationTest, SingleEndpointTimeoutHttp) {
 
   // Endpoint doesn't repond to the health check
 
-  // Receive updates until the one we expect arrives
-  waitForEndpointHealthResponse(envoy::api::v2::core::HealthStatus::TIMEOUT);
+  // Envoy reports back to server
+  ASSERT_TRUE(hds_stream_->waitForGrpcMessage(*dispatcher_, response_));
 
+  // Check that the response is correct
+  // TODO(lilika): Ideally this would be envoy::api::v2::core::HealthStatus::TIMEOUT
+  checkEndpointHealthResponse(response_.endpoint_health_response().endpoints_health(0),
+                              envoy::api::v2::core::HealthStatus::UNHEALTHY,
+                              host_upstream_->localAddress());
   checkCounters(1, 2, 0, 1);
 
   // Clean up connections
@@ -328,9 +312,13 @@ TEST_P(HdsIntegrationTest, SingleEndpointUnhealthyHttp) {
   host_stream_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "404"}}, false);
   host_stream_->encodeData(1024, true);
 
-  // Receive updates until the one we expect arrives
-  waitForEndpointHealthResponse(envoy::api::v2::core::HealthStatus::UNHEALTHY);
+  // Envoy reports back to server
+  ASSERT_TRUE(hds_stream_->waitForGrpcMessage(*dispatcher_, response_));
 
+  // Check that the response is correct
+  checkEndpointHealthResponse(response_.endpoint_health_response().endpoints_health(0),
+                              envoy::api::v2::core::HealthStatus::UNHEALTHY,
+                              host_upstream_->localAddress());
   checkCounters(1, 2, 0, 1);
 
   // Clean up connections
@@ -358,8 +346,7 @@ TEST_P(HdsIntegrationTest, SingleEndpointTimeoutTcp) {
   server_health_check_specifier_.mutable_cluster_health_checks(0)
       ->mutable_health_checks(0)
       ->mutable_timeout()
-      ->set_nanos(100000000); // 0.1 seconds
-
+      ->set_nanos(800000000);
   hds_stream_->startGrpcStream();
   hds_stream_->sendGrpcMessage(server_health_check_specifier_);
   test_server_->waitForCounterGe("hds_delegate.requests", ++hds_requests_);
@@ -368,12 +355,18 @@ TEST_P(HdsIntegrationTest, SingleEndpointTimeoutTcp) {
   ASSERT_TRUE(host_upstream_->waitForRawConnection(host_fake_raw_connection_));
   ASSERT_TRUE(
       host_fake_raw_connection_->waitForData(FakeRawConnection::waitForInexactMatch("Ping")));
-  host_upstream_->set_allow_unexpected_disconnects(true);
 
+  host_upstream_->set_allow_unexpected_disconnects(true);
   // No response from the endpoint
 
-  // Receive updates until the one we expect arrives
-  waitForEndpointHealthResponse(envoy::api::v2::core::HealthStatus::TIMEOUT);
+  // Envoy reports back to server
+  ASSERT_TRUE(hds_stream_->waitForGrpcMessage(*dispatcher_, response_));
+
+  // Check that the response is correct
+  auto endpoint = response_.endpoint_health_response().endpoints_health(0);
+  EXPECT_EQ(envoy::api::v2::core::HealthStatus::UNHEALTHY, endpoint.health_status());
+  EXPECT_EQ(host_upstream_->localAddress()->ip()->port(),
+            endpoint.endpoint().address().socket_address().port_value());
 
   // Clean up connections
   cleanupHostConnections();
@@ -403,8 +396,14 @@ TEST_P(HdsIntegrationTest, SingleEndpointHealthyTcp) {
   RELEASE_ASSERT(result, result.message());
   host_upstream_->set_allow_unexpected_disconnects(true);
 
-  // Receive updates until the one we expect arrives
-  waitForEndpointHealthResponse(envoy::api::v2::core::HealthStatus::HEALTHY);
+  // Envoy reports back to server
+  ASSERT_TRUE(hds_stream_->waitForGrpcMessage(*dispatcher_, response_));
+
+  // Check that the response is correct
+  auto endpoint = response_.endpoint_health_response().endpoints_health(0);
+  EXPECT_EQ(envoy::api::v2::core::HealthStatus::HEALTHY, endpoint.health_status());
+  EXPECT_EQ(host_upstream_->localAddress()->ip()->port(),
+            endpoint.endpoint().address().socket_address().port_value());
 
   // Clean up connections
   cleanupHostConnections();
@@ -422,10 +421,6 @@ TEST_P(HdsIntegrationTest, SingleEndpointUnhealthyTcp) {
 
   // Server asks for health checking
   server_health_check_specifier_ = makeTcpHealthCheckSpecifier();
-  server_health_check_specifier_.mutable_cluster_health_checks(0)
-      ->mutable_health_checks(0)
-      ->mutable_timeout()
-      ->set_seconds(2);
   hds_stream_->startGrpcStream();
   hds_stream_->sendGrpcMessage(server_health_check_specifier_);
   test_server_->waitForCounterGe("hds_delegate.requests", ++hds_requests_);
@@ -438,8 +433,14 @@ TEST_P(HdsIntegrationTest, SingleEndpointUnhealthyTcp) {
   RELEASE_ASSERT(result, result.message());
   host_upstream_->set_allow_unexpected_disconnects(true);
 
-  // Receive updates until the one we expect arrives
-  waitForEndpointHealthResponse(envoy::api::v2::core::HealthStatus::UNHEALTHY);
+  // Envoy reports back to server
+  ASSERT_TRUE(hds_stream_->waitForGrpcMessage(*dispatcher_, response_));
+
+  // Check that the response is correct
+  auto endpoint = response_.endpoint_health_response().endpoints_health(0);
+  EXPECT_EQ(envoy::api::v2::core::HealthStatus::UNHEALTHY, endpoint.health_status());
+  EXPECT_EQ(host_upstream_->localAddress()->ip()->port(),
+            endpoint.endpoint().address().socket_address().port_value());
 
   // Clean up connections
   cleanupHostConnections();
@@ -475,17 +476,16 @@ TEST_P(HdsIntegrationTest, TwoEndpointsSameLocality) {
   host2_stream_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "200"}}, false);
   host2_stream_->encodeData(1024, true);
 
-  // Receive updates until the one we expect arrives
+  // Envoy reports back to server
   ASSERT_TRUE(hds_stream_->waitForGrpcMessage(*dispatcher_, response_));
-  while (!(checkEndpointHealthResponse(response_.endpoint_health_response().endpoints_health(0),
-                                       envoy::api::v2::core::HealthStatus::UNHEALTHY,
-                                       host_upstream_->localAddress()) &&
-           checkEndpointHealthResponse(response_.endpoint_health_response().endpoints_health(1),
-                                       envoy::api::v2::core::HealthStatus::HEALTHY,
-                                       host2_upstream_->localAddress()))) {
-    ASSERT_TRUE(hds_stream_->waitForGrpcMessage(*dispatcher_, response_));
-  }
 
+  // Check that the response is correct
+  checkEndpointHealthResponse(response_.endpoint_health_response().endpoints_health(0),
+                              envoy::api::v2::core::HealthStatus::UNHEALTHY,
+                              host_upstream_->localAddress());
+  checkEndpointHealthResponse(response_.endpoint_health_response().endpoints_health(1),
+                              envoy::api::v2::core::HealthStatus::HEALTHY,
+                              host2_upstream_->localAddress());
   checkCounters(1, 2, 1, 1);
 
   // Clean up connections
@@ -505,8 +505,8 @@ TEST_P(HdsIntegrationTest, TwoEndpointsDifferentLocality) {
   Network::Utility::addressToProtobufAddress(
       *host2_upstream_->localAddress(),
       *health_check->add_locality_endpoints()->add_endpoints()->mutable_address());
-  health_check->mutable_locality_endpoints(1)->mutable_locality()->set_region("plakias");
-  health_check->mutable_locality_endpoints(1)->mutable_locality()->set_zone("fragokastelo");
+  health_check->mutable_locality_endpoints(1)->mutable_locality()->set_region("different_region");
+  health_check->mutable_locality_endpoints(1)->mutable_locality()->set_zone("different_zone");
   health_check->mutable_locality_endpoints(1)->mutable_locality()->set_sub_zone("emplisi");
 
   // Server <--> Envoy
@@ -527,17 +527,16 @@ TEST_P(HdsIntegrationTest, TwoEndpointsDifferentLocality) {
   host2_stream_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "200"}}, false);
   host2_stream_->encodeData(1024, true);
 
-  // Receive updates until the one we expect arrives
+  // Envoy reports back to server
   ASSERT_TRUE(hds_stream_->waitForGrpcMessage(*dispatcher_, response_));
-  while (!(checkEndpointHealthResponse(response_.endpoint_health_response().endpoints_health(0),
-                                       envoy::api::v2::core::HealthStatus::UNHEALTHY,
-                                       host_upstream_->localAddress()) &&
-           checkEndpointHealthResponse(response_.endpoint_health_response().endpoints_health(1),
-                                       envoy::api::v2::core::HealthStatus::HEALTHY,
-                                       host2_upstream_->localAddress()))) {
-    ASSERT_TRUE(hds_stream_->waitForGrpcMessage(*dispatcher_, response_));
-  }
 
+  // Check that the response is correct
+  checkEndpointHealthResponse(response_.endpoint_health_response().endpoints_health(0),
+                              envoy::api::v2::core::HealthStatus::UNHEALTHY,
+                              host_upstream_->localAddress());
+  checkEndpointHealthResponse(response_.endpoint_health_response().endpoints_health(1),
+                              envoy::api::v2::core::HealthStatus::HEALTHY,
+                              host2_upstream_->localAddress());
   checkCounters(1, 2, 1, 1);
 
   // Clean up connections
@@ -558,12 +557,12 @@ TEST_P(HdsIntegrationTest, TwoEndpointsDifferentClusters) {
   Network::Utility::addressToProtobufAddress(
       *host2_upstream_->localAddress(),
       *health_check->add_locality_endpoints()->add_endpoints()->mutable_address());
-  health_check->mutable_locality_endpoints(0)->mutable_locality()->set_region("kounopetra");
-  health_check->mutable_locality_endpoints(0)->mutable_locality()->set_zone("emplisi");
+  health_check->mutable_locality_endpoints(0)->mutable_locality()->set_region("peculiar_region");
+  health_check->mutable_locality_endpoints(0)->mutable_locality()->set_zone("peculiar_zone");
   health_check->mutable_locality_endpoints(0)->mutable_locality()->set_sub_zone("paris");
 
-  health_check->add_health_checks()->mutable_timeout()->set_seconds(MaxTimeout);
-  health_check->mutable_health_checks(0)->mutable_interval()->set_seconds(MaxTimeout);
+  health_check->add_health_checks()->mutable_timeout()->set_seconds(2);
+  health_check->mutable_health_checks(0)->mutable_interval()->set_seconds(1);
   health_check->mutable_health_checks(0)->mutable_unhealthy_threshold()->set_value(2);
   health_check->mutable_health_checks(0)->mutable_healthy_threshold()->set_value(2);
   health_check->mutable_health_checks(0)->mutable_grpc_health_check();
@@ -588,17 +587,16 @@ TEST_P(HdsIntegrationTest, TwoEndpointsDifferentClusters) {
   host2_stream_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "200"}}, false);
   host2_stream_->encodeData(1024, true);
 
-  // Receive updates until the one we expect arrives
+  // Envoy reports back to server
   ASSERT_TRUE(hds_stream_->waitForGrpcMessage(*dispatcher_, response_));
-  while (!(checkEndpointHealthResponse(response_.endpoint_health_response().endpoints_health(0),
-                                       envoy::api::v2::core::HealthStatus::UNHEALTHY,
-                                       host_upstream_->localAddress()) &&
-           checkEndpointHealthResponse(response_.endpoint_health_response().endpoints_health(1),
-                                       envoy::api::v2::core::HealthStatus::HEALTHY,
-                                       host2_upstream_->localAddress()))) {
-    ASSERT_TRUE(hds_stream_->waitForGrpcMessage(*dispatcher_, response_));
-  }
 
+  // Check that the response is correct
+  checkEndpointHealthResponse(response_.endpoint_health_response().endpoints_health(0),
+                              envoy::api::v2::core::HealthStatus::UNHEALTHY,
+                              host_upstream_->localAddress());
+  checkEndpointHealthResponse(response_.endpoint_health_response().endpoints_health(1),
+                              envoy::api::v2::core::HealthStatus::HEALTHY,
+                              host2_upstream_->localAddress());
   checkCounters(1, 2, 0, 1);
   EXPECT_EQ(1, test_server_->counter("cluster.cat.health_check.success")->value());
   EXPECT_EQ(0, test_server_->counter("cluster.cat.health_check.failure")->value());
@@ -630,16 +628,20 @@ TEST_P(HdsIntegrationTest, TestUpdateMessage) {
   host_stream_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "200"}}, false);
   host_stream_->encodeData(1024, true);
 
-  // Receive updates until the one we expect arrives
-  waitForEndpointHealthResponse(envoy::api::v2::core::HealthStatus::HEALTHY);
+  // Envoy reports back to server
+  ASSERT_TRUE(hds_stream_->waitForGrpcMessage(*dispatcher_, response_));
 
+  // Check that the response is correct
+  checkEndpointHealthResponse(response_.endpoint_health_response().endpoints_health(0),
+                              envoy::api::v2::core::HealthStatus::HEALTHY,
+                              host_upstream_->localAddress());
   checkCounters(1, 2, 1, 0);
 
   cleanupHostConnections();
 
   // New HealthCheckSpecifier message
   envoy::service::discovery::v2::HealthCheckSpecifier new_message;
-  new_message.mutable_interval()->set_nanos(100000000); // 0.1 seconds
+  new_message.mutable_interval()->set_seconds(1);
 
   auto* health_check = new_message.add_cluster_health_checks();
 
@@ -648,12 +650,12 @@ TEST_P(HdsIntegrationTest, TestUpdateMessage) {
       *host2_upstream_->localAddress(),
       *health_check->add_locality_endpoints()->add_endpoints()->mutable_address());
 
-  health_check->mutable_locality_endpoints(0)->mutable_locality()->set_region("matala");
-  health_check->mutable_locality_endpoints(0)->mutable_locality()->set_zone("tilburg");
-  health_check->mutable_locality_endpoints(0)->mutable_locality()->set_sub_zone("rivendell");
+  health_check->mutable_locality_endpoints(0)->mutable_locality()->set_region("peculiar_region");
+  health_check->mutable_locality_endpoints(0)->mutable_locality()->set_zone("peculiar_zone");
+  health_check->mutable_locality_endpoints(0)->mutable_locality()->set_sub_zone("paris");
 
-  health_check->add_health_checks()->mutable_timeout()->set_seconds(MaxTimeout);
-  health_check->mutable_health_checks(0)->mutable_interval()->set_seconds(MaxTimeout);
+  health_check->add_health_checks()->mutable_timeout()->set_seconds(2);
+  health_check->mutable_health_checks(0)->mutable_interval()->set_seconds(1);
   health_check->mutable_health_checks(0)->mutable_unhealthy_threshold()->set_value(2);
   health_check->mutable_health_checks(0)->mutable_healthy_threshold()->set_value(2);
   health_check->mutable_health_checks(0)->mutable_grpc_health_check();
@@ -669,18 +671,17 @@ TEST_P(HdsIntegrationTest, TestUpdateMessage) {
   ASSERT_TRUE(host2_fake_connection_->waitForNewStream(*dispatcher_, host2_stream_));
   ASSERT_TRUE(host2_stream_->waitForEndStream(*dispatcher_));
   host2_upstream_->set_allow_unexpected_disconnects(true);
-
   // Endpoint responds to the health check
   host2_stream_->encodeHeaders(Http::TestHeaderMapImpl{{":status", "404"}}, false);
   host2_stream_->encodeData(1024, true);
 
-  // Receive updates until the one we expect arrives
+  // Envoy reports back to server
   ASSERT_TRUE(hds_stream_->waitForGrpcMessage(*dispatcher_, response_));
-  while (!checkEndpointHealthResponse(response_.endpoint_health_response().endpoints_health(0),
-                                      envoy::api::v2::core::HealthStatus::UNHEALTHY,
-                                      host2_upstream_->localAddress())) {
-    ASSERT_TRUE(hds_stream_->waitForGrpcMessage(*dispatcher_, response_));
-  }
+
+  // Check that the response is correct
+  checkEndpointHealthResponse(response_.endpoint_health_response().endpoints_health(0),
+                              envoy::api::v2::core::HealthStatus::UNHEALTHY,
+                              host2_upstream_->localAddress());
 
   // Clean up connections
   cleanupHostConnections();

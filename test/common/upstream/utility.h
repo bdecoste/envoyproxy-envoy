@@ -79,7 +79,7 @@ inline HostSharedPtr makeTestHost(ClusterInfoConstSharedPtr cluster, const std::
   return HostSharedPtr{new HostImpl(
       cluster, "", Network::Utility::resolveUrl(url),
       envoy::api::v2::core::Metadata::default_instance(), weight, envoy::api::v2::core::Locality(),
-      envoy::api::v2::endpoint::Endpoint::HealthCheckConfig::default_instance(), 0)};
+      envoy::api::v2::endpoint::Endpoint::HealthCheckConfig::default_instance())};
 }
 
 inline HostSharedPtr makeTestHost(ClusterInfoConstSharedPtr cluster, const std::string& url,
@@ -88,7 +88,7 @@ inline HostSharedPtr makeTestHost(ClusterInfoConstSharedPtr cluster, const std::
   return HostSharedPtr{
       new HostImpl(cluster, "", Network::Utility::resolveUrl(url), metadata, weight,
                    envoy::api::v2::core::Locality(),
-                   envoy::api::v2::endpoint::Endpoint::HealthCheckConfig::default_instance(), 0)};
+                   envoy::api::v2::endpoint::Endpoint::HealthCheckConfig::default_instance())};
 }
 
 inline HostSharedPtr
@@ -97,7 +97,7 @@ makeTestHost(ClusterInfoConstSharedPtr cluster, const std::string& url,
              uint32_t weight = 1) {
   return HostSharedPtr{new HostImpl(cluster, "", Network::Utility::resolveUrl(url),
                                     envoy::api::v2::core::Metadata::default_instance(), weight,
-                                    envoy::api::v2::core::Locality(), health_check_config, 0)};
+                                    envoy::api::v2::core::Locality(), health_check_config)};
 }
 
 inline HostDescriptionConstSharedPtr makeTestHostDescription(ClusterInfoConstSharedPtr cluster,
@@ -106,7 +106,7 @@ inline HostDescriptionConstSharedPtr makeTestHostDescription(ClusterInfoConstSha
       cluster, "", Network::Utility::resolveUrl(url),
       envoy::api::v2::core::Metadata::default_instance(),
       envoy::api::v2::core::Locality().default_instance(),
-      envoy::api::v2::endpoint::Endpoint::HealthCheckConfig::default_instance(), 0)};
+      envoy::api::v2::endpoint::Endpoint::HealthCheckConfig::default_instance())};
 }
 
 inline HostsPerLocalitySharedPtr makeHostsPerLocality(std::vector<HostVector>&& locality_hosts,

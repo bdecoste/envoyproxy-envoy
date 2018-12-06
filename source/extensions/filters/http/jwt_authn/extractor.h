@@ -15,7 +15,7 @@ namespace HttpFilters {
 namespace JwtAuthn {
 
 /**
- * JwtLocation stores following token information:
+ * JwtLocation stores following token infomation:
  *
  * * extracted token string,
  * * the location where the JWT is extracted from,
@@ -66,20 +66,11 @@ public:
   virtual ~Extractor() {}
 
   /**
-   * Extract all JWT tokens from the headers. If set of header_keys or param_keys
-   * is not empty only those in the matching locations wil be returned.
-   *
+   * Extract all JWT tokens from the headers
    * @param headers is the HTTP request headers.
    * @return list of extracted Jwt location info.
    */
   virtual std::vector<JwtLocationConstPtr> extract(const Http::HeaderMap& headers) const PURE;
-
-  /**
-   * Remove headers that configured to send JWT payloads.
-   *
-   * @param headers is the HTTP request headers.
-   */
-  virtual void sanitizePayloadHeaders(Http::HeaderMap& headers) const PURE;
 
   /**
    * Create an instance of Extractor for a given config.
@@ -88,15 +79,6 @@ public:
    */
   static ExtractorConstPtr
   create(const ::envoy::config::filter::http::jwt_authn::v2alpha::JwtAuthentication& config);
-
-  /**
-   * Create an instance of Extractor for a given config.
-   * @param from_headers header location config.
-   * @param from_params query param location config.
-   * @return the extractor object.
-   */
-  static ExtractorConstPtr
-  create(const ::envoy::config::filter::http::jwt_authn::v2alpha::JwtProvider& provider);
 };
 
 } // namespace JwtAuthn

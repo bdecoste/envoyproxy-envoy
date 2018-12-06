@@ -6,13 +6,11 @@
 #include "envoy/api/api.h"
 #include "envoy/api/os_sys_calls.h"
 #include "envoy/event/dispatcher.h"
-#include "envoy/event/timer.h"
 #include "envoy/stats/store.h"
 
 #include "common/api/os_sys_calls_impl.h"
 
 #include "test/mocks/filesystem/mocks.h"
-#include "test/test_common/test_time_system.h"
 
 #include "gmock/gmock.h"
 
@@ -25,17 +23,16 @@ public:
   ~MockApi();
 
   // Api::Api
-  Event::DispatcherPtr allocateDispatcher(Event::TimeSystem& time_system) override {
-    return Event::DispatcherPtr{allocateDispatcher_(time_system)};
+  Event::DispatcherPtr allocateDispatcher() override {
+    return Event::DispatcherPtr{allocateDispatcher_()};
   }
 
-  MOCK_METHOD1(allocateDispatcher_, Event::Dispatcher*(Event::TimeSystem&));
-  MOCK_METHOD3(createFile,
+  MOCK_METHOD0(allocateDispatcher_, Event::Dispatcher*());
+  MOCK_METHOD4(createFile,
                Filesystem::FileSharedPtr(const std::string& path, Event::Dispatcher& dispatcher,
-                                         Thread::BasicLockable& lock));
+                                         Thread::BasicLockable& lock, Stats::Store& stats_store));
   MOCK_METHOD1(fileExists, bool(const std::string& path));
   MOCK_METHOD1(fileReadToEnd, std::string(const std::string& path));
-  MOCK_METHOD1(createThread, Thread::ThreadPtr(std::function<void()> thread_routine));
 
   std::shared_ptr<Filesystem::MockFile> file_{new Filesystem::MockFile()};
 };

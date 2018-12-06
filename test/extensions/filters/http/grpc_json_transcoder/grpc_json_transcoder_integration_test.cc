@@ -24,7 +24,7 @@ class GrpcJsonTranscoderIntegrationTest
       public testing::TestWithParam<Network::Address::IpVersion> {
 public:
   GrpcJsonTranscoderIntegrationTest()
-      : HttpIntegrationTest(Http::CodecClient::Type::HTTP1, GetParam(), realTime()) {}
+      : HttpIntegrationTest(Http::CodecClient::Type::HTTP1, GetParam()) {}
   /**
    * Global initializer for all integration tests.
    */
@@ -72,8 +72,8 @@ protected:
     }
 
     ASSERT_TRUE(fake_upstreams_[0]->waitForHttpConnection(*dispatcher_, fake_upstream_connection_));
+    ASSERT_TRUE(fake_upstream_connection_->waitForNewStream(*dispatcher_, upstream_request_));
     if (!grpc_request_messages.empty()) {
-      ASSERT_TRUE(fake_upstream_connection_->waitForNewStream(*dispatcher_, upstream_request_));
       ASSERT_TRUE(upstream_request_->waitForEndStream(*dispatcher_));
 
       Grpc::Decoder grpc_decoder;
@@ -96,13 +96,10 @@ protected:
       response_headers.insertStatus().value(200);
       response_headers.insertContentType().value(std::string("application/grpc"));
       if (grpc_response_messages.empty()) {
-        response_headers.insertGrpcStatus().value(static_cast<uint64_t>(grpc_status.error_code()));
-        response_headers.insertGrpcMessage().value(absl::string_view(
-            grpc_status.error_message().data(), grpc_status.error_message().size()));
+        response_headers.insertGrpcStatus().value(grpc_status.error_code());
+        response_headers.insertGrpcMessage().value(grpc_status.error_message());
         upstream_request_->encodeHeaders(response_headers, true);
       } else {
-        response_headers.addCopy(Http::LowerCaseString("trailer"), "Grpc-Status");
-        response_headers.addCopy(Http::LowerCaseString("trailer"), "Grpc-Message");
         upstream_request_->encodeHeaders(response_headers, false);
         for (const auto& response_message_str : grpc_response_messages) {
           ResponseType response_message;
@@ -111,24 +108,17 @@ protected:
           upstream_request_->encodeData(*buffer, false);
         }
         Http::TestHeaderMapImpl response_trailers;
-        response_trailers.insertGrpcStatus().value(static_cast<uint64_t>(grpc_status.error_code()));
-        response_trailers.insertGrpcMessage().value(absl::string_view(
-            grpc_status.error_message().data(), grpc_status.error_message().size()));
+        response_trailers.insertGrpcStatus().value(grpc_status.error_code());
+        response_trailers.insertGrpcMessage().value(grpc_status.error_message());
         upstream_request_->encodeTrailers(response_trailers);
       }
       EXPECT_TRUE(upstream_request_->complete());
+    } else {
+      ASSERT_TRUE(upstream_request_->waitForReset());
     }
 
     response->waitForEndStream();
     EXPECT_TRUE(response->complete());
-
-    if (response->headers().get(Http::LowerCaseString("transfer-encoding")) == nullptr ||
-        strncmp(
-            response->headers().get(Http::LowerCaseString("transfer-encoding"))->value().c_str(),
-            "chunked", strlen("chunked")) != 0) {
-      EXPECT_EQ(response->headers().get(Http::LowerCaseString("trailer")), nullptr);
-    }
-
     response_headers.iterate(
         [](const Http::HeaderEntry& entry, void* context) -> Http::HeaderMap::Iterate {
           IntegrationStreamDecoder* response = static_cast<IntegrationStreamDecoder*>(context);
@@ -277,11 +267,18 @@ TEST_P(GrpcJsonTranscoderIntegrationTest, StreamingPost) {
         { "theme" : "Documentary" },
         { "theme" : "Mystery" },
       ])",
-      {R"(shelf { theme: "Classics" })", R"(shelf { theme: "Satire" })",
-       R"(shelf { theme: "Russian" })", R"(shelf { theme: "Children" })",
-       R"(shelf { theme: "Documentary" })", R"(shelf { theme: "Mystery" })"},
-      {R"(id: 3 theme: "Classics")", R"(id: 4 theme: "Satire")", R"(id: 5 theme: "Russian")",
-       R"(id: 6 theme: "Children")", R"(id: 7 theme: "Documentary")", R"(id: 8 theme: "Mystery")"},
+      {R"(shelf { theme: "Classics" })",
+       R"(shelf { theme: "Satire" })",
+       R"(shelf { theme: "Russian" })",
+       R"(shelf { theme: "Children" })",
+       R"(shelf { theme: "Documentary" })",
+       R"(shelf { theme: "Mystery" })"},
+      {R"(id: 3 theme: "Classics")",
+       R"(id: 4 theme: "Satire")",
+       R"(id: 5 theme: "Russian")",
+       R"(id: 6 theme: "Children")",
+       R"(id: 7 theme: "Documentary")",
+       R"(id: 8 theme: "Mystery")"},
       Status(),
       Http::TestHeaderMapImpl{{":status", "200"},
                               {"content-type", "application/json"},

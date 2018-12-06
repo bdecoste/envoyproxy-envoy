@@ -3,8 +3,6 @@
 #include <string>
 #include <vector>
 
-#include "envoy/common/time.h"
-
 namespace Envoy {
 namespace Extensions {
 namespace Tracers {
@@ -47,7 +45,7 @@ public:
   /**
    * Returns a randomly-generated 64-bit integer number.
    */
-  static uint64_t generateRandom64(TimeSource& time_source);
+  static uint64_t generateRandom64();
 };
 
 } // namespace Zipkin

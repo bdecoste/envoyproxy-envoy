@@ -4,7 +4,6 @@
 #include <vector>
 
 #include "envoy/stats/stats.h"
-#include "envoy/stats/tag.h"
 
 #include "common/common/assert.h"
 

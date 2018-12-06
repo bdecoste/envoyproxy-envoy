@@ -1,10 +1,8 @@
 #pragma once
 
 #include <chrono>
-#include <memory>
 
 #include "envoy/common/time.h"
-#include "envoy/stats/histogram.h"
 #include "envoy/stats/stats.h"
 
 namespace Envoy {
@@ -17,8 +15,8 @@ namespace Stats {
  */
 class Timespan {
 public:
-  Timespan(Histogram& histogram, TimeSource& time_source)
-      : time_source_(time_source), histogram_(histogram), start_(time_source.monotonicTime()) {}
+  Timespan(Histogram& histogram)
+      : histogram_(histogram), start_(std::chrono::steady_clock::now()) {}
 
   /**
    * Complete the timespan and send the time to the histogram.
@@ -29,12 +27,11 @@ public:
    * Get duration since the creation of the span.
    */
   std::chrono::milliseconds getRawDuration() {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(time_source_.monotonicTime() -
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() -
                                                                  start_);
   }
 
 private:
-  TimeSource& time_source_;
   Histogram& histogram_;
   const MonotonicTime start_;
 };

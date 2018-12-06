@@ -1,16 +1,13 @@
 #include <unistd.h>
 
 #include <cstdint>
-#include <memory>
 #include <string>
 
 #include "common/common/fmt.h"
-#include "common/filesystem/filesystem_impl.h"
 #include "common/protobuf/utility.h"
 
 #include "server/config_validation/server.h"
 #include "server/configuration_impl.h"
-#include "server/options_impl.h"
 
 #include "test/integration/server.h"
 #include "test/mocks/server/mocks.h"
@@ -30,20 +27,9 @@ using testing::ReturnRef;
 namespace Envoy {
 namespace ConfigTest {
 
-namespace {
-
-// asConfigYaml returns a new config that empties the configPath() and populates configYaml()
-OptionsImpl asConfigYaml(const OptionsImpl& src) {
-  return Envoy::Server::createTestOptionsImpl("", Filesystem::fileReadToEnd(src.configPath()),
-                                              src.localAddressIpVersion());
-}
-
-} // namespace
-
 class ConfigTest {
 public:
-  ConfigTest(const OptionsImpl& options)
-      : api_(Api::createApiForTest(stats_store_)), options_(options) {
+  ConfigTest(const Server::TestOptionsImpl& options) : options_(options) {
     ON_CALL(server_, options()).WillByDefault(ReturnRef(options_));
     ON_CALL(server_, random()).WillByDefault(ReturnRef(random_));
     ON_CALL(server_, sslContextManager()).WillByDefault(ReturnRef(ssl_context_manager_));
@@ -55,10 +41,10 @@ public:
     Server::Configuration::InitialImpl initial_config(bootstrap);
     Server::Configuration::MainImpl main_config;
 
-    cluster_manager_factory_ = std::make_unique<Upstream::ValidationClusterManagerFactory>(
+    cluster_manager_factory_.reset(new Upstream::ValidationClusterManagerFactory(
         server_.runtime(), server_.stats(), server_.threadLocal(), server_.random(),
         server_.dnsResolver(), ssl_context_manager_, server_.dispatcher(), server_.localInfo(),
-        server_.secretManager(), *api_, server_.httpContext());
+        server_.secretManager()));
 
     ON_CALL(server_, clusterManager()).WillByDefault(Invoke([&]() -> Upstream::ClusterManager& {
       return *main_config.clusterManager();
@@ -91,16 +77,14 @@ public:
     server_.thread_local_.shutdownThread();
   }
 
-  Stats::IsolatedStoreImpl stats_store_;
-  Api::ApiPtr api_;
   NiceMock<Server::MockInstance> server_;
   NiceMock<Ssl::MockContextManager> ssl_context_manager_;
-  OptionsImpl options_;
+  Server::TestOptionsImpl options_;
   std::unique_ptr<Upstream::ProdClusterManagerFactory> cluster_manager_factory_;
   NiceMock<Server::MockListenerComponentFactory> component_factory_;
   NiceMock<Server::MockWorkerFactory> worker_factory_;
   Server::ListenerManagerImpl listener_manager_{server_, component_factory_, worker_factory_,
-                                                server_.timeSystem()};
+                                                ProdSystemTimeSource::instance_};
   Runtime::RandomGeneratorImpl random_;
   NiceMock<Api::MockOsSysCalls> os_sys_calls_;
   TestThreadsafeSingletonInjector<Api::OsSysCallsImpl> os_calls{&os_sys_calls_};
@@ -108,8 +92,8 @@ public:
 
 void testMerge() {
   const std::string overlay = "static_resources: { clusters: [{name: 'foo'}]}";
-  OptionsImpl options(Server::createTestOptionsImpl("google_com_proxy.v2.yaml", overlay,
-                                                    Network::Address::IpVersion::v6));
+  Server::TestOptionsImpl options("google_com_proxy.v2.yaml", overlay,
+                                  Network::Address::IpVersion::v6);
   envoy::config::bootstrap::v2::Bootstrap bootstrap;
   Server::InstanceUtil::loadBootstrapConfig(bootstrap, options);
   EXPECT_EQ(2, bootstrap.static_resources().clusters_size());
@@ -117,8 +101,8 @@ void testMerge() {
 
 void testIncompatibleMerge() {
   const std::string overlay = "static_resources: { clusters: [{name: 'foo'}]}";
-  OptionsImpl options(Server::createTestOptionsImpl("google_com_proxy.v1.yaml", overlay,
-                                                    Network::Address::IpVersion::v6));
+  Server::TestOptionsImpl options("google_com_proxy.v1.yaml", overlay,
+                                  Network::Address::IpVersion::v6);
   envoy::config::bootstrap::v2::Bootstrap bootstrap;
   EXPECT_THROW_WITH_MESSAGE(Server::InstanceUtil::loadBootstrapConfig(bootstrap, options),
                             EnvoyException,
@@ -128,14 +112,13 @@ void testIncompatibleMerge() {
 uint32_t run(const std::string& directory) {
   uint32_t num_tested = 0;
   for (const std::string& filename : TestUtility::listFiles(directory, false)) {
-    OptionsImpl options(
-        Envoy::Server::createTestOptionsImpl(filename, "", Network::Address::IpVersion::v6));
+    Server::TestOptionsImpl options(filename, Network::Address::IpVersion::v6);
     ConfigTest test1(options);
     // Config flag --config-yaml is only supported for v2 configs.
     envoy::config::bootstrap::v2::Bootstrap bootstrap;
     if (Server::InstanceUtil::loadBootstrapConfig(bootstrap, options) ==
         Server::InstanceUtil::BootstrapVersion::V2) {
-      ConfigTest test2(asConfigYaml(options));
+      ConfigTest test2(options.asConfigYaml());
     }
     num_tested++;
   }

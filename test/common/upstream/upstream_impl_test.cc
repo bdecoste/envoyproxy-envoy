@@ -243,7 +243,6 @@ TEST(StrictDnsClusterImplTest, Basic) {
      },
     "hosts": [{"url": "tcp://localhost1:11001"},
               {"url": "tcp://localhost2:11002"}]
-              
   }
   )EOF";
 
@@ -391,7 +390,7 @@ TEST(StrictDnsClusterImplTest, HostRemovalActiveHealthSkipped) {
   resolver.dns_callback_(TestUtility::makeDnsResponse({"127.0.0.1", "127.0.0.2"}));
 
   // Verify that both endpoints are initially marked with FAILED_ACTIVE_HC, then
-  // clear the flag to simulate that these endpoints have been successfully health
+  // clear the flag to simulate that these endpoints have been sucessfully health
   // checked.
   {
     const auto& hosts = cluster.prioritySet().hostSetsPerPriority()[0]->hosts();
@@ -419,7 +418,6 @@ TEST(StrictDnsClusterImplTest, LoadAssignmentBasic) {
   NiceMock<LocalInfo::MockLocalInfo> local_info;
   NiceMock<Runtime::MockRandomGenerator> random;
   // gmock matches in LIFO order which is why these are swapped.
-  ResolverData resolver3(*dns_resolver, dispatcher);
   ResolverData resolver2(*dns_resolver, dispatcher);
   ResolverData resolver1(*dns_resolver, dispatcher);
 
@@ -465,13 +463,6 @@ TEST(StrictDnsClusterImplTest, LoadAssignmentBasic) {
             address:
               socket_address:
                 address: localhost2
-                port_value: 11002
-            health_check_config:
-              port_value: 8000
-        - endpoint:
-            address:
-              socket_address:
-                address: localhost3
                 port_value: 11002
             health_check_config:
               port_value: 8000
@@ -530,9 +521,6 @@ TEST(StrictDnsClusterImplTest, LoadAssignmentBasic) {
   EXPECT_EQ("localhost1", cluster.prioritySet().hostSetsPerPriority()[0]->hosts()[0]->hostname());
   EXPECT_EQ("localhost1", cluster.prioritySet().hostSetsPerPriority()[0]->hosts()[1]->hostname());
 
-  // This is the first time we receveived an update for localhost1, we expect to rebuild.
-  EXPECT_EQ(0UL, stats.counter("cluster.name.update_no_rebuild").value());
-
   resolver1.expectResolve(*dns_resolver);
   resolver1.timer_->callback_();
   EXPECT_CALL(*resolver1.timer_, enableTimer(std::chrono::milliseconds(4000)));
@@ -541,9 +529,6 @@ TEST(StrictDnsClusterImplTest, LoadAssignmentBasic) {
       std::list<std::string>({"127.0.0.1:11001", "127.0.0.2:11001"}),
       ContainerEq(hostListToAddresses(cluster.prioritySet().hostSetsPerPriority()[0]->hosts())));
 
-  // Since no change for localhost1, we expect no rebuild.
-  EXPECT_EQ(1UL, stats.counter("cluster.name.update_no_rebuild").value());
-
   resolver1.expectResolve(*dns_resolver);
   resolver1.timer_->callback_();
   EXPECT_CALL(*resolver1.timer_, enableTimer(std::chrono::milliseconds(4000)));
@@ -551,35 +536,18 @@ TEST(StrictDnsClusterImplTest, LoadAssignmentBasic) {
   EXPECT_THAT(
       std::list<std::string>({"127.0.0.1:11001", "127.0.0.2:11001"}),
       ContainerEq(hostListToAddresses(cluster.prioritySet().hostSetsPerPriority()[0]->hosts())));
-
-  // Since no change for localhost1, we expect no rebuild.
-  EXPECT_EQ(2UL, stats.counter("cluster.name.update_no_rebuild").value());
-
-  EXPECT_CALL(*resolver2.timer_, enableTimer(std::chrono::milliseconds(4000)));
-  EXPECT_CALL(membership_updated, ready());
-  resolver2.dns_callback_(TestUtility::makeDnsResponse({"10.0.0.1", "10.0.0.1"}));
-
-  // We received a new set of hosts for localhost2. Should rebuild the cluster.
-  EXPECT_EQ(2UL, stats.counter("cluster.name.update_no_rebuild").value());
-
-  resolver1.expectResolve(*dns_resolver);
-  resolver1.timer_->callback_();
-  EXPECT_CALL(*resolver1.timer_, enableTimer(std::chrono::milliseconds(4000)));
-  resolver1.dns_callback_(TestUtility::makeDnsResponse({"127.0.0.2", "127.0.0.1"}));
-
-  // We again received the same set as before for localhost1. No rebuild this time.
-  EXPECT_EQ(3UL, stats.counter("cluster.name.update_no_rebuild").value());
 
   resolver1.timer_->callback_();
   EXPECT_CALL(*resolver1.timer_, enableTimer(std::chrono::milliseconds(4000)));
   EXPECT_CALL(membership_updated, ready());
   resolver1.dns_callback_(TestUtility::makeDnsResponse({"127.0.0.3"}));
   EXPECT_THAT(
-      std::list<std::string>({"127.0.0.3:11001", "10.0.0.1:11002"}),
+      std::list<std::string>({"127.0.0.3:11001"}),
       ContainerEq(hostListToAddresses(cluster.prioritySet().hostSetsPerPriority()[0]->hosts())));
 
   // Make sure we de-dup the same address.
   EXPECT_CALL(*resolver2.timer_, enableTimer(std::chrono::milliseconds(4000)));
+  EXPECT_CALL(membership_updated, ready());
   resolver2.dns_callback_(TestUtility::makeDnsResponse({"10.0.0.1", "10.0.0.1"}));
   EXPECT_THAT(
       std::list<std::string>({"127.0.0.3:11001", "10.0.0.1:11002"}),
@@ -590,62 +558,18 @@ TEST(StrictDnsClusterImplTest, LoadAssignmentBasic) {
   EXPECT_EQ(1UL,
             cluster.prioritySet().hostSetsPerPriority()[0]->healthyHostsPerLocality().get().size());
 
-  // Make sure that we *don't* de-dup between resolve targets.
-  EXPECT_CALL(*resolver3.timer_, enableTimer(std::chrono::milliseconds(4000)));
-  EXPECT_CALL(membership_updated, ready());
-  resolver3.dns_callback_(TestUtility::makeDnsResponse({"10.0.0.1"}));
-
-  const auto hosts = cluster.prioritySet().hostSetsPerPriority()[0]->hosts();
-  EXPECT_THAT(std::list<std::string>({"127.0.0.3:11001", "10.0.0.1:11002", "10.0.0.1:11002"}),
-              ContainerEq(hostListToAddresses(hosts)));
-
-  EXPECT_EQ(3UL, cluster.prioritySet().hostSetsPerPriority()[0]->healthyHosts().size());
-  EXPECT_EQ(1UL, cluster.prioritySet().hostSetsPerPriority()[0]->hostsPerLocality().get().size());
-  EXPECT_EQ(1UL,
-            cluster.prioritySet().hostSetsPerPriority()[0]->healthyHostsPerLocality().get().size());
-
-  // Ensure that all host objects in the host list are unique.
-  for (const auto host : hosts) {
-    EXPECT_EQ(1, std::count(hosts.begin(), hosts.end(), host));
-  }
-
   for (const HostSharedPtr& host : cluster.prioritySet().hostSetsPerPriority()[0]->hosts()) {
     EXPECT_EQ(cluster.info().get(), &host->cluster());
   }
-
-  // Remove the duplicated hosts from both resolve targets and ensure that we don't see the same
-  // host multiple times.
-  std::unordered_set<HostSharedPtr> removed_hosts;
-  cluster.prioritySet().addMemberUpdateCb(
-      [&](uint32_t, const HostVector&, const HostVector& hosts_removed) -> void {
-        for (const auto& host : hosts_removed) {
-          EXPECT_EQ(removed_hosts.end(), removed_hosts.find(host));
-          removed_hosts.insert(host);
-        }
-      });
-
-  EXPECT_CALL(*resolver2.timer_, enableTimer(std::chrono::milliseconds(4000)));
-  EXPECT_CALL(membership_updated, ready());
-  resolver2.dns_callback_(TestUtility::makeDnsResponse({}));
-
-  EXPECT_CALL(*resolver3.timer_, enableTimer(std::chrono::milliseconds(4000)));
-  EXPECT_CALL(membership_updated, ready());
-  resolver3.dns_callback_(TestUtility::makeDnsResponse({}));
-
-  // Ensure that we called the update membership callback.
-  EXPECT_EQ(2, removed_hosts.size());
 
   // Make sure we cancel.
   resolver1.expectResolve(*dns_resolver);
   resolver1.timer_->callback_();
   resolver2.expectResolve(*dns_resolver);
   resolver2.timer_->callback_();
-  resolver3.expectResolve(*dns_resolver);
-  resolver3.timer_->callback_();
 
   EXPECT_CALL(resolver1.active_dns_query_, cancel());
   EXPECT_CALL(resolver2.active_dns_query_, cancel());
-  EXPECT_CALL(resolver3.active_dns_query_, cancel());
 }
 
 TEST(StrictDnsClusterImplTest, LoadAssignmentBasicMultiplePriorities) {
@@ -827,14 +751,13 @@ TEST(HostImplTest, HostnameCanaryAndLocality) {
   locality.set_sub_zone("world");
   HostImpl host(cluster.info_, "lyft.com", Network::Utility::resolveUrl("tcp://10.0.0.1:1234"),
                 metadata, 1, locality,
-                envoy::api::v2::endpoint::Endpoint::HealthCheckConfig::default_instance(), 1);
+                envoy::api::v2::endpoint::Endpoint::HealthCheckConfig::default_instance());
   EXPECT_EQ(cluster.info_.get(), &host.cluster());
   EXPECT_EQ("lyft.com", host.hostname());
   EXPECT_TRUE(host.canary());
   EXPECT_EQ("oceania", host.locality().region());
   EXPECT_EQ("hello", host.locality().zone());
   EXPECT_EQ("world", host.locality().sub_zone());
-  EXPECT_EQ(1, host.priority());
 }
 
 TEST(StaticClusterImplTest, InitialHosts) {
@@ -1585,26 +1508,6 @@ public:
   std::unique_ptr<Server::Configuration::TransportSocketFactoryContextImpl> factory_context_;
 };
 
-struct Foo : public Envoy::Config::TypedMetadata::Object {};
-
-struct Baz : public Envoy::Config::TypedMetadata::Object {
-  Baz(std::string n) : name(n) {}
-  std::string name;
-};
-
-class BazFactory : public ClusterTypedMetadataFactory {
-public:
-  const std::string name() const { return "baz"; }
-  // Returns nullptr (conversion failure) if d is empty.
-  std::unique_ptr<const Envoy::Config::TypedMetadata::Object>
-  parse(const ProtobufWkt::Struct& d) const {
-    if (d.fields().find("name") != d.fields().end()) {
-      return std::make_unique<Baz>(d.fields().at("name").string_value());
-    }
-    throw EnvoyException("Cannot create a Baz when metadata is empty.");
-  }
-};
-
 // Cluster metadata and common config retrieval.
 TEST_F(ClusterInfoImplTest, Metadata) {
   const std::string yaml = R"EOF(
@@ -1613,45 +1516,19 @@ TEST_F(ClusterInfoImplTest, Metadata) {
     type: STRICT_DNS
     lb_policy: MAGLEV
     hosts: [{ socket_address: { address: foo.bar.com, port_value: 443 }}]
-    metadata: { filter_metadata: { com.bar.foo: { baz: test_value },
-                                   baz: {name: meh } } }
+    metadata: { filter_metadata: { com.bar.foo: { baz: test_value } } }
     common_lb_config:
       healthy_panic_threshold:
         value: 0.3
   )EOF";
 
-  BazFactory baz_factory;
-  Registry::InjectFactory<ClusterTypedMetadataFactory> registered_factory(baz_factory);
   auto cluster = makeCluster(yaml);
 
-  EXPECT_EQ("meh", cluster->info()->typedMetadata().get<Baz>(baz_factory.name())->name);
-  EXPECT_EQ(nullptr, cluster->info()->typedMetadata().get<Foo>(baz_factory.name()));
   EXPECT_EQ("test_value",
             Config::Metadata::metadataValue(cluster->info()->metadata(), "com.bar.foo", "baz")
                 .string_value());
   EXPECT_EQ(0.3, cluster->info()->lbConfig().healthy_panic_threshold().value());
   EXPECT_EQ(LoadBalancerType::Maglev, cluster->info()->lbType());
-}
-
-// Typed metadata loading throws exception.
-TEST_F(ClusterInfoImplTest, BrokenTypedMetadata) {
-  const std::string yaml = R"EOF(
-    name: name
-    connect_timeout: 0.25s
-    type: STRICT_DNS
-    lb_policy: MAGLEV
-    hosts: [{ socket_address: { address: foo.bar.com, port_value: 443 }}]
-    metadata: { filter_metadata: { com.bar.foo: { baz: test_value },
-                                   baz: {boom: meh} } }
-    common_lb_config:
-      healthy_panic_threshold:
-        value: 0.3
-  )EOF";
-
-  BazFactory baz_factory;
-  Registry::InjectFactory<ClusterTypedMetadataFactory> registered_factory(baz_factory);
-  EXPECT_THROW_WITH_MESSAGE(makeCluster(yaml), EnvoyException,
-                            "Cannot create a Baz when metadata is empty.");
 }
 
 // Cluster extension protocol options fails validation when configured for an unregistered filter.
@@ -1666,32 +1543,16 @@ TEST_F(ClusterInfoImplTest, ExtensionProtocolOptionsForUnknownFilter) {
       no_such_filter: { option: value }
   )EOF";
 
-  EXPECT_THROW_WITH_MESSAGE(
-      makeCluster(yaml), EnvoyException,
-      "Didn't find a registered network or http filter implementation for name: 'no_such_filter'");
+  EXPECT_THROW_WITH_MESSAGE(makeCluster(yaml), EnvoyException,
+                            "Didn't find a registered implementation for name: 'no_such_filter'");
 }
 
-class TestFilterConfigFactoryBase {
+class TestFilterConfigFactory : public Server::Configuration::NamedNetworkFilterConfigFactory {
 public:
-  TestFilterConfigFactoryBase(
+  TestFilterConfigFactory(
       std::function<ProtobufTypes::MessagePtr()> empty_proto,
       std::function<Upstream::ProtocolOptionsConfigConstSharedPtr(const Protobuf::Message&)> config)
       : empty_proto_(empty_proto), config_(config) {}
-
-  ProtobufTypes::MessagePtr createEmptyProtocolOptionsProto() { return empty_proto_(); }
-  Upstream::ProtocolOptionsConfigConstSharedPtr
-  createProtocolOptionsConfig(const Protobuf::Message& msg) {
-    return config_(msg);
-  }
-
-  std::function<ProtobufTypes::MessagePtr()> empty_proto_;
-  std::function<Upstream::ProtocolOptionsConfigConstSharedPtr(const Protobuf::Message&)> config_;
-};
-
-class TestNetworkFilterConfigFactory
-    : public Server::Configuration::NamedNetworkFilterConfigFactory {
-public:
-  TestNetworkFilterConfigFactory(TestFilterConfigFactoryBase& parent) : parent_(parent) {}
 
   // NamedNetworkFilterConfigFactory
   Network::FilterFactoryCb createFilterFactory(const Json::Object&,
@@ -1704,63 +1565,29 @@ public:
     NOT_IMPLEMENTED_GCOVR_EXCL_LINE;
   }
   ProtobufTypes::MessagePtr createEmptyConfigProto() override { NOT_IMPLEMENTED_GCOVR_EXCL_LINE; }
-  ProtobufTypes::MessagePtr createEmptyProtocolOptionsProto() override {
-    return parent_.createEmptyProtocolOptionsProto();
-  }
+  ProtobufTypes::MessagePtr createEmptyProtocolOptionsProto() override { return empty_proto_(); }
   Upstream::ProtocolOptionsConfigConstSharedPtr
   createProtocolOptionsConfig(const Protobuf::Message& msg) override {
-    return parent_.createProtocolOptionsConfig(msg);
+    return config_(msg);
   }
   std::string name() override { CONSTRUCT_ON_FIRST_USE(std::string, "envoy.test.filter"); }
 
-  TestFilterConfigFactoryBase& parent_;
+  std::function<ProtobufTypes::MessagePtr()> empty_proto_;
+  std::function<Upstream::ProtocolOptionsConfigConstSharedPtr(const Protobuf::Message&)> config_;
 };
 
-class TestHttpFilterConfigFactory : public Server::Configuration::NamedHttpFilterConfigFactory {
-public:
-  TestHttpFilterConfigFactory(TestFilterConfigFactoryBase& parent) : parent_(parent) {}
-
-  // NamedNetworkFilterConfigFactory
-  Http::FilterFactoryCb createFilterFactory(const Json::Object&, const std::string&,
-                                            Server::Configuration::FactoryContext&) override {
-    NOT_IMPLEMENTED_GCOVR_EXCL_LINE;
-  }
-  Http::FilterFactoryCb
-  createFilterFactoryFromProto(const Protobuf::Message&, const std::string&,
-                               Server::Configuration::FactoryContext&) override {
-    NOT_IMPLEMENTED_GCOVR_EXCL_LINE;
-  }
-  ProtobufTypes::MessagePtr createEmptyConfigProto() override { NOT_IMPLEMENTED_GCOVR_EXCL_LINE; }
-  ProtobufTypes::MessagePtr createEmptyRouteConfigProto() override {
-    NOT_IMPLEMENTED_GCOVR_EXCL_LINE;
-  }
-  Router::RouteSpecificFilterConfigConstSharedPtr
-  createRouteSpecificFilterConfig(const Protobuf::Message&,
-                                  Server::Configuration::FactoryContext&) override {
-    NOT_IMPLEMENTED_GCOVR_EXCL_LINE;
-  }
-
-  ProtobufTypes::MessagePtr createEmptyProtocolOptionsProto() override {
-    return parent_.createEmptyProtocolOptionsProto();
-  }
-  Upstream::ProtocolOptionsConfigConstSharedPtr
-  createProtocolOptionsConfig(const Protobuf::Message& msg) override {
-    return parent_.createProtocolOptionsConfig(msg);
-  }
-  std::string name() override { CONSTRUCT_ON_FIRST_USE(std::string, "envoy.test.filter"); }
-
-  TestFilterConfigFactoryBase& parent_;
-};
 struct TestFilterProtocolOptionsConfig : public Upstream::ProtocolOptionsConfig {};
 
 // Cluster extension protocol options fails validation when configured for filter that does not
 // support options.
 TEST_F(ClusterInfoImplTest, ExtensionProtocolOptionsForFilterWithoutOptions) {
-  TestFilterConfigFactoryBase factoryBase(
+  TestFilterConfigFactory factory(
       []() -> ProtobufTypes::MessagePtr { return nullptr; },
       [](const Protobuf::Message&) -> Upstream::ProtocolOptionsConfigConstSharedPtr {
         return nullptr;
       });
+  Registry::InjectFactory<Server::Configuration::NamedNetworkFilterConfigFactory> registry(factory);
+
   const std::string yaml = R"EOF(
     name: name
     connect_timeout: 0.25s
@@ -1771,26 +1598,15 @@ TEST_F(ClusterInfoImplTest, ExtensionProtocolOptionsForFilterWithoutOptions) {
       envoy.test.filter: { option: value }
   )EOF";
 
-  {
-    TestNetworkFilterConfigFactory factory(factoryBase);
-    Registry::InjectFactory<Server::Configuration::NamedNetworkFilterConfigFactory> registry(
-        factory);
-    EXPECT_THROW_WITH_MESSAGE(makeCluster(yaml), EnvoyException,
-                              "filter envoy.test.filter does not support protocol options");
-  }
-  {
-    TestHttpFilterConfigFactory factory(factoryBase);
-    Registry::InjectFactory<Server::Configuration::NamedHttpFilterConfigFactory> registry(factory);
-    EXPECT_THROW_WITH_MESSAGE(makeCluster(yaml), EnvoyException,
-                              "filter envoy.test.filter does not support protocol options");
-  }
+  EXPECT_THROW_WITH_MESSAGE(makeCluster(yaml), EnvoyException,
+                            "filter envoy.test.filter does not support protocol options");
 }
 
 // Cluster retrieval of typed extension protocol options.
 TEST_F(ClusterInfoImplTest, ExtensionProtocolOptionsForFilterWithOptions) {
   auto protocol_options = std::make_shared<TestFilterProtocolOptionsConfig>();
 
-  TestFilterConfigFactoryBase factoryBase(
+  TestFilterConfigFactory factory(
       []() -> ProtobufTypes::MessagePtr { return std::make_unique<ProtobufWkt::Struct>(); },
       [&](const Protobuf::Message& msg) -> Upstream::ProtocolOptionsConfigConstSharedPtr {
         const auto& msg_struct = dynamic_cast<const ProtobufWkt::Struct&>(msg);
@@ -1798,6 +1614,7 @@ TEST_F(ClusterInfoImplTest, ExtensionProtocolOptionsForFilterWithOptions) {
 
         return protocol_options;
       });
+  Registry::InjectFactory<Server::Configuration::NamedNetworkFilterConfigFactory> registry(factory);
 
   const std::string yaml = R"EOF(
     name: name
@@ -1809,33 +1626,14 @@ TEST_F(ClusterInfoImplTest, ExtensionProtocolOptionsForFilterWithOptions) {
       envoy.test.filter: { option: "value" }
   )EOF";
 
-  // This vector is used to gather clusters with extension_protocol_options from the different
-  // types of extension factories (network, http).
-  std::vector<std::unique_ptr<StrictDnsClusterImpl>> clusters;
+  auto cluster = makeCluster(yaml);
 
-  {
-    // Get the cluster with extension_protocol_options for a network filter factory.
-    TestNetworkFilterConfigFactory factory(factoryBase);
-    Registry::InjectFactory<Server::Configuration::NamedNetworkFilterConfigFactory> registry(
-        factory);
-    clusters.push_back(makeCluster(yaml));
-  }
-  {
-    // Get the cluster with extension_protocol_options for an http filter factory.
-    TestHttpFilterConfigFactory factory(factoryBase);
-    Registry::InjectFactory<Server::Configuration::NamedHttpFilterConfigFactory> registry(factory);
-    clusters.push_back(makeCluster(yaml));
-  }
-
-  // Make sure that the clusters created from both factories are as expected.
-  for (auto&& cluster : clusters) {
-    std::shared_ptr<const TestFilterProtocolOptionsConfig> stored_options =
-        cluster->info()->extensionProtocolOptionsTyped<TestFilterProtocolOptionsConfig>(
-            "envoy.test.filter");
-    EXPECT_NE(nullptr, protocol_options);
-    // Same pointer
-    EXPECT_EQ(stored_options.get(), protocol_options.get());
-  }
+  std::shared_ptr<const TestFilterProtocolOptionsConfig> stored_options =
+      cluster->info()->extensionProtocolOptionsTyped<TestFilterProtocolOptionsConfig>(
+          factory.name());
+  EXPECT_NE(nullptr, protocol_options);
+  // Same pointer
+  EXPECT_EQ(stored_options.get(), protocol_options.get());
 }
 
 // Validate empty singleton for HostsPerLocalityImpl.
@@ -1927,19 +1725,6 @@ TEST_F(HostSetImplLocalityTest, AllUnhealthy) {
   host_set_.updateHosts(hosts, std::make_shared<const HostVector>(), hosts_per_locality,
                         hosts_per_locality, locality_weights, {}, {}, absl::nullopt);
   EXPECT_FALSE(host_set_.chooseLocality().has_value());
-}
-
-// When a locality has zero hosts, it should be treated as if it has zero healthy.
-TEST_F(HostSetImplLocalityTest, EmptyLocality) {
-  HostsPerLocalitySharedPtr hosts_per_locality =
-      makeHostsPerLocality({{hosts_[0], hosts_[1], hosts_[2]}, {}});
-  LocalityWeightsConstSharedPtr locality_weights{new LocalityWeights{1, 1}};
-  auto hosts = makeHostsFromHostsPerLocality(hosts_per_locality);
-  host_set_.updateHosts(hosts, hosts, hosts_per_locality, hosts_per_locality, locality_weights, {},
-                        {}, absl::nullopt);
-  // Verify that we are not RRing between localities.
-  EXPECT_EQ(0, host_set_.chooseLocality().value());
-  EXPECT_EQ(0, host_set_.chooseLocality().value());
 }
 
 // When all locality weights are zero we should fail to select a locality.

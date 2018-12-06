@@ -135,7 +135,7 @@ public:
   virtual ~HttpTracer() {}
 
   virtual SpanPtr startSpan(const Config& config, Http::HeaderMap& request_headers,
-                            const StreamInfo::StreamInfo& stream_info,
+                            const RequestInfo::RequestInfo& request_info,
                             const Tracing::Decision tracing_decision) PURE;
 };
 

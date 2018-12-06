@@ -13,9 +13,7 @@ namespace Router {
  * Implementation of ShadowWriter that takes incoming requests to shadow and implements "fire and
  * forget" behavior using an async client.
  */
-class ShadowWriterImpl : Logger::Loggable<Logger::Id::router>,
-                         public ShadowWriter,
-                         public Http::AsyncClient::Callbacks {
+class ShadowWriterImpl : public ShadowWriter, public Http::AsyncClient::Callbacks {
 public:
   ShadowWriterImpl(Upstream::ClusterManager& cm) : cm_(cm) {}
 

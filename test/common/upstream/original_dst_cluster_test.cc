@@ -36,7 +36,7 @@ namespace Envoy {
 namespace Upstream {
 namespace OriginalDstClusterTest {
 
-class TestLoadBalancerContext : public LoadBalancerContextBase {
+class TestLoadBalancerContext : public LoadBalancerContext {
 public:
   TestLoadBalancerContext(const Network::Connection* connection) : connection_(connection) {}
   TestLoadBalancerContext(const Network::Connection* connection, const std::string& key,
@@ -48,8 +48,8 @@ public:
   // Upstream::LoadBalancerContext
   absl::optional<uint64_t> computeHashKey() override { return 0; }
   const Network::Connection* downstreamConnection() const override { return connection_; }
+  const Router::MetadataMatchCriteria* metadataMatchCriteria() override { return nullptr; }
   const Http::HeaderMap* downstreamHeaders() const override { return downstream_headers_.get(); }
-
   absl::optional<uint64_t> hash_key_;
   const Network::Connection* connection_;
   Http::HeaderMapPtr downstream_headers_;
@@ -428,7 +428,7 @@ TEST_F(OriginalDstClusterTest, Connection) {
 
   EXPECT_CALL(dispatcher_, createClientConnection_(PointeesEq(connection.local_address_), _, _, _))
       .WillOnce(Return(new NiceMock<Network::MockClientConnection>()));
-  host->createConnection(dispatcher_, nullptr, nullptr);
+  host->createConnection(dispatcher_, nullptr);
 }
 
 TEST_F(OriginalDstClusterTest, MultipleClusters) {

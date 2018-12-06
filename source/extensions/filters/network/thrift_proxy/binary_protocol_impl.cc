@@ -18,11 +18,18 @@ namespace ThriftProxy {
 const uint16_t BinaryProtocolImpl::Magic = 0x8001;
 
 bool BinaryProtocolImpl::readMessageBegin(Buffer::Instance& buffer, MessageMetadata& metadata) {
-  if (buffer.length() < MinMessageBeginLength) {
+  // Minimum message length:
+  //   version: 2 bytes +
+  //   unused: 1 byte +
+  //   msg type: 1 byte +
+  //   name len: 4 bytes +
+  //   name: 0 bytes +
+  //   seq id: 4 bytes
+  if (buffer.length() < 12) {
     return false;
   }
 
-  uint16_t version = buffer.peekBEInt<uint16_t>();
+  uint16_t version = BufferHelper::peekU16(buffer);
   if (version != Magic) {
     throw EnvoyException(
         fmt::format("invalid binary protocol version 0x{:04x} != 0x{:04x}", version, Magic));
@@ -30,14 +37,14 @@ bool BinaryProtocolImpl::readMessageBegin(Buffer::Instance& buffer, MessageMetad
 
   // The byte at offset 2 is unused and ignored.
 
-  MessageType type = static_cast<MessageType>(buffer.peekInt<int8_t>(3));
+  MessageType type = static_cast<MessageType>(BufferHelper::peekI8(buffer, 3));
   if (type < MessageType::Call || type > MessageType::LastMessageType) {
     throw EnvoyException(
         fmt::format("invalid binary protocol message type {}", static_cast<int8_t>(type)));
   }
 
-  uint32_t name_len = buffer.peekBEInt<uint32_t>(4);
-  if (buffer.length() < name_len + MinMessageBeginLength) {
+  uint32_t name_len = BufferHelper::peekU32(buffer, 4);
+  if (buffer.length() < name_len + 12) {
     return false;
   }
 
@@ -51,7 +58,7 @@ bool BinaryProtocolImpl::readMessageBegin(Buffer::Instance& buffer, MessageMetad
     metadata.setMethodName("");
   }
   metadata.setMessageType(type);
-  metadata.setSequenceId(buffer.drainBEInt<int32_t>());
+  metadata.setSequenceId(BufferHelper::drainI32(buffer));
 
   return true;
 }
@@ -79,7 +86,7 @@ bool BinaryProtocolImpl::readFieldBegin(Buffer::Instance& buffer, std::string& n
     return false;
   }
 
-  FieldType type = static_cast<FieldType>(buffer.peekInt<int8_t>());
+  FieldType type = static_cast<FieldType>(BufferHelper::peekI8(buffer));
   if (type == FieldType::Stop) {
     field_id = 0;
     buffer.drain(1);
@@ -88,7 +95,7 @@ bool BinaryProtocolImpl::readFieldBegin(Buffer::Instance& buffer, std::string& n
     if (buffer.length() < 3) {
       return false;
     }
-    int16_t id = buffer.peekBEInt<int16_t>(1);
+    int16_t id = BufferHelper::peekI16(buffer, 1);
     if (id < 0) {
       throw EnvoyException(fmt::format("invalid binary protocol field id {}", id));
     }
@@ -117,9 +124,9 @@ bool BinaryProtocolImpl::readMapBegin(Buffer::Instance& buffer, FieldType& key_t
     return false;
   }
 
-  FieldType ktype = static_cast<FieldType>(buffer.peekInt<int8_t>(0));
-  FieldType vtype = static_cast<FieldType>(buffer.peekInt<int8_t>(1));
-  int32_t s = buffer.peekBEInt<int32_t>(2);
+  FieldType ktype = static_cast<FieldType>(BufferHelper::peekI8(buffer, 0));
+  FieldType vtype = static_cast<FieldType>(BufferHelper::peekI8(buffer, 1));
+  int32_t s = BufferHelper::peekI32(buffer, 2);
   if (s < 0) {
     throw EnvoyException(fmt::format("negative binary protocol map size {}", s));
   }
@@ -147,8 +154,8 @@ bool BinaryProtocolImpl::readListBegin(Buffer::Instance& buffer, FieldType& elem
     return false;
   }
 
-  FieldType type = static_cast<FieldType>(buffer.peekInt<int8_t>());
-  int32_t s = buffer.peekBEInt<int32_t>(1);
+  FieldType type = static_cast<FieldType>(BufferHelper::peekI8(buffer));
+  int32_t s = BufferHelper::peekI32(buffer, 1);
   if (s < 0) {
     throw EnvoyException(fmt::format("negative binary protocol list/set size {}", s));
   }
@@ -177,7 +184,7 @@ bool BinaryProtocolImpl::readBool(Buffer::Instance& buffer, bool& value) {
     return false;
   }
 
-  value = buffer.drainInt<int8_t>() != 0;
+  value = BufferHelper::drainI8(buffer) != 0;
   return true;
 }
 
@@ -185,7 +192,7 @@ bool BinaryProtocolImpl::readByte(Buffer::Instance& buffer, uint8_t& value) {
   if (buffer.length() < 1) {
     return false;
   }
-  value = buffer.drainInt<int8_t>();
+  value = BufferHelper::drainI8(buffer);
   return true;
 }
 
@@ -193,7 +200,7 @@ bool BinaryProtocolImpl::readInt16(Buffer::Instance& buffer, int16_t& value) {
   if (buffer.length() < 2) {
     return false;
   }
-  value = buffer.drainBEInt<int16_t>();
+  value = BufferHelper::drainI16(buffer);
   return true;
 }
 
@@ -201,7 +208,7 @@ bool BinaryProtocolImpl::readInt32(Buffer::Instance& buffer, int32_t& value) {
   if (buffer.length() < 4) {
     return false;
   }
-  value = buffer.drainBEInt<int32_t>();
+  value = BufferHelper::drainI32(buffer);
   return true;
 }
 
@@ -209,7 +216,7 @@ bool BinaryProtocolImpl::readInt64(Buffer::Instance& buffer, int64_t& value) {
   if (buffer.length() < 8) {
     return false;
   }
-  value = buffer.drainBEInt<int64_t>();
+  value = BufferHelper::drainI64(buffer);
   return true;
 }
 
@@ -220,7 +227,7 @@ bool BinaryProtocolImpl::readDouble(Buffer::Instance& buffer, double& value) {
     return false;
   }
 
-  value = BufferHelper::drainBEDouble(buffer);
+  value = BufferHelper::drainDouble(buffer);
   return true;
 }
 
@@ -230,7 +237,7 @@ bool BinaryProtocolImpl::readString(Buffer::Instance& buffer, std::string& value
     return false;
   }
 
-  int32_t str_len = buffer.peekBEInt<int32_t>();
+  int32_t str_len = BufferHelper::peekI32(buffer);
   if (str_len < 0) {
     throw EnvoyException(fmt::format("negative binary protocol string/binary length {}", str_len));
   }
@@ -257,10 +264,10 @@ bool BinaryProtocolImpl::readBinary(Buffer::Instance& buffer, std::string& value
 
 void BinaryProtocolImpl::writeMessageBegin(Buffer::Instance& buffer,
                                            const MessageMetadata& metadata) {
-  buffer.writeBEInt<uint16_t>(Magic);
-  buffer.writeBEInt<uint16_t>(static_cast<uint16_t>(metadata.messageType()));
+  BufferHelper::writeU16(buffer, Magic);
+  BufferHelper::writeU16(buffer, static_cast<uint16_t>(metadata.messageType()));
   writeString(buffer, metadata.methodName());
-  buffer.writeBEInt<int32_t>(metadata.sequenceId());
+  BufferHelper::writeI32(buffer, metadata.sequenceId());
 }
 
 void BinaryProtocolImpl::writeMessageEnd(Buffer::Instance& buffer) {
@@ -280,12 +287,12 @@ void BinaryProtocolImpl::writeFieldBegin(Buffer::Instance& buffer, const std::st
                                          FieldType field_type, int16_t field_id) {
   UNREFERENCED_PARAMETER(name);
 
-  buffer.writeByte(static_cast<uint8_t>(field_type));
+  BufferHelper::writeI8(buffer, static_cast<uint8_t>(field_type));
   if (field_type == FieldType::Stop) {
     return;
   }
 
-  buffer.writeBEInt<int16_t>(field_id);
+  BufferHelper::writeI16(buffer, field_id);
 }
 
 void BinaryProtocolImpl::writeFieldEnd(Buffer::Instance& buffer) { UNREFERENCED_PARAMETER(buffer); }
@@ -296,9 +303,9 @@ void BinaryProtocolImpl::writeMapBegin(Buffer::Instance& buffer, FieldType key_t
     throw EnvoyException(fmt::format("illegal binary protocol map size {}", size));
   }
 
-  buffer.writeByte(static_cast<int8_t>(key_type));
-  buffer.writeByte(static_cast<int8_t>(value_type));
-  buffer.writeBEInt<int32_t>(static_cast<int32_t>(size));
+  BufferHelper::writeI8(buffer, static_cast<int8_t>(key_type));
+  BufferHelper::writeI8(buffer, static_cast<int8_t>(value_type));
+  BufferHelper::writeI32(buffer, static_cast<int32_t>(size));
 }
 
 void BinaryProtocolImpl::writeMapEnd(Buffer::Instance& buffer) { UNREFERENCED_PARAMETER(buffer); }
@@ -309,8 +316,8 @@ void BinaryProtocolImpl::writeListBegin(Buffer::Instance& buffer, FieldType elem
     throw EnvoyException(fmt::format("illegal binary protocol list/set size {}", size));
   }
 
-  buffer.writeByte(static_cast<int8_t>(elem_type));
-  buffer.writeBEInt<int32_t>(static_cast<int32_t>(size));
+  BufferHelper::writeI8(buffer, static_cast<int8_t>(elem_type));
+  BufferHelper::writeI32(buffer, static_cast<int32_t>(size));
 }
 
 void BinaryProtocolImpl::writeListEnd(Buffer::Instance& buffer) { UNREFERENCED_PARAMETER(buffer); }
@@ -323,31 +330,31 @@ void BinaryProtocolImpl::writeSetBegin(Buffer::Instance& buffer, FieldType elem_
 void BinaryProtocolImpl::writeSetEnd(Buffer::Instance& buffer) { writeListEnd(buffer); }
 
 void BinaryProtocolImpl::writeBool(Buffer::Instance& buffer, bool value) {
-  buffer.writeByte(value ? 1 : 0);
+  BufferHelper::writeI8(buffer, value ? 1 : 0);
 }
 
 void BinaryProtocolImpl::writeByte(Buffer::Instance& buffer, uint8_t value) {
-  buffer.writeByte(value);
+  BufferHelper::writeI8(buffer, value);
 }
 
 void BinaryProtocolImpl::writeInt16(Buffer::Instance& buffer, int16_t value) {
-  buffer.writeBEInt<int16_t>(value);
+  BufferHelper::writeI16(buffer, value);
 }
 
 void BinaryProtocolImpl::writeInt32(Buffer::Instance& buffer, int32_t value) {
-  buffer.writeBEInt<int32_t>(value);
+  BufferHelper::writeI32(buffer, value);
 }
 
 void BinaryProtocolImpl::writeInt64(Buffer::Instance& buffer, int64_t value) {
-  buffer.writeBEInt<int64_t>(value);
+  BufferHelper::writeI64(buffer, value);
 }
 
 void BinaryProtocolImpl::writeDouble(Buffer::Instance& buffer, double value) {
-  BufferHelper::writeBEDouble(buffer, value);
+  BufferHelper::writeDouble(buffer, value);
 }
 
 void BinaryProtocolImpl::writeString(Buffer::Instance& buffer, const std::string& value) {
-  buffer.writeBEInt<uint32_t>(value.length());
+  BufferHelper::writeU32(buffer, value.length());
   buffer.add(value);
 }
 
@@ -365,13 +372,13 @@ bool LaxBinaryProtocolImpl::readMessageBegin(Buffer::Instance& buffer, MessageMe
     return false;
   }
 
-  uint32_t name_len = buffer.peekBEInt<uint32_t>();
+  uint32_t name_len = BufferHelper::peekU32(buffer);
 
   if (buffer.length() < 9 + name_len) {
     return false;
   }
 
-  MessageType type = static_cast<MessageType>(buffer.peekInt<int8_t>(name_len + 4));
+  MessageType type = static_cast<MessageType>(BufferHelper::peekI8(buffer, name_len + 4));
   if (type < MessageType::Call || type > MessageType::LastMessageType) {
     throw EnvoyException(
         fmt::format("invalid (lax) binary protocol message type {}", static_cast<int8_t>(type)));
@@ -387,7 +394,7 @@ bool LaxBinaryProtocolImpl::readMessageBegin(Buffer::Instance& buffer, MessageMe
   }
 
   metadata.setMessageType(type);
-  metadata.setSequenceId(buffer.peekBEInt<int32_t>(1));
+  metadata.setSequenceId(BufferHelper::peekI32(buffer, 1));
   buffer.drain(5);
 
   return true;
@@ -396,8 +403,8 @@ bool LaxBinaryProtocolImpl::readMessageBegin(Buffer::Instance& buffer, MessageMe
 void LaxBinaryProtocolImpl::writeMessageBegin(Buffer::Instance& buffer,
                                               const MessageMetadata& metadata) {
   writeString(buffer, metadata.methodName());
-  buffer.writeByte(static_cast<int8_t>(metadata.messageType()));
-  buffer.writeBEInt<int32_t>(metadata.sequenceId());
+  BufferHelper::writeI8(buffer, static_cast<int8_t>(metadata.messageType()));
+  BufferHelper::writeI32(buffer, metadata.sequenceId());
 }
 
 class BinaryProtocolConfigFactory : public ProtocolFactoryBase<BinaryProtocolImpl> {

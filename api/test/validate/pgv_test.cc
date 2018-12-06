@@ -54,7 +54,6 @@ template <class Proto> struct TestCase {
 // from data plane API.
 int main(int argc, char* argv[]) {
   envoy::config::bootstrap::v2::Bootstrap invalid_bootstrap;
-  invalid_bootstrap.mutable_runtime();
   // This is a baseline test of the validation features we care about. It's
   // probably not worth adding in every filter and field that we want to valid
   // in the API upfront, but as regressions occur, this is the place to add the
@@ -64,7 +63,7 @@ int main(int argc, char* argv[]) {
   cluster_manager {}
   admin {
     access_log_path: "/dev/null"
-    address { pipe { path: "/" } }
+    address {}
   }
   )EOF";
   envoy::config::bootstrap::v2::Bootstrap valid_bootstrap;

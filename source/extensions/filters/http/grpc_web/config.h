@@ -15,7 +15,7 @@ public:
   GrpcWebFilterConfig() : Common::EmptyHttpFilterConfig(HttpFilterNames::get().GrpcWeb) {}
 
   Http::FilterFactoryCb createFilter(const std::string&,
-                                     Server::Configuration::FactoryContext&) override;
+                                     Server::Configuration::FactoryContext& context) override;
 };
 
 } // namespace GrpcWeb

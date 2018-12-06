@@ -16,8 +16,7 @@ struct AppException : public EnvoyException, public DirectResponse {
       : EnvoyException(what), type_(type) {}
   AppException(const AppException& ex) : EnvoyException(ex.what()), type_(ex.type_) {}
 
-  ResponseType encode(MessageMetadata& metadata, Protocol& proto,
-                      Buffer::Instance& buffer) const override;
+  void encode(MessageMetadata& metadata, Protocol& proto, Buffer::Instance& buffer) const override;
 
   const AppExceptionType type_;
 };

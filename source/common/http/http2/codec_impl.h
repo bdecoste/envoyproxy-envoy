@@ -19,9 +19,6 @@
 #include "common/common/logger.h"
 #include "common/http/codec_helper.h"
 #include "common/http/header_map_impl.h"
-#include "common/http/utility.h"
-#include "common/http/http2/metadata_decoder.h"
-#include "common/http/http2/metadata_encoder.h"
 
 #include "absl/types/optional.h"
 #include "nghttp2/nghttp2.h"
@@ -90,7 +87,7 @@ public:
   Protocol protocol() override { return Protocol::Http2; }
   void shutdownNotice() override;
   bool wantsToWrite() override { return nghttp2_session_want_write(session_); }
-  // Propagate network connection watermark events to each stream on the connection.
+  // Propogate network connection watermark events to each stream on the connection.
   void onUnderlyingConnectionAboveWriteBufferHighWatermark() override {
     for (auto& stream : active_streams_) {
       stream->runHighWatermarkCallbacks();
@@ -156,7 +153,6 @@ protected:
     virtual void submitHeaders(const std::vector<nghttp2_nv>& final_headers,
                                nghttp2_data_provider* provider) PURE;
     void submitTrailers(const HeaderMap& trailers);
-    void submitMetadata();
 
     // Http::StreamEncoder
     void encode100ContinueHeaders(const HeaderMap& headers) override;
@@ -164,7 +160,6 @@ protected:
     void encodeData(Buffer::Instance& data, bool end_stream) override;
     void encodeTrailers(const HeaderMap& trailers) override;
     Stream& getStream() override { return *this; }
-    void encodeMetadata(const MetadataMap& metadata_map) override;
 
     // Http::Stream
     void addCallbacks(StreamCallbacks& callbacks) override { addCallbacks_(callbacks); }
@@ -182,8 +177,8 @@ protected:
     void pendingRecvBufferHighWatermark();
     void pendingRecvBufferLowWatermark();
 
-    // If the send buffer encounters watermark callbacks, propagate this information to the streams.
-    // The router and connection manager will propagate them on as appropriate.
+    // If the send buffer encounters watermark callbacks, propogate this information to the streams.
+    // The router and connection manager will propogate them on as appropriate.
     void pendingSendBufferHighWatermark();
     void pendingSendBufferLowWatermark();
 
@@ -191,20 +186,6 @@ protected:
     // appear to transmit headers greater than approximtely 64K (NGHTTP2_MAX_HEADERSLEN) for reasons
     // I don't fully understand.
     static const uint64_t MAX_HEADER_SIZE = 63 * 1024;
-
-    // Does any necessary WebSocket/Upgrade conversion, then passes the headers
-    // to the decoder_.
-    void decodeHeaders();
-
-    // Get MetadataEncoder for this stream.
-    MetadataEncoder& getMetadataEncoder();
-    // Get MetadataDecoder for this stream.
-    MetadataDecoder& getMetadataDecoder();
-    // Callback function for MetadataDecoder.
-    void onMetadataDecoded(std::unique_ptr<MetadataMap> metadata_map);
-
-    virtual void transformUpgradeFromH1toH2(HeaderMap& headers) PURE;
-    virtual void maybeTransformUpgradeFromH2ToH1() PURE;
 
     bool buffers_overrun() const { return read_disable_count_ > 0; }
 
@@ -221,8 +202,6 @@ protected:
         [this]() -> void { this->pendingSendBufferLowWatermark(); },
         [this]() -> void { this->pendingSendBufferHighWatermark(); }};
     HeaderMapPtr pending_trailers_;
-    std::unique_ptr<MetadataDecoder> metadata_decoder_;
-    std::unique_ptr<MetadataEncoder> metadata_encoder_;
     absl::optional<StreamResetReason> deferred_reset_;
     HeaderString cookies_;
     bool local_end_stream_sent_ : 1;
@@ -245,16 +224,6 @@ protected:
     // StreamImpl
     void submitHeaders(const std::vector<nghttp2_nv>& final_headers,
                        nghttp2_data_provider* provider) override;
-    void transformUpgradeFromH1toH2(HeaderMap& headers) override {
-      upgrade_type_ = headers.Upgrade()->value().c_str();
-      Http::Utility::transformUpgradeRequestFromH1toH2(headers);
-    }
-    void maybeTransformUpgradeFromH2ToH1() override {
-      if (!upgrade_type_.empty() && headers_->Status()) {
-        Http::Utility::transformUpgradeResponseFromH2toH1(*headers_, upgrade_type_);
-      }
-    }
-    std::string upgrade_type_;
   };
 
   /**
@@ -264,21 +233,8 @@ protected:
     using StreamImpl::StreamImpl;
 
     // StreamImpl
-    void encodeHeaders(const HeaderMap& headers, bool end_stream) override {
-      // The contract is that client codecs must ensure that :status is present.
-      ASSERT(headers.Status() != nullptr);
-      StreamImpl::encodeHeaders(headers, end_stream);
-    }
     void submitHeaders(const std::vector<nghttp2_nv>& final_headers,
                        nghttp2_data_provider* provider) override;
-    void transformUpgradeFromH1toH2(HeaderMap& headers) override {
-      Http::Utility::transformUpgradeResponseFromH1toH2(headers);
-    }
-    void maybeTransformUpgradeFromH2ToH1() override {
-      if (Http::Utility::isH2UpgradeRequest(*headers_)) {
-        Http::Utility::transformUpgradeRequestFromH2toH1(*headers_);
-      }
-    }
   };
 
   ConnectionImpl* base() { return this; }
@@ -294,7 +250,6 @@ protected:
   CodecStats stats_;
   Network::Connection& connection_;
   uint32_t per_stream_buffer_limit_;
-  bool allow_metadata_;
 
 private:
   virtual ConnectionCallbacks& callbacks() PURE;
@@ -306,9 +261,6 @@ private:
   int onInvalidFrame(int32_t stream_id, int error_code);
   ssize_t onSend(const uint8_t* data, size_t length);
   int onStreamClose(int32_t stream_id, uint32_t error_code);
-  int onMetadataReceived(int32_t stream_id, const uint8_t* data, size_t len);
-  int onMetadataFrameComplete(int32_t stream_id, bool end_metadata);
-  ssize_t packMetadata(int32_t stream_id, uint8_t* buf, size_t len);
 
   bool dispatching_ : 1;
   bool raised_goaway_ : 1;
