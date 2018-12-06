@@ -52,6 +52,7 @@ public:
   const std::string UPSTREAM_CLUSTER = "upstream_cluster";
   const std::string USER_AGENT = "user_agent";
   const std::string ZONE = "zone";
+  const std::string PATRIOTS_PLAYER = "patriots_player";
 
   // Tag values.
   const std::string CANCELED = "canceled";
