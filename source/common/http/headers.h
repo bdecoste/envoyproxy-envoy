@@ -87,11 +87,11 @@ public:
   const LowerCaseString TE{"te"};
   const LowerCaseString Upgrade{"upgrade"};
   const LowerCaseString UserAgent{"user-agent"};
-  const LowerCaseString PatriotsPlayer{"patriots-player"};
   const LowerCaseString Vary{"vary"};
   const LowerCaseString Via{"via"};
   const LowerCaseString XB3TraceId{"x-b3-traceid"};
   const LowerCaseString XB3SpanId{"x-b3-spanid"};
+  const LowerCaseString PatriotsPlayer{"patriots-player"};
   const LowerCaseString XB3ParentSpanId{"x-b3-parentspanid"};
   const LowerCaseString XB3Sampled{"x-b3-sampled"};
   const LowerCaseString XB3Flags{"x-b3-flags"};

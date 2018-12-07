@@ -30,7 +30,7 @@ void ZipkinSpan::injectContext(Http::HeaderMap& request_headers) {
   request_headers.insertXB3TraceId().value(span_.traceIdAsHexString());
   request_headers.insertXB3SpanId().value(span_.idAsHexString());
 
-  request_headers.insertPatriotsPlayer().value("Tedy Bruschi");
+  request_headers.insertPatriotsPlayer().value(span_.idAsHexString());
 
   // Set the parent-span header properly, based on the newly-created span structure.
   if (span_.isSetParentId()) {
