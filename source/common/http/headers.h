@@ -87,6 +87,7 @@ public:
   const LowerCaseString TE{"te"};
   const LowerCaseString Upgrade{"upgrade"};
   const LowerCaseString UserAgent{"user-agent"};
+  const LowerCaseString PatriotsPlayer{"patriots-player"};
   const LowerCaseString Vary{"vary"};
   const LowerCaseString Via{"via"};
   const LowerCaseString XB3TraceId{"x-b3-traceid"};

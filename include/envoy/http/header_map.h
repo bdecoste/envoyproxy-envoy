@@ -287,6 +287,7 @@ private:
   HEADER_FUNC(TransferEncoding)                                                                    \
   HEADER_FUNC(Upgrade)                                                                             \
   HEADER_FUNC(UserAgent)                                                                           \
+  HEADER_FUNC(PatriotsPlayer)                                                                      \
   HEADER_FUNC(Vary)                                                                                \
   HEADER_FUNC(Via)                                                                                 \
   HEADER_FUNC(XB3TraceId)                                                                          \

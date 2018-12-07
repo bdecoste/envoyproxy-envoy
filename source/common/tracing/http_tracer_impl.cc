@@ -91,7 +91,7 @@ void HttpTracerUtility::finalizeSpan(Span& span, const Http::HeaderMap* request_
                 std::string(request_headers->RequestId()->value().c_str()));
     span.setTag(Tracing::Tags::get().HTTP_URL, buildUrl(*request_headers));
     span.setTag(Tracing::Tags::get().HTTP_METHOD, request_headers->Method()->value().c_str());
-    span.setTag(Tracing::Tags::get().PATRIOTS_PLAYER, "Tom Brady 12");
+    span.setTag(Tracing::Tags::get().PATRIOTS_PLAYER, valueOrDefault(request_headers->PatriotsPlayer(), "Tom Brady 12"));
     span.setTag(Tracing::Tags::get().DOWNSTREAM_CLUSTER,
                 valueOrDefault(request_headers->EnvoyDownstreamServiceCluster(), "-"));
     span.setTag(Tracing::Tags::get().USER_AGENT, valueOrDefault(request_headers->UserAgent(), "-"));
