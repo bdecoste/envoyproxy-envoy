@@ -110,6 +110,7 @@ EXTENSIONS = {
     #
 
     "envoy.transport_sockets.alts":                     "//source/extensions/transport_sockets/alts:config",
+    "envoy.transport_sockets.openssl":                  "//source/extensions/transport_sockets/openssl:config",
     "envoy.transport_sockets.capture":                  "//source/extensions/transport_sockets/capture:config",
 
     # Retry host predicates

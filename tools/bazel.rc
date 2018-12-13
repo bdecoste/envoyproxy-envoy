@@ -51,3 +51,6 @@ build:clang-msan --linkopt -fuse-ld=lld
 
 # Test options
 test --test_env=HEAPCHECK=normal --test_env=PPROF_PATH
+
+# Add compile option for all C++ files
+build --cxxopt -Wno-error=unused-parameter
