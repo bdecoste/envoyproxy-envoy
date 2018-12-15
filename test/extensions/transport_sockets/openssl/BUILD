@@ -81,7 +81,7 @@ envoy_cc_test(
     ],
     data = [
         "gen_unittest_certs.sh",
-        "//test/common/ssl/test_data:certs",
+        "//test/extensions/transport_sockets/openssl/test_data:certs",
     ],
     external_deps = ["ssl"],
     deps = [

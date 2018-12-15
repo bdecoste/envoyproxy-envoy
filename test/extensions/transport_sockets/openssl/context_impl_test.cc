@@ -24,26 +24,46 @@ using testing::NiceMock;
 using testing::ReturnRef;
 
 namespace Envoy {
-namespace Ssl {
+namespace Extensions {
+namespace TransportSockets {
+namespace Openssl {
 
-class SslContextImplTest : public SslCertsTest {
+class OpenSslTestBase : public HttpIntegrationTest,
+						public SslCertsTest {
+public:
+
+  void initialize() {
+	  config_helper_.addConfigModifier([this](envoy::config::bootstrap::v2::Bootstrap& bootstrap) {
+	        auto* transport_socket = bootstrap.mutable_static_resources()
+	                                     ->mutable_listeners(0)
+	                                     ->mutable_filter_chains(0)
+	                                     ->mutable_transport_socket();
+	        transport_socket->set_name("envoy.transport_sockets.openssl");
+	  });
+  }
+};
+
+class SslContextImplTest : public OpenSslTestBase {
 protected:
   Event::SimulatedTimeSystem time_system_;
   Stats::IsolatedStoreImpl store_;
-  ContextManagerImpl manager_{time_system_};
+  Envoy::Ssl::ContextManagerImpl manager_{time_system_};
 };
 
 TEST_F(SslContextImplTest, TestdNSNameMatching) {
-  EXPECT_TRUE(ContextImpl::dNSNameMatch("lyft.com", "lyft.com"));
-  EXPECT_TRUE(ContextImpl::dNSNameMatch("a.lyft.com", "*.lyft.com"));
-  EXPECT_TRUE(ContextImpl::dNSNameMatch("a.b.lyft.com", "*.lyft.com"));
-  EXPECT_FALSE(ContextImpl::dNSNameMatch("foo.test.com", "*.lyft.com"));
-  EXPECT_FALSE(ContextImpl::dNSNameMatch("lyft.com", "*.lyft.com"));
-  EXPECT_FALSE(ContextImpl::dNSNameMatch("alyft.com", "*.lyft.com"));
-  EXPECT_FALSE(ContextImpl::dNSNameMatch("alyft.com", "*lyft.com"));
-  EXPECT_FALSE(ContextImpl::dNSNameMatch("lyft.com", "*lyft.com"));
-  EXPECT_FALSE(ContextImpl::dNSNameMatch("", "*lyft.com"));
-  EXPECT_FALSE(ContextImpl::dNSNameMatch("lyft.com", ""));
+
+  initialize();
+
+  EXPECT_TRUE(Envoy::Ssl::ContextImpl::dNSNameMatch("lyft.com", "lyft.com"));
+  EXPECT_TRUE(Envoy::Ssl::ContextImpl::dNSNameMatch("a.lyft.com", "*.lyft.com"));
+  EXPECT_TRUE(Envoy::Ssl::ContextImpl::dNSNameMatch("a.b.lyft.com", "*.lyft.com"));
+  EXPECT_FALSE(Envoy::Ssl::ContextImpl::dNSNameMatch("foo.test.com", "*.lyft.com"));
+  EXPECT_FALSE(Envoy::Ssl::ContextImpl::dNSNameMatch("lyft.com", "*.lyft.com"));
+  EXPECT_FALSE(Envoy::Ssl::ContextImpl::dNSNameMatch("alyft.com", "*.lyft.com"));
+  EXPECT_FALSE(Envoy::Ssl::ContextImpl::dNSNameMatch("alyft.com", "*lyft.com"));
+  EXPECT_FALSE(Envoy::Ssl::ContextImpl::dNSNameMatch("lyft.com", "*lyft.com"));
+  EXPECT_FALSE(Envoy::Ssl::ContextImpl::dNSNameMatch("", "*lyft.com"));
+  EXPECT_FALSE(Envoy::Ssl::ContextImpl::dNSNameMatch("lyft.com", ""));
 }
 
 TEST_F(SslContextImplTest, TestVerifySubjectAltNameDNSMatched) {
@@ -51,7 +71,7 @@ TEST_F(SslContextImplTest, TestVerifySubjectAltNameDNSMatched) {
       TestEnvironment::substitute("{{ test_rundir }}/test/extensions/transport_sockets/openssl/test_data/san_dns_cert.pem"));
   std::vector<std::string> verify_subject_alt_name_list = {"server1.example.com",
                                                            "server2.example.com"};
-  EXPECT_TRUE(ContextImpl::verifySubjectAltName(cert.get(), verify_subject_alt_name_list));
+  EXPECT_TRUE(Envoy::Ssl::ContextImpl::verifySubjectAltName(cert.get(), verify_subject_alt_name_list));
 }
 
 TEST_F(SslContextImplTest, TestVerifySubjectAltNameURIMatched) {
@@ -59,14 +79,14 @@ TEST_F(SslContextImplTest, TestVerifySubjectAltNameURIMatched) {
       TestEnvironment::substitute("{{ test_rundir }}/test/extensions/transport_sockets/openssl/test_data/san_uri_cert.pem"));
   std::vector<std::string> verify_subject_alt_name_list = {"spiffe://lyft.com/fake-team",
                                                            "spiffe://lyft.com/test-team"};
-  EXPECT_TRUE(ContextImpl::verifySubjectAltName(cert.get(), verify_subject_alt_name_list));
+  EXPECT_TRUE(Envoy::Ssl::ContextImpl::verifySubjectAltName(cert.get(), verify_subject_alt_name_list));
 }
 
 TEST_F(SslContextImplTest, TestVerifySubjectAltNameNotMatched) {
   bssl::UniquePtr<X509> cert = readCertFromFile(
       TestEnvironment::substitute("{{ test_rundir }}/test/extensions/transport_sockets/openssl/test_data/san_dns_cert.pem"));
   std::vector<std::string> verify_subject_alt_name_list = {"foo", "bar"};
-  EXPECT_FALSE(ContextImpl::verifySubjectAltName(cert.get(), verify_subject_alt_name_list));
+  EXPECT_FALSE(Envoy::Ssl::ContextImpl::verifySubjectAltName(cert.get(), verify_subject_alt_name_list));
 }
 
 TEST_F(SslContextImplTest, TestCipherSuites) {
@@ -78,7 +98,7 @@ TEST_F(SslContextImplTest, TestCipherSuites) {
 
   envoy::api::v2::auth::UpstreamTlsContext tls_context;
   MessageUtil::loadFromYaml(TestEnvironment::substitute(yaml), tls_context);
-  ClientContextConfigImpl cfg(tls_context, factory_context_);
+  Envoy::Ssl::ClientContextConfigImpl cfg(tls_context, factory_context_);
   EXPECT_THROW_WITH_MESSAGE(manager_.createSslClientContext(store_, cfg), EnvoyException,
                             "Failed to initialize cipher suites "
                             "-ALL:+[AES128-SHA|BOGUS1]:BOGUS2:AES256-SHA. The following "
@@ -98,8 +118,8 @@ TEST_F(SslContextImplTest, TestExpiringCert) {
   envoy::api::v2::auth::UpstreamTlsContext tls_context;
   MessageUtil::loadFromYaml(TestEnvironment::substitute(yaml), tls_context);
 
-  ClientContextConfigImpl cfg(tls_context, factory_context_);
-  ClientContextSharedPtr context(manager_.createSslClientContext(store_, cfg));
+  Envoy::Ssl::ClientContextConfigImpl cfg(tls_context, factory_context_);
+  Envoy::Ssl::ClientContextSharedPtr context(manager_.createSslClientContext(store_, cfg));
 
   // This is a total hack, but right now we generate the cert and it expires in 15 days only in the
   // first second that it's valid. This can become invalid and then cause slower tests to fail.
@@ -121,8 +141,8 @@ TEST_F(SslContextImplTest, TestExpiredCert) {
 
   envoy::api::v2::auth::UpstreamTlsContext tls_context;
   MessageUtil::loadFromYaml(TestEnvironment::substitute(yaml), tls_context);
-  ClientContextConfigImpl cfg(tls_context, factory_context_);
-  ClientContextSharedPtr context(manager_.createSslClientContext(store_, cfg));
+  Envoy::Ssl::ClientContextConfigImpl cfg(tls_context, factory_context_);
+  Envoy::Ssl::ClientContextSharedPtr context(manager_.createSslClientContext(store_, cfg));
   EXPECT_EQ(0U, context->daysUntilFirstCertExpires());
 }
 
@@ -141,9 +161,9 @@ TEST_F(SslContextImplTest, TestGetCertInformation) {
 
   envoy::api::v2::auth::UpstreamTlsContext tls_context;
   MessageUtil::loadFromYaml(TestEnvironment::substitute(yaml), tls_context);
-  ClientContextConfigImpl cfg(tls_context, factory_context_);
+  Envoy::Ssl::ClientContextConfigImpl cfg(tls_context, factory_context_);
 
-  ClientContextSharedPtr context(manager_.createSslClientContext(store_, cfg));
+  Envoy::Ssl::ClientContextSharedPtr context(manager_.createSslClientContext(store_, cfg));
   // This is similar to the hack above, but right now we generate the ca_cert and it expires in 15
   // days only in the first second that it's valid. We will partially match for up until Days until
   // Expiration: 1.
@@ -190,9 +210,9 @@ TEST_F(SslContextImplTest, TestGetCertInformationWithSAN) {
 
   envoy::api::v2::auth::UpstreamTlsContext tls_context;
   MessageUtil::loadFromYaml(TestEnvironment::substitute(yaml), tls_context);
-  ClientContextConfigImpl cfg(tls_context, factory_context_);
+  Envoy::Ssl::ClientContextConfigImpl cfg(tls_context, factory_context_);
 
-  ClientContextSharedPtr context(manager_.createSslClientContext(store_, cfg));
+  Envoy::Ssl::ClientContextSharedPtr context(manager_.createSslClientContext(store_, cfg));
   std::string ca_cert_json = R"EOF({
  "path": "{{ test_rundir }}/test/extensions/transport_sockets/openssl/test_data/san_dns_cert3.pem",
  "serial_number": "b13ff63f2dbc118d",
@@ -243,9 +263,9 @@ TEST_F(SslContextImplTest, TestGetCertInformationWithExpiration) {
 
   envoy::api::v2::auth::UpstreamTlsContext tls_context;
   MessageUtil::loadFromYaml(TestEnvironment::substitute(yaml), tls_context);
-  ClientContextConfigImpl cfg(tls_context, factory_context_);
+  Envoy::Ssl::ClientContextConfigImpl cfg(tls_context, factory_context_);
 
-  ClientContextSharedPtr context(manager_.createSslClientContext(store_, cfg));
+  Envoy::Ssl::ClientContextSharedPtr context(manager_.createSslClientContext(store_, cfg));
   std::string ca_cert_json = R"EOF({
  "path": "{{ test_rundir }}/test/extensions/transport_sockets/openssl/test_data/san_dns_cert3.pem",
  "serial_number": "b13ff63f2dbc118d",
@@ -270,16 +290,16 @@ TEST_F(SslContextImplTest, TestGetCertInformationWithExpiration) {
 
 TEST_F(SslContextImplTest, TestNoCert) {
   Json::ObjectSharedPtr loader = TestEnvironment::jsonLoadFromString("{}");
-  ClientContextConfigImpl cfg(*loader, factory_context_);
-  ClientContextSharedPtr context(manager_.createSslClientContext(store_, cfg));
+  Envoy::Ssl::ClientContextConfigImpl cfg(*loader, factory_context_);
+  Envoy::Ssl::ClientContextSharedPtr context(manager_.createSslClientContext(store_, cfg));
   EXPECT_EQ(nullptr, context->getCaCertInformation());
   EXPECT_TRUE(context->getCertChainInformation().empty());
 }
 
 class SslServerContextImplTicketTest : public SslContextImplTest {
 public:
-  void loadConfig(ServerContextConfigImpl& cfg) {
-    ServerContextSharedPtr server_ctx(
+  void loadConfig(Envoy::Ssl::ServerContextConfigImpl& cfg) {
+	  Envoy::Ssl::ServerContextSharedPtr server_ctx(
         manager_.createSslServerContext(store_, cfg, std::vector<std::string>{}));
   }
 
@@ -293,7 +313,7 @@ public:
         TestEnvironment::substitute("{{ test_tmpdir }}/unittestkey.pem"));
 
     NiceMock<Server::Configuration::MockTransportSocketFactoryContext> factory_context;
-    ServerContextConfigImpl server_context_config(cfg, factory_context);
+    Envoy::Ssl::ServerContextConfigImpl server_context_config(cfg, factory_context);
     loadConfig(server_context_config);
   }
 
@@ -301,7 +321,7 @@ public:
     envoy::api::v2::auth::DownstreamTlsContext tls_context;
     MessageUtil::loadFromYaml(TestEnvironment::substitute(yaml), tls_context);
     NiceMock<Server::Configuration::MockTransportSocketFactoryContext> factory_context;
-    ServerContextConfigImpl cfg(tls_context, factory_context);
+    Envoy::Ssl::ServerContextConfigImpl cfg(tls_context, factory_context);
     loadConfig(cfg);
   }
 };
@@ -478,11 +498,11 @@ TEST(ClientContextConfigImplTest, EmptyServerNameIndication) {
 
   tls_context.set_sni(std::string("\000", 1));
   EXPECT_THROW_WITH_MESSAGE(
-      ClientContextConfigImpl client_context_config(tls_context, factory_context), EnvoyException,
+	  Envoy::Ssl::ClientContextConfigImpl client_context_config(tls_context, factory_context), EnvoyException,
       "SNI names containing NULL-byte are not allowed");
   tls_context.set_sni(std::string("a\000b", 3));
   EXPECT_THROW_WITH_MESSAGE(
-      ClientContextConfigImpl client_context_config(tls_context, factory_context), EnvoyException,
+	  Envoy::Ssl::ClientContextConfigImpl client_context_config(tls_context, factory_context), EnvoyException,
       "SNI names containing NULL-byte are not allowed");
 }
 
@@ -495,9 +515,9 @@ TEST(ClientContextConfigImplTest, InvalidCertificateHash) {
       // This is valid hex-encoded string, but it doesn't represent SHA-256 (80 vs 64 chars).
       ->add_verify_certificate_hash("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                                     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-  ClientContextConfigImpl client_context_config(tls_context, factory_context);
+  Envoy::Ssl::ClientContextConfigImpl client_context_config(tls_context, factory_context);
   Event::SimulatedTimeSystem time_system;
-  ContextManagerImpl manager(time_system);
+  Envoy::Ssl::ContextManagerImpl manager(time_system);
   Stats::IsolatedStoreImpl store;
   EXPECT_THROW_WITH_REGEX(manager.createSslClientContext(store, client_context_config),
                           EnvoyException, "Invalid hex-encoded SHA-256 .*");
@@ -511,9 +531,9 @@ TEST(ClientContextConfigImplTest, InvalidCertificateSpki) {
       ->mutable_validation_context()
       // Not a base64-encoded string.
       ->add_verify_certificate_spki("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-  ClientContextConfigImpl client_context_config(tls_context, factory_context);
+  Envoy::Ssl::ClientContextConfigImpl client_context_config(tls_context, factory_context);
   Event::SimulatedTimeSystem time_system;
-  ContextManagerImpl manager(time_system);
+  Envoy::Ssl::ContextManagerImpl manager(time_system);
   Stats::IsolatedStoreImpl store;
   EXPECT_THROW_WITH_REGEX(manager.createSslClientContext(store, client_context_config),
                           EnvoyException, "Invalid base64-encoded SHA-256 .*");
@@ -531,9 +551,9 @@ TEST(ClientContextConfigImplTest, P256EcdsaCert) {
   )EOF";
   MessageUtil::loadFromYaml(TestEnvironment::substitute(tls_certificate_yaml),
                             *tls_context.mutable_common_tls_context()->add_tls_certificates());
-  ClientContextConfigImpl client_context_config(tls_context, factory_context);
+  Envoy::Ssl::ClientContextConfigImpl client_context_config(tls_context, factory_context);
   Event::SimulatedTimeSystem time_system;
-  ContextManagerImpl manager(time_system);
+  Envoy::Ssl::ContextManagerImpl manager(time_system);
   Stats::IsolatedStoreImpl store;
   manager.createSslClientContext(store, client_context_config);
 }
@@ -550,9 +570,9 @@ TEST(ClientContextConfigImplTest, NonP256EcdsaCert) {
   )EOF";
   MessageUtil::loadFromYaml(TestEnvironment::substitute(tls_certificate_yaml),
                             *tls_context.mutable_common_tls_context()->add_tls_certificates());
-  ClientContextConfigImpl client_context_config(tls_context, factory_context);
+  Envoy::Ssl::ClientContextConfigImpl client_context_config(tls_context, factory_context);
   Event::SimulatedTimeSystem time_system;
-  ContextManagerImpl manager(time_system);
+  Envoy::Ssl::ContextManagerImpl manager(time_system);
   Stats::IsolatedStoreImpl store;
   EXPECT_THROW_WITH_REGEX(manager.createSslClientContext(store, client_context_config),
                           EnvoyException,
@@ -576,7 +596,7 @@ TEST(ClientContextConfigImplTest, MultipleTlsCertificates) {
   MessageUtil::loadFromYaml(TestEnvironment::substitute(tls_certificate_yaml),
                             *tls_context.mutable_common_tls_context()->add_tls_certificates());
   EXPECT_THROW_WITH_MESSAGE(
-      ClientContextConfigImpl client_context_config(tls_context, factory_context), EnvoyException,
+	  Envoy::Ssl::ClientContextConfigImpl client_context_config(tls_context, factory_context), EnvoyException,
       "Multiple TLS certificates are not supported for client contexts");
 }
 
@@ -595,7 +615,7 @@ TEST(ClientContextConfigImplTest, TlsCertificatesAndSdsConfig) {
                             *tls_context.mutable_common_tls_context()->add_tls_certificates());
   tls_context.mutable_common_tls_context()->add_tls_certificate_sds_secret_configs();
   EXPECT_THROW_WITH_MESSAGE(
-      ClientContextConfigImpl client_context_config(tls_context, factory_context), EnvoyException,
+	  Envoy::Ssl::ClientContextConfigImpl client_context_config(tls_context, factory_context), EnvoyException,
       "Multiple TLS certificates are not supported for client contexts");
 }
 
@@ -620,7 +640,7 @@ TEST(ClientContextConfigImplTest, SecretNotReady) {
       tls_context.mutable_common_tls_context()->mutable_tls_certificate_sds_secret_configs()->Add();
   sds_secret_configs->set_name("abc.com");
   sds_secret_configs->mutable_sds_config();
-  ClientContextConfigImpl client_context_config(tls_context, factory_context);
+  Envoy::Ssl::ClientContextConfigImpl client_context_config(tls_context, factory_context);
   // When sds secret is not downloaded, config is not ready.
   EXPECT_FALSE(client_context_config.isReady());
   // Set various callbacks to config.
@@ -657,7 +677,7 @@ TEST(ClientContextConfigImplTest, ValidationContextNotReady) {
       tls_context.mutable_common_tls_context()->mutable_validation_context_sds_secret_config();
   sds_secret_configs->set_name("abc.com");
   sds_secret_configs->mutable_sds_config();
-  ClientContextConfigImpl client_context_config(tls_context, factory_context);
+  Envoy::Ssl::ClientContextConfigImpl client_context_config(tls_context, factory_context);
   // When sds secret is not downloaded, config is not ready.
   EXPECT_FALSE(client_context_config.isReady());
   // Set various callbacks to config.
@@ -690,7 +710,7 @@ tls_certificate:
 
   NiceMock<Server::Configuration::MockTransportSocketFactoryContext> factory_context;
   factory_context.secretManager().addStaticSecret(secret_config);
-  ClientContextConfigImpl client_context_config(tls_context, factory_context);
+  Envoy::Ssl::ClientContextConfigImpl client_context_config(tls_context, factory_context);
 
   const std::string cert_pem = "{{ test_rundir }}/test/extensions/transport_sockets/openssl/test_data/selfsigned_cert.pem";
   EXPECT_EQ(TestEnvironment::readFileToStringForTest(TestEnvironment::substitute(cert_pem)),
@@ -722,7 +742,7 @@ TEST(ClientContextConfigImplTest, PasswordProtectedTlsCertificates) {
 
   NiceMock<Server::Configuration::MockTransportSocketFactoryContext> factory_context;
   factory_context.secretManager().addStaticSecret(secret_config);
-  ClientContextConfigImpl client_context_config(tls_context, factory_context);
+  Envoy::Ssl::ClientContextConfigImpl client_context_config(tls_context, factory_context);
 
   const std::string cert_pem =
       "{{ test_rundir }}/test/extensions/transport_sockets/openssl/test_data/password_protected_cert.pem";
@@ -759,10 +779,10 @@ TEST(ClientContextConfigImplTest, PasswordNotSuppliedTlsCertificates) {
 
   NiceMock<Server::Configuration::MockTransportSocketFactoryContext> factory_context;
   factory_context.secretManager().addStaticSecret(secret_config);
-  ClientContextConfigImpl client_context_config(tls_context, factory_context);
+  Envoy::Ssl::ClientContextConfigImpl client_context_config(tls_context, factory_context);
 
   Event::SimulatedTimeSystem time_system;
-  ContextManagerImpl manager(time_system);
+  Envoy::Ssl::ContextManagerImpl manager(time_system);
   Stats::IsolatedStoreImpl store;
   EXPECT_THROW_WITH_REGEX(manager.createSslClientContext(store, client_context_config),
                           EnvoyException,
@@ -804,7 +824,7 @@ TEST(ClientContextConfigImplTest, StaticCertificateValidationContext) {
   tls_context.mutable_common_tls_context()
       ->mutable_validation_context_sds_secret_config()
       ->set_name("def.com");
-  ClientContextConfigImpl client_context_config(tls_context, factory_context);
+  Envoy::Ssl::ClientContextConfigImpl client_context_config(tls_context, factory_context);
 
   const std::string cert_pem = "{{ test_rundir }}/test/extensions/transport_sockets/openssl/test_data/ca_cert.pem";
   EXPECT_EQ(TestEnvironment::readFileToStringForTest(TestEnvironment::substitute(cert_pem)),
@@ -837,7 +857,7 @@ tls_certificate:
       ->set_name("missing");
 
   EXPECT_THROW_WITH_MESSAGE(
-      ClientContextConfigImpl client_context_config(tls_context, factory_context), EnvoyException,
+      Envoy::Ssl::ClientContextConfigImpl client_context_config(tls_context, factory_context), EnvoyException,
       "Unknown static secret: missing");
 }
 
@@ -877,7 +897,7 @@ TEST(ClientContextConfigImplTest, MissingStaticCertificateValidationContext) {
       ->mutable_validation_context_sds_secret_config()
       ->set_name("missing");
   EXPECT_THROW_WITH_MESSAGE(
-      ClientContextConfigImpl client_context_config(tls_context, factory_context), EnvoyException,
+      Envoy::Ssl::ClientContextConfigImpl client_context_config(tls_context, factory_context), EnvoyException,
       "Unknown static certificate validation context: missing");
 }
 
@@ -888,7 +908,7 @@ TEST(ServerContextConfigImplTest, MultipleTlsCertificates) {
   envoy::api::v2::auth::DownstreamTlsContext tls_context;
   NiceMock<Server::Configuration::MockTransportSocketFactoryContext> factory_context;
   EXPECT_THROW_WITH_MESSAGE(
-      ServerContextConfigImpl client_context_config(tls_context, factory_context), EnvoyException,
+	  Envoy::Ssl::ServerContextConfigImpl client_context_config(tls_context, factory_context), EnvoyException,
       "No TLS certificates found for server context");
   const std::string tls_certificate_yaml = R"EOF(
   certificate_chain:
@@ -901,7 +921,7 @@ TEST(ServerContextConfigImplTest, MultipleTlsCertificates) {
   MessageUtil::loadFromYaml(TestEnvironment::substitute(tls_certificate_yaml),
                             *tls_context.mutable_common_tls_context()->add_tls_certificates());
   EXPECT_THROW_WITH_MESSAGE(
-      ServerContextConfigImpl client_context_config(tls_context, factory_context), EnvoyException,
+	  Envoy::Ssl::ServerContextConfigImpl client_context_config(tls_context, factory_context), EnvoyException,
       "A single TLS certificate is required for server contexts");
 }
 
@@ -909,7 +929,7 @@ TEST(ServerContextConfigImplTest, TlsCertificatesAndSdsConfig) {
   envoy::api::v2::auth::DownstreamTlsContext tls_context;
   NiceMock<Server::Configuration::MockTransportSocketFactoryContext> factory_context;
   EXPECT_THROW_WITH_MESSAGE(
-      ServerContextConfigImpl server_context_config(tls_context, factory_context), EnvoyException,
+	  Envoy::Ssl::ServerContextConfigImpl server_context_config(tls_context, factory_context), EnvoyException,
       "No TLS certificates found for server context");
   const std::string tls_certificate_yaml = R"EOF(
   certificate_chain:
@@ -921,7 +941,7 @@ TEST(ServerContextConfigImplTest, TlsCertificatesAndSdsConfig) {
                             *tls_context.mutable_common_tls_context()->add_tls_certificates());
   tls_context.mutable_common_tls_context()->add_tls_certificate_sds_secret_configs();
   EXPECT_THROW_WITH_MESSAGE(
-      ServerContextConfigImpl server_context_config(tls_context, factory_context), EnvoyException,
+	  Envoy::Ssl::ServerContextConfigImpl server_context_config(tls_context, factory_context), EnvoyException,
       "A single TLS certificate is required for server contexts");
 }
 
@@ -944,7 +964,7 @@ TEST(ServerContextConfigImplTest, SecretNotReady) {
       tls_context.mutable_common_tls_context()->mutable_tls_certificate_sds_secret_configs()->Add();
   sds_secret_configs->set_name("abc.com");
   sds_secret_configs->mutable_sds_config();
-  ServerContextConfigImpl server_context_config(tls_context, factory_context);
+  Envoy::Ssl::ServerContextConfigImpl server_context_config(tls_context, factory_context);
   // When sds secret is not downloaded, config is not ready.
   EXPECT_FALSE(server_context_config.isReady());
   // Set various callbacks to config.
@@ -981,7 +1001,7 @@ TEST(ServerContextConfigImplTest, ValidationContextNotReady) {
       tls_context.mutable_common_tls_context()->mutable_validation_context_sds_secret_config();
   sds_secret_configs->set_name("abc.com");
   sds_secret_configs->mutable_sds_config();
-  ServerContextConfigImpl server_context_config(tls_context, factory_context);
+  Envoy::Ssl::ServerContextConfigImpl server_context_config(tls_context, factory_context);
   // When sds secret is not downloaded, config is not ready.
   EXPECT_FALSE(server_context_config.isReady());
   // Set various callbacks to config.
@@ -996,11 +1016,11 @@ TEST(ServerContextImplTest, TlsCertificateNonEmpty) {
   envoy::api::v2::auth::DownstreamTlsContext tls_context;
   NiceMock<Server::Configuration::MockTransportSocketFactoryContext> factory_context;
   tls_context.mutable_common_tls_context()->add_tls_certificates();
-  ServerContextConfigImpl client_context_config(tls_context, factory_context);
+  Envoy::Ssl::ServerContextConfigImpl client_context_config(tls_context, factory_context);
   Event::SimulatedTimeSystem time_system;
-  ContextManagerImpl manager(time_system);
+  Envoy::Ssl::ContextManagerImpl manager(time_system);
   Stats::IsolatedStoreImpl store;
-  EXPECT_THROW_WITH_MESSAGE(ServerContextSharedPtr server_ctx(manager.createSslServerContext(
+  EXPECT_THROW_WITH_MESSAGE(Envoy::Ssl::ServerContextSharedPtr server_ctx(manager.createSslServerContext(
                                 store, client_context_config, std::vector<std::string>{})),
                             EnvoyException,
                             "Server TlsCertificates must have a certificate specified");
@@ -1017,7 +1037,7 @@ TEST(ServerContextConfigImplTest, InvalidIgnoreCertsNoCA) {
   server_validation_ctx->set_allow_expired_certificate(true);
 
   EXPECT_THROW_WITH_MESSAGE(
-      ServerContextConfigImpl server_context_config(tls_context, factory_context), EnvoyException,
+	  Envoy::Ssl::ServerContextConfigImpl server_context_config(tls_context, factory_context), EnvoyException,
       "Certificate validity period is always ignored without trusted CA");
 
   envoy::api::v2::auth::TlsCertificate* server_cert =
@@ -1029,20 +1049,22 @@ TEST(ServerContextConfigImplTest, InvalidIgnoreCertsNoCA) {
 
   server_validation_ctx->set_allow_expired_certificate(false);
 
-  EXPECT_NO_THROW(ServerContextConfigImpl server_context_config(tls_context, factory_context));
+  EXPECT_NO_THROW(Envoy::Ssl::ServerContextConfigImpl server_context_config(tls_context, factory_context));
 
   server_validation_ctx->set_allow_expired_certificate(true);
 
   EXPECT_THROW_WITH_MESSAGE(
-      ServerContextConfigImpl server_context_config(tls_context, factory_context), EnvoyException,
+	  Envoy::Ssl::ServerContextConfigImpl server_context_config(tls_context, factory_context), EnvoyException,
       "Certificate validity period is always ignored without trusted CA");
 
   // But once you add a trusted CA, you should be able to create the context.
   server_validation_ctx->mutable_trusted_ca()->set_filename(
       TestEnvironment::substitute("{{ test_rundir }}/test/extensions/transport_sockets/openssl/test_data/ca_cert.pem"));
 
-  EXPECT_NO_THROW(ServerContextConfigImpl server_context_config(tls_context, factory_context));
+  EXPECT_NO_THROW(Envoy::Ssl::ServerContextConfigImpl server_context_config(tls_context, factory_context));
 }
 
-} // namespace Ssl
+} // namespace Alts
+} // namespace TransportSockets
+} // namespace Extensions
 } // namespace Envoy

@@ -43,7 +43,9 @@ using testing::ReturnRef;
 using testing::StrictMock;
 
 namespace Envoy {
-namespace Ssl {
+namespace Extensions {
+namespace TransportSockets {
+namespace Openssl {
 
 namespace {
 
@@ -60,10 +62,10 @@ void testUtil(const std::string& client_ctx_yaml, const std::string& server_ctx_
 
   envoy::api::v2::auth::DownstreamTlsContext server_tls_context;
   MessageUtil::loadFromYaml(TestEnvironment::substitute(server_ctx_yaml), server_tls_context);
-  auto server_cfg = std::make_unique<ServerContextConfigImpl>(server_tls_context, factory_context);
-  ContextManagerImpl manager(time_system);
+  auto server_cfg = std::make_unique<Envoy::Ssl::ServerContextConfigImpl>(server_tls_context, factory_context);
+  Envoy::Ssl::ContextManagerImpl manager(time_system);
   Stats::IsolatedStoreImpl server_stats_store;
-  Ssl::ServerSslSocketFactory server_ssl_socket_factory(
+  Envoy::Ssl::ServerSslSocketFactory server_ssl_socket_factory(
       std::move(server_cfg), manager, server_stats_store, std::vector<std::string>{});
 
   DangerousDeprecatedTestTime test_time;
@@ -76,9 +78,9 @@ void testUtil(const std::string& client_ctx_yaml, const std::string& server_ctx_
 
   envoy::api::v2::auth::UpstreamTlsContext client_tls_context;
   MessageUtil::loadFromYaml(TestEnvironment::substitute(client_ctx_yaml), client_tls_context);
-  auto client_cfg = std::make_unique<ClientContextConfigImpl>(client_tls_context, factory_context);
+  auto client_cfg = std::make_unique<Envoy::Ssl::ClientContextConfigImpl>(client_tls_context, factory_context);
   Stats::IsolatedStoreImpl client_stats_store;
-  Ssl::ClientSslSocketFactory client_ssl_socket_factory(std::move(client_cfg), manager,
+  Envoy::Ssl::ClientSslSocketFactory client_ssl_socket_factory(std::move(client_cfg), manager,
                                                         client_stats_store);
   Network::ClientConnectionPtr client_connection = dispatcher.createClientConnection(
       socket.localAddress(), Network::Address::InstanceConstSharedPtr(),
@@ -173,7 +175,7 @@ const std::string testUtilV2(
     Network::TransportSocketOptionsSharedPtr transport_socket_options) {
   Event::SimulatedTimeSystem time_system;
   testing::NiceMock<Server::Configuration::MockTransportSocketFactoryContext> factory_context;
-  ContextManagerImpl manager(time_system);
+  Envoy::Ssl::ContextManagerImpl manager(time_system);
   std::string new_session = EMPTY_STRING;
 
   // SNI-based selection logic isn't happening in Ssl::SslSocket anymore.
@@ -182,9 +184,9 @@ const std::string testUtilV2(
   std::vector<std::string> server_names(filter_chain.filter_chain_match().server_names().begin(),
                                         filter_chain.filter_chain_match().server_names().end());
   auto server_cfg =
-      std::make_unique<Ssl::ServerContextConfigImpl>(filter_chain.tls_context(), factory_context);
+      std::make_unique<Envoy::Ssl::ServerContextConfigImpl>(filter_chain.tls_context(), factory_context);
   Stats::IsolatedStoreImpl server_stats_store;
-  Ssl::ServerSslSocketFactory server_ssl_socket_factory(std::move(server_cfg), manager,
+  Envoy::Ssl::ServerSslSocketFactory server_ssl_socket_factory(std::move(server_cfg), manager,
                                                         server_stats_store, server_names);
 
   DangerousDeprecatedTestTime test_time;
@@ -195,9 +197,9 @@ const std::string testUtilV2(
   Network::MockConnectionHandler connection_handler;
   Network::ListenerPtr listener = dispatcher.createListener(socket, callbacks, true, false);
 
-  auto client_cfg = std::make_unique<ClientContextConfigImpl>(client_ctx_proto, factory_context);
+  auto client_cfg = std::make_unique<Envoy::Ssl::ClientContextConfigImpl>(client_ctx_proto, factory_context);
   Stats::IsolatedStoreImpl client_stats_store;
-  ClientSslSocketFactory client_ssl_socket_factory(std::move(client_cfg), manager,
+  Envoy::Ssl::ClientSslSocketFactory client_ssl_socket_factory(std::move(client_cfg), manager,
                                                    client_stats_store);
   Network::ClientConnectionPtr client_connection = dispatcher.createClientConnection(
       socket.localAddress(), Network::Address::InstanceConstSharedPtr(),
@@ -1764,11 +1766,11 @@ TEST_P(SslSocketTest, FlushCloseDuringHandshake) {
 
   envoy::api::v2::auth::DownstreamTlsContext tls_context;
   MessageUtil::loadFromYaml(TestEnvironment::substitute(server_ctx_yaml), tls_context);
-  auto server_cfg = std::make_unique<ServerContextConfigImpl>(tls_context, factory_context_);
+  auto server_cfg = std::make_unique<Envoy::Ssl::ServerContextConfigImpl>(tls_context, factory_context_);
   Event::SimulatedTimeSystem time_system;
-  ContextManagerImpl manager(time_system);
+  Envoy::Ssl::ContextManagerImpl manager(time_system);
   Stats::IsolatedStoreImpl server_stats_store;
-  Ssl::ServerSslSocketFactory server_ssl_socket_factory(
+  Envoy::Ssl::ServerSslSocketFactory server_ssl_socket_factory(
       std::move(server_cfg), manager, server_stats_store, std::vector<std::string>{});
 
   Network::TcpListenSocket socket(Network::Test::getCanonicalLoopbackAddress(GetParam()), nullptr,
@@ -1825,11 +1827,11 @@ TEST_P(SslSocketTest, HalfClose) {
 
   envoy::api::v2::auth::DownstreamTlsContext server_tls_context;
   MessageUtil::loadFromYaml(TestEnvironment::substitute(server_ctx_yaml), server_tls_context);
-  auto server_cfg = std::make_unique<ServerContextConfigImpl>(server_tls_context, factory_context_);
+  auto server_cfg = std::make_unique<Envoy::Ssl::ServerContextConfigImpl>(server_tls_context, factory_context_);
   Event::SimulatedTimeSystem time_system;
-  ContextManagerImpl manager(time_system);
+  Envoy::Ssl::ContextManagerImpl manager(time_system);
   Stats::IsolatedStoreImpl server_stats_store;
-  Ssl::ServerSslSocketFactory server_ssl_socket_factory(
+  Envoy::Ssl::ServerSslSocketFactory server_ssl_socket_factory(
       std::move(server_cfg), manager, server_stats_store, std::vector<std::string>{});
 
   Network::TcpListenSocket socket(Network::Test::getCanonicalLoopbackAddress(GetParam()), nullptr,
@@ -1847,9 +1849,9 @@ TEST_P(SslSocketTest, HalfClose) {
 
   envoy::api::v2::auth::UpstreamTlsContext tls_context;
   MessageUtil::loadFromYaml(TestEnvironment::substitute(client_ctx_yaml), tls_context);
-  auto client_cfg = std::make_unique<ClientContextConfigImpl>(tls_context, factory_context_);
+  auto client_cfg = std::make_unique<Envoy::Ssl::ClientContextConfigImpl>(tls_context, factory_context_);
   Stats::IsolatedStoreImpl client_stats_store;
-  ClientSslSocketFactory client_ssl_socket_factory(std::move(client_cfg), manager,
+  Envoy::Ssl::ClientSslSocketFactory client_ssl_socket_factory(std::move(client_cfg), manager,
                                                    client_stats_store);
   Network::ClientConnectionPtr client_connection = dispatcher_->createClientConnection(
       socket.localAddress(), Network::Address::InstanceConstSharedPtr(),
@@ -1915,11 +1917,11 @@ TEST_P(SslSocketTest, ClientAuthMultipleCAs) {
 
   envoy::api::v2::auth::DownstreamTlsContext server_tls_context;
   MessageUtil::loadFromYaml(TestEnvironment::substitute(server_ctx_yaml), server_tls_context);
-  auto server_cfg = std::make_unique<ServerContextConfigImpl>(server_tls_context, factory_context);
+  auto server_cfg = std::make_unique<Envoy::Ssl::ServerContextConfigImpl>(server_tls_context, factory_context);
   Event::SimulatedTimeSystem time_system;
-  ContextManagerImpl manager(time_system);
+  Envoy::Ssl::ContextManagerImpl manager(time_system);
   Stats::IsolatedStoreImpl server_stats_store;
-  Ssl::ServerSslSocketFactory server_ssl_socket_factory(
+  Envoy::Ssl::ServerSslSocketFactory server_ssl_socket_factory(
       std::move(server_cfg), manager, server_stats_store, std::vector<std::string>{});
 
   Network::TcpListenSocket socket(Network::Test::getCanonicalLoopbackAddress(GetParam()), nullptr,
@@ -1939,9 +1941,9 @@ TEST_P(SslSocketTest, ClientAuthMultipleCAs) {
 
   envoy::api::v2::auth::UpstreamTlsContext tls_context;
   MessageUtil::loadFromYaml(TestEnvironment::substitute(client_ctx_yaml), tls_context);
-  auto client_cfg = std::make_unique<ClientContextConfigImpl>(tls_context, factory_context);
+  auto client_cfg = std::make_unique<Envoy::Ssl::ClientContextConfigImpl>(tls_context, factory_context);
   Stats::IsolatedStoreImpl client_stats_store;
-  ClientSslSocketFactory ssl_socket_factory(std::move(client_cfg), manager, client_stats_store);
+  Envoy::Ssl::ClientSslSocketFactory ssl_socket_factory(std::move(client_cfg), manager, client_stats_store);
   Network::ClientConnectionPtr client_connection = dispatcher_->createClientConnection(
       socket.localAddress(), Network::Address::InstanceConstSharedPtr(),
       ssl_socket_factory.createTransportSocket(nullptr), nullptr);
@@ -1997,21 +1999,21 @@ void testTicketSessionResumption(const std::string& server_ctx_yaml1,
                                  const Network::Address::IpVersion ip_version) {
   testing::NiceMock<Server::Configuration::MockTransportSocketFactoryContext> factory_context;
   Event::SimulatedTimeSystem time_system;
-  ContextManagerImpl manager(time_system);
+  Envoy::Ssl::ContextManagerImpl manager(time_system);
 
   envoy::api::v2::auth::DownstreamTlsContext server_tls_context1;
   MessageUtil::loadFromYaml(TestEnvironment::substitute(server_ctx_yaml1), server_tls_context1);
   auto server_cfg1 =
-      std::make_unique<ServerContextConfigImpl>(server_tls_context1, factory_context);
+      std::make_unique<Envoy::Ssl::ServerContextConfigImpl>(server_tls_context1, factory_context);
 
   envoy::api::v2::auth::DownstreamTlsContext server_tls_context2;
   MessageUtil::loadFromYaml(TestEnvironment::substitute(server_ctx_yaml2), server_tls_context2);
   auto server_cfg2 =
-      std::make_unique<ServerContextConfigImpl>(server_tls_context2, factory_context);
+      std::make_unique<Envoy::Ssl::ServerContextConfigImpl>(server_tls_context2, factory_context);
   Stats::IsolatedStoreImpl server_stats_store;
-  Ssl::ServerSslSocketFactory server_ssl_socket_factory1(std::move(server_cfg1), manager,
+  Envoy::Ssl::ServerSslSocketFactory server_ssl_socket_factory1(std::move(server_cfg1), manager,
                                                          server_stats_store, server_names1);
-  Ssl::ServerSslSocketFactory server_ssl_socket_factory2(std::move(server_cfg2), manager,
+  Envoy::Ssl::ServerSslSocketFactory server_ssl_socket_factory2(std::move(server_cfg2), manager,
                                                          server_stats_store, server_names2);
 
   Network::TcpListenSocket socket1(Network::Test::getCanonicalLoopbackAddress(ip_version), nullptr,
@@ -2027,9 +2029,9 @@ void testTicketSessionResumption(const std::string& server_ctx_yaml1,
 
   envoy::api::v2::auth::UpstreamTlsContext client_tls_context;
   MessageUtil::loadFromYaml(TestEnvironment::substitute(client_ctx_yaml), client_tls_context);
-  auto client_cfg = std::make_unique<ClientContextConfigImpl>(client_tls_context, factory_context);
+  auto client_cfg = std::make_unique<Envoy::Ssl::ClientContextConfigImpl>(client_tls_context, factory_context);
   Stats::IsolatedStoreImpl client_stats_store;
-  ClientSslSocketFactory ssl_socket_factory(std::move(client_cfg), manager, client_stats_store);
+  Envoy::Ssl::ClientSslSocketFactory ssl_socket_factory(std::move(client_cfg), manager, client_stats_store);
   Network::ClientConnectionPtr client_connection = dispatcher.createClientConnection(
       socket1.localAddress(), Network::Address::InstanceConstSharedPtr(),
       ssl_socket_factory.createTransportSocket(nullptr), nullptr);
@@ -2407,16 +2409,16 @@ TEST_P(SslSocketTest, ClientAuthCrossListenerSessionResumption) {
 
   envoy::api::v2::auth::DownstreamTlsContext tls_context1;
   MessageUtil::loadFromYaml(TestEnvironment::substitute(server_ctx_yaml), tls_context1);
-  auto server_cfg = std::make_unique<ServerContextConfigImpl>(tls_context1, factory_context_);
+  auto server_cfg = std::make_unique<Envoy::Ssl::ServerContextConfigImpl>(tls_context1, factory_context_);
   envoy::api::v2::auth::DownstreamTlsContext tls_context2;
   MessageUtil::loadFromYaml(TestEnvironment::substitute(server2_ctx_yaml), tls_context2);
-  auto server2_cfg = std::make_unique<ServerContextConfigImpl>(tls_context2, factory_context_);
+  auto server2_cfg = std::make_unique<Envoy::Ssl::ServerContextConfigImpl>(tls_context2, factory_context_);
   Event::SimulatedTimeSystem time_system;
-  ContextManagerImpl manager(time_system);
+  Envoy::Ssl::ContextManagerImpl manager(time_system);
   Stats::IsolatedStoreImpl server_stats_store;
-  Ssl::ServerSslSocketFactory server_ssl_socket_factory(
+  Envoy::Ssl::ServerSslSocketFactory server_ssl_socket_factory(
       std::move(server_cfg), manager, server_stats_store, std::vector<std::string>{});
-  Ssl::ServerSslSocketFactory server2_ssl_socket_factory(
+  Envoy::Ssl::ServerSslSocketFactory server2_ssl_socket_factory(
       std::move(server2_cfg), manager, server_stats_store, std::vector<std::string>{});
 
   Network::TcpListenSocket socket(Network::Test::getCanonicalLoopbackAddress(GetParam()), nullptr,
@@ -2439,9 +2441,9 @@ TEST_P(SslSocketTest, ClientAuthCrossListenerSessionResumption) {
   envoy::api::v2::auth::UpstreamTlsContext tls_context;
   MessageUtil::loadFromYaml(TestEnvironment::substitute(client_ctx_yaml), tls_context);
 
-  auto client_cfg = std::make_unique<ClientContextConfigImpl>(tls_context, factory_context_);
+  auto client_cfg = std::make_unique<Envoy::Ssl::ClientContextConfigImpl>(tls_context, factory_context_);
   Stats::IsolatedStoreImpl client_stats_store;
-  ClientSslSocketFactory ssl_socket_factory(std::move(client_cfg), manager, client_stats_store);
+  Envoy::Ssl::ClientSslSocketFactory ssl_socket_factory(std::move(client_cfg), manager, client_stats_store);
   Network::ClientConnectionPtr client_connection = dispatcher_->createClientConnection(
       socket.localAddress(), Network::Address::InstanceConstSharedPtr(),
       ssl_socket_factory.createTransportSocket(nullptr), nullptr);
@@ -2521,13 +2523,13 @@ void testClientSessionResumption(const std::string& server_ctx_yaml,
 
   testing::NiceMock<Server::Configuration::MockTransportSocketFactoryContext> factory_context;
   Event::SimulatedTimeSystem time_system;
-  ContextManagerImpl manager(time_system);
+  Envoy::Ssl::ContextManagerImpl manager(time_system);
 
   envoy::api::v2::auth::DownstreamTlsContext server_ctx_proto;
   MessageUtil::loadFromYaml(TestEnvironment::substitute(server_ctx_yaml), server_ctx_proto);
-  auto server_cfg = std::make_unique<ServerContextConfigImpl>(server_ctx_proto, factory_context);
+  auto server_cfg = std::make_unique<Envoy::Ssl::ServerContextConfigImpl>(server_ctx_proto, factory_context);
   Stats::IsolatedStoreImpl server_stats_store;
-  ServerSslSocketFactory server_ssl_socket_factory(std::move(server_cfg), manager,
+  Envoy::Ssl::ServerSslSocketFactory server_ssl_socket_factory(std::move(server_cfg), manager,
                                                    server_stats_store, std::vector<std::string>{});
 
   Network::TcpListenSocket socket(Network::Test::getCanonicalLoopbackAddress(version), nullptr,
@@ -2542,9 +2544,9 @@ void testClientSessionResumption(const std::string& server_ctx_yaml,
 
   envoy::api::v2::auth::UpstreamTlsContext client_ctx_proto;
   MessageUtil::loadFromYaml(TestEnvironment::substitute(client_ctx_yaml), client_ctx_proto);
-  auto client_cfg = std::make_unique<ClientContextConfigImpl>(client_ctx_proto, factory_context);
+  auto client_cfg = std::make_unique<Envoy::Ssl::ClientContextConfigImpl>(client_ctx_proto, factory_context);
   Stats::IsolatedStoreImpl client_stats_store;
-  ClientSslSocketFactory client_ssl_socket_factory(std::move(client_cfg), manager,
+  Envoy::Ssl::ClientSslSocketFactory client_ssl_socket_factory(std::move(client_cfg), manager,
                                                    client_stats_store);
   Network::ClientConnectionPtr client_connection = dispatcher.createClientConnection(
       socket.localAddress(), Network::Address::InstanceConstSharedPtr(),
@@ -2783,11 +2785,11 @@ TEST_P(SslSocketTest, SslError) {
 
   envoy::api::v2::auth::DownstreamTlsContext tls_context;
   MessageUtil::loadFromYaml(TestEnvironment::substitute(server_ctx_yaml), tls_context);
-  auto server_cfg = std::make_unique<ServerContextConfigImpl>(tls_context, factory_context_);
+  auto server_cfg = std::make_unique<Envoy::Ssl::ServerContextConfigImpl>(tls_context, factory_context_);
   Event::SimulatedTimeSystem time_system;
-  ContextManagerImpl manager(time_system);
+  Envoy::Ssl::ContextManagerImpl manager(time_system);
   Stats::IsolatedStoreImpl server_stats_store;
-  Ssl::ServerSslSocketFactory server_ssl_socket_factory(
+  Envoy::Ssl::ServerSslSocketFactory server_ssl_socket_factory(
       std::move(server_cfg), manager, server_stats_store, std::vector<std::string>{});
 
   Network::TcpListenSocket socket(Network::Test::getCanonicalLoopbackAddress(GetParam()), nullptr,
@@ -3250,13 +3252,13 @@ TEST_P(SslSocketTest, DownstreamNotReadySslSocket) {
       tls_context.mutable_common_tls_context()->mutable_tls_certificate_sds_secret_configs()->Add();
   sds_secret_configs->set_name("abc.com");
   sds_secret_configs->mutable_sds_config();
-  auto server_cfg = std::make_unique<ServerContextConfigImpl>(tls_context, factory_context);
+  auto server_cfg = std::make_unique<Envoy::Ssl::ServerContextConfigImpl>(tls_context, factory_context);
   EXPECT_TRUE(server_cfg->tlsCertificates().empty());
   EXPECT_FALSE(server_cfg->isReady());
 
   Event::SimulatedTimeSystem time_system;
-  ContextManagerImpl manager(time_system);
-  Ssl::ServerSslSocketFactory server_ssl_socket_factory(std::move(server_cfg), manager, stats_store,
+  Envoy::Ssl::ContextManagerImpl manager(time_system);
+  Envoy::Ssl::ServerSslSocketFactory server_ssl_socket_factory(std::move(server_cfg), manager, stats_store,
                                                         std::vector<std::string>{});
   auto transport_socket = server_ssl_socket_factory.createTransportSocket(nullptr);
   EXPECT_EQ(EMPTY_STRING, transport_socket->protocol());
@@ -3291,12 +3293,12 @@ TEST_P(SslSocketTest, UpstreamNotReadySslSocket) {
       tls_context.mutable_common_tls_context()->mutable_tls_certificate_sds_secret_configs()->Add();
   sds_secret_configs->set_name("abc.com");
   sds_secret_configs->mutable_sds_config();
-  auto client_cfg = std::make_unique<ClientContextConfigImpl>(tls_context, factory_context);
+  auto client_cfg = std::make_unique<Envoy::Ssl::ClientContextConfigImpl>(tls_context, factory_context);
   EXPECT_TRUE(client_cfg->tlsCertificates().empty());
   EXPECT_FALSE(client_cfg->isReady());
 
-  ContextManagerImpl manager(time_system);
-  Ssl::ClientSslSocketFactory client_ssl_socket_factory(std::move(client_cfg), manager,
+  Envoy::Ssl::ContextManagerImpl manager(time_system);
+  Envoy::Ssl::ClientSslSocketFactory client_ssl_socket_factory(std::move(client_cfg), manager,
                                                         stats_store);
   auto transport_socket = client_ssl_socket_factory.createTransportSocket(nullptr);
   EXPECT_EQ(EMPTY_STRING, transport_socket->protocol());
@@ -3314,19 +3316,19 @@ public:
     MessageUtil::loadFromYaml(TestEnvironment::substitute(server_ctx_yaml_),
                               downstream_tls_context_);
     auto server_cfg =
-        std::make_unique<ServerContextConfigImpl>(downstream_tls_context_, factory_context_);
+        std::make_unique<Envoy::Ssl::ServerContextConfigImpl>(downstream_tls_context_, factory_context_);
     Event::SimulatedTimeSystem time_system;
-    manager_ = std::make_unique<ContextManagerImpl>(time_system);
-    server_ssl_socket_factory_ = std::make_unique<ServerSslSocketFactory>(
+    manager_ = std::make_unique<Envoy::Ssl::ContextManagerImpl>(time_system);
+    server_ssl_socket_factory_ = std::make_unique<Envoy::Ssl::ServerSslSocketFactory>(
         std::move(server_cfg), *manager_, server_stats_store_, std::vector<std::string>{});
 
     listener_ = dispatcher_->createListener(socket_, listener_callbacks_, true, false);
 
     MessageUtil::loadFromYaml(TestEnvironment::substitute(client_ctx_yaml_), upstream_tls_context_);
     auto client_cfg =
-        std::make_unique<ClientContextConfigImpl>(upstream_tls_context_, factory_context_);
+        std::make_unique<Envoy::Ssl::ClientContextConfigImpl>(upstream_tls_context_, factory_context_);
 
-    client_ssl_socket_factory_ = std::make_unique<ClientSslSocketFactory>(
+    client_ssl_socket_factory_ = std::make_unique<Envoy::Ssl::ClientSslSocketFactory>(
         std::move(client_cfg), *manager_, client_stats_store_);
     client_connection_ = dispatcher_->createClientConnection(
         socket_.localAddress(), source_address_,
@@ -3500,11 +3502,11 @@ public:
 )EOF";
 
   envoy::api::v2::auth::DownstreamTlsContext downstream_tls_context_;
-  std::unique_ptr<ContextManagerImpl> manager_;
+  std::unique_ptr<Envoy::Ssl::ContextManagerImpl> manager_;
   Network::TransportSocketFactoryPtr server_ssl_socket_factory_;
   Network::ListenerPtr listener_;
   envoy::api::v2::auth::UpstreamTlsContext upstream_tls_context_;
-  ClientContextSharedPtr client_ctx_;
+  Envoy::Ssl::ClientContextSharedPtr client_ctx_;
   Network::TransportSocketFactoryPtr client_ssl_socket_factory_;
   Network::ClientConnectionPtr client_connection_;
   Network::ConnectionPtr server_connection_;
@@ -3573,5 +3575,7 @@ TEST_P(SslReadBufferLimitTest, TestBind) {
   disconnect();
 }
 
-} // namespace Ssl
+} // namespace Alts
+} // namespace TransportSockets
+} // namespace Extensions
 } // namespace Envoy
