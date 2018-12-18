@@ -12,6 +12,38 @@ namespace Extensions {
 namespace TransportSockets {
 namespace Openssl {
 
+namespace {
+// This SslSocket will be used when SSL secret is not fetched from SDS server.
+class NotReadySslSocket : public Network::TransportSocket {
+public:
+  // Network::TransportSocket
+  void setTransportSocketCallbacks(Network::TransportSocketCallbacks&) override {}
+  std::string protocol() const override { return EMPTY_STRING; }
+  bool canFlushClose() override { return true; }
+  void closeSocket(Network::ConnectionEvent) override {}
+  Network::IoResult doRead(Buffer::Instance&) override { return {Network::PostIoAction::Close, 0, false}; }
+  Network::IoResult doWrite(Buffer::Instance&, bool) override {
+    return {Network::PostIoAction::Close, 0, false};
+  }
+  void onConnected() override {}
+  const Ssl::Connection* ssl() const override { return nullptr; }
+};
+} // namespace
+
+OpensslSocket::OpensslSocket(Envoy::Ssl::ContextSharedPtr ctx, InitialState state,
+                     Network::TransportSocketOptionsSharedPtr transport_socket_options)
+    : ctx_(std::dynamic_pointer_cast<Envoy::Ssl::ContextImpl>(ctx)),
+      ssl_(ctx_->newSsl(transport_socket_options != nullptr
+                            ? transport_socket_options->serverNameOverride()
+                            : absl::nullopt)) {
+  if (state == InitialState::Client) {
+    SSL_set_connect_state(ssl_.get());
+  } else {
+    ASSERT(state == InitialState::Server);
+    SSL_set_accept_state(ssl_.get());
+  }
+}
+
 OpensslSocket::OpensslSocket(Network::TransportSocketPtr&& raw_socket)
     : raw_buffer_socket_(std::move(raw_socket)) {}
 
@@ -34,6 +66,7 @@ std::string OpensslSocket::protocol() const {
 }
 
 Network::PostIoAction OpensslSocket::doHandshake() {
+std::cout << "!!!!!!!!!!!!!!!!!!!!!! doHandshake \n";
   ASSERT(!handshake_complete_);
   int rc = SSL_do_handshake(ssl_.get());
   if (rc == 1) {
@@ -59,116 +92,6 @@ Network::PostIoAction OpensslSocket::doHandshake() {
 	}
   }
 }
-
-/*void OpensslSocket::doHandshakeNext() {
-  ENVOY_CONN_LOG(debug, "TSI: doHandshake next: received: {}", callbacks_->connection(),
-                 raw_read_buffer_.length());
-
-  if (!handshaker_) {
-    handshaker_ = handshaker_factory_(callbacks_->connection().dispatcher(),
-                                      callbacks_->connection().localAddress(),
-                                      callbacks_->connection().remoteAddress());
-    if (!handshaker_) {
-      ENVOY_CONN_LOG(warn, "TSI: failed to create handshaker", callbacks_->connection());
-      callbacks_->connection().close(Network::ConnectionCloseType::NoFlush);
-      return;
-    }
-
-    handshaker_->setHandshakerCallbacks(*this);
-  }
-
-  handshaker_next_calling_ = true;
-  Buffer::OwnedImpl handshaker_buffer;
-  handshaker_buffer.move(raw_read_buffer_);
-  handshaker_->next(handshaker_buffer);
-}*/
-
-/*Network::PostIoAction OpensslSocket::doHandshakeNextDone(NextResultPtr&& next_result) {
-  ASSERT(next_result);
-
-  ENVOY_CONN_LOG(debug, "TSI: doHandshake next done: status: {} to_send: {}",
-                 callbacks_->connection(), next_result->status_, next_result->to_send_->length());
-
-  tsi_result status = next_result->status_;
-  tsi_handshaker_result* handshaker_result = next_result->result_.get();
-
-  if (status != TSI_INCOMPLETE_DATA && status != TSI_OK) {
-    ENVOY_CONN_LOG(debug, "TSI: Handshake failed: status: {}", callbacks_->connection(), status);
-    return Network::PostIoAction::Close;
-  }
-
-  if (next_result->to_send_->length() > 0) {
-    raw_write_buffer_.move(*next_result->to_send_);
-  }
-
-  if (status == TSI_OK && handshaker_result != nullptr) {
-    tsi_peer peer;
-    // returns TSI_OK assuming there is no fatal error. Asserting OK.
-    status = tsi_handshaker_result_extract_peer(handshaker_result, &peer);
-    ASSERT(status == TSI_OK);
-    Cleanup peer_cleanup([&peer]() { tsi_peer_destruct(&peer); });
-    ENVOY_CONN_LOG(debug, "TSI: Handshake successful: peer properties: {}",
-                   callbacks_->connection(), peer.property_count);
-    for (size_t i = 0; i < peer.property_count; ++i) {
-      ENVOY_CONN_LOG(debug, "  {}: {}", callbacks_->connection(), peer.properties[i].name,
-                     std::string(peer.properties[i].value.data, peer.properties[i].value.length));
-    }
-    if (handshake_validator_) {
-      std::string err;
-      const bool peer_validated = handshake_validator_(peer, err);
-      if (peer_validated) {
-        ENVOY_CONN_LOG(debug, "TSI: Handshake validation succeeded.", callbacks_->connection());
-      } else {
-        ENVOY_CONN_LOG(debug, "TSI: Handshake validation failed: {}", callbacks_->connection(),
-                       err);
-        return Network::PostIoAction::Close;
-      }
-    } else {
-      ENVOY_CONN_LOG(debug, "TSI: Handshake validation skipped.", callbacks_->connection());
-    }
-
-    const unsigned char* unused_bytes;
-    size_t unused_byte_size;
-
-    // returns TSI_OK assuming there is no fatal error. Asserting OK.
-    status =
-        tsi_handshaker_result_get_unused_bytes(handshaker_result, &unused_bytes, &unused_byte_size);
-    ASSERT(status == TSI_OK);
-    if (unused_byte_size > 0) {
-      raw_read_buffer_.prepend(
-          absl::string_view{reinterpret_cast<const char*>(unused_bytes), unused_byte_size});
-    }
-    ENVOY_CONN_LOG(debug, "TSI: Handshake successful: unused_bytes: {}", callbacks_->connection(),
-                   unused_byte_size);
-
-    // returns TSI_OK assuming there is no fatal error. Asserting OK.
-    tsi_frame_protector* frame_protector;
-    status =
-        tsi_handshaker_result_create_frame_protector(handshaker_result, NULL, &frame_protector);
-    ASSERT(status == TSI_OK);
-    frame_protector_ = std::make_unique<OpensslFrameProtector>(frame_protector);
-
-    handshake_complete_ = true;
-    callbacks_->raiseEvent(Network::ConnectionEvent::Connected);
-  }
-
-  if (read_error_ || (!handshake_complete_ && end_stream_read_)) {
-    ENVOY_CONN_LOG(debug, "TSI: Handshake failed: end of stream without enough data",
-                   callbacks_->connection());
-    return Network::PostIoAction::Close;
-  }
-
-  if (raw_read_buffer_.length() > 0) {
-    callbacks_->setReadBufferReady();
-  }
-
-  // Try to write raw buffer when next call is done, even this is not in do[Read|Write] stack.
-  if (raw_write_buffer_.length() > 0) {
-    return raw_buffer_socket_->doWrite(raw_write_buffer_, false).action_;
-  }
-
-  return Network::PostIoAction::KeepOpen;
-}*/
 
 Network::IoResult OpensslSocket::doRead(Buffer::Instance& read_buffer) {
  if (!handshake_complete_) {
@@ -264,10 +187,10 @@ Network::IoResult OpensslSocket::doWrite(Buffer::Instance& write_buffer, bool en
 
   uint64_t bytes_to_write;
   if (bytes_to_retry_) {
-	bytes_to_write = bytes_to_retry_;
-	bytes_to_retry_ = 0;
+    bytes_to_write = bytes_to_retry_;
+    bytes_to_retry_ = 0;
   } else {
-	bytes_to_write = std::min(write_buffer.length(), static_cast<uint64_t>(16384));
+    bytes_to_write = std::min(write_buffer.length(), static_cast<uint64_t>(16384));
   }
 
   uint64_t total_bytes_written = 0;
@@ -304,8 +227,8 @@ Network::IoResult OpensslSocket::doWrite(Buffer::Instance& write_buffer, bool en
   }
 
   if (write_buffer.length() == 0 && end_stream) {
-	shutdownSsl();
-  }
+     shutdownSsl();
+   }
 
   return {Network::PostIoAction::KeepOpen, total_bytes_written, false};
 }
@@ -333,15 +256,6 @@ void OpensslSocket::onConnected() {
 	ASSERT(!handshake_complete_);
 }
 
-/*void OpensslSocket::onNextDone(NextResultPtr&& result) {
-  handshaker_next_calling_ = false;
-
-  Network::PostIoAction action = doHandshakeNextDone(std::move(result));
-  if (action == Network::PostIoAction::Close) {
-    callbacks_->connection().close(Network::ConnectionCloseType::NoFlush);
-  }
-}*/
-
 OpensslSocketFactory::OpensslSocketFactory(){}
 
 bool OpensslSocketFactory::implementsSecureTransport() const { return true; }
@@ -349,6 +263,93 @@ bool OpensslSocketFactory::implementsSecureTransport() const { return true; }
 Network::TransportSocketPtr
 OpensslSocketFactory::createTransportSocket(Network::TransportSocketOptionsSharedPtr) const {
   return std::make_unique<OpensslSocket>();
+}
+
+namespace {
+OpensslSocketFactoryStats generateStats(const std::string& prefix, Stats::Scope& store) {
+  return {
+      ALL_SSL_SOCKET_FACTORY_STATS(POOL_COUNTER_PREFIX(store, prefix + "_ssl_socket_factory."))};
+}
+} // namespace
+
+ClientOpensslSocketFactory::ClientOpensslSocketFactory(Envoy::Ssl::ClientContextConfigPtr config,
+                                                       Envoy::Ssl::ContextManager& manager,
+                                                       Stats::Scope& stats_scope)
+    : manager_(manager), stats_scope_(stats_scope), stats_(generateStats("client", stats_scope)),
+      config_(std::move(config)),
+      ssl_ctx_(manager_.createSslClientContext(stats_scope_, *config_)) {
+  config_->setSecretUpdateCallback([this]() { onAddOrUpdateSecret(); });
+}
+
+Network::TransportSocketPtr ClientOpensslSocketFactory::createTransportSocket(
+    Network::TransportSocketOptionsSharedPtr transport_socket_options) const {
+  // onAddOrUpdateSecret() could be invoked in the middle of checking the existence of ssl_ctx and
+  // creating SslSocket using ssl_ctx. Capture ssl_ctx_ into a local variable so that we check and
+  // use the same ssl_ctx to create SslSocket.namespace {
+  Envoy::Ssl::ClientContextSharedPtr ssl_ctx;
+  {
+    absl::ReaderMutexLock l(&ssl_ctx_mu_);
+    ssl_ctx = ssl_ctx_;
+  }
+  if (ssl_ctx) {
+    return std::make_unique<OpensslSocket>(std::move(ssl_ctx), InitialState::Client,
+                                            transport_socket_options);
+  } else {
+    ENVOY_LOG(debug, "Create NotReadySslSocket");
+    stats_.upstream_context_secrets_not_ready_.inc();
+    return std::make_unique<NotReadySslSocket>();
+  }
+}
+
+bool ClientOpensslSocketFactory::implementsSecureTransport() const { return true; }
+
+void ClientOpensslSocketFactory::onAddOrUpdateSecret() {
+  ENVOY_LOG(debug, "Secret is updated.");
+  {
+    absl::WriterMutexLock l(&ssl_ctx_mu_);
+    ssl_ctx_ = manager_.createSslClientContext(stats_scope_, *config_);
+  }
+  stats_.ssl_context_update_by_sds_.inc();
+}
+
+ServerOpensslSocketFactory::ServerOpensslSocketFactory(Envoy::Ssl::ServerContextConfigPtr config,
+                                                       Envoy::Ssl::ContextManager& manager,
+                                                       Stats::Scope& stats_scope,
+                                                       const std::vector<std::string>& server_names)
+    : manager_(manager), stats_scope_(stats_scope), stats_(generateStats("server", stats_scope)),
+      config_(std::move(config)), server_names_(server_names),
+      ssl_ctx_(manager_.createSslServerContext(stats_scope_, *config_, server_names_)) {
+  config_->setSecretUpdateCallback([this]() { onAddOrUpdateSecret(); });
+}
+
+Network::TransportSocketPtr
+ServerOpensslSocketFactory::createTransportSocket(Network::TransportSocketOptionsSharedPtr) const {
+  // onAddOrUpdateSecret() could be invoked in the middle of checking the existence of ssl_ctx and
+  // creating SslSocket using ssl_ctx. Capture ssl_ctx_ into a local variable so that we check and
+  // use the same ssl_ctx to create SslSocket.1
+  Envoy::Ssl::ServerContextSharedPtr ssl_ctx;
+  {
+    absl::ReaderMutexLock l(&ssl_ctx_mu_);
+    ssl_ctx = ssl_ctx_;
+  }
+  if (ssl_ctx) {
+    return std::make_unique<OpensslSocket>(std::move(ssl_ctx), InitialState::Server, nullptr);
+  } else {
+    ENVOY_LOG(debug, "Create NotReadySslSocket");
+    stats_.downstream_context_secrets_not_ready_.inc();
+    return std::make_unique<NotReadySslSocket>();
+  }
+}
+
+bool ServerOpensslSocketFactory::implementsSecureTransport() const { return true; }
+
+void ServerOpensslSocketFactory::onAddOrUpdateSecret() {
+  ENVOY_LOG(debug, "Secret is updated.");
+  {
+    absl::WriterMutexLock l(&ssl_ctx_mu_);
+    ssl_ctx_ = manager_.createSslServerContext(stats_scope_, *config_, server_names_);
+  }
+  stats_.ssl_context_update_by_sds_.inc();
 }
 
 } // namespace Openssl

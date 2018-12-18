@@ -10,6 +10,7 @@
 
 #include "test/extensions/transport_sockets/openssl/ssl_certs_test.h"
 #include "test/extensions/transport_sockets/openssl/ssl_test_utility.h"
+#include "test/integration/http_integration.h"
 #include "test/mocks/secret/mocks.h"
 #include "test/mocks/server/mocks.h"
 #include "test/test_common/environment.h"
@@ -28,11 +29,14 @@ namespace Extensions {
 namespace TransportSockets {
 namespace Openssl {
 
-class OpenSslTestBase : public HttpIntegrationTest,
-						public SslCertsTest {
+class OpensslContextTestBase : public SslCertsTest,
+                               public HttpIntegrationTest,
+						       public testing::WithParamInterface<Network::Address::IpVersion> {
 public:
+	OpensslContextTestBase()
+	      : HttpIntegrationTest(Http::CodecClient::Type::HTTP1, GetParam(), realTime()){}
 
-  void initialize() {
+  void initialize() override {
 	  config_helper_.addConfigModifier([this](envoy::config::bootstrap::v2::Bootstrap& bootstrap) {
 	        auto* transport_socket = bootstrap.mutable_static_resources()
 	                                     ->mutable_listeners(0)
@@ -41,16 +45,24 @@ public:
 	        transport_socket->set_name("envoy.transport_sockets.openssl");
 	  });
   }
+
+  void SetUp() override {
+
+  }
+
+  void TearDown() override {
+
+  }
 };
 
-class SslContextImplTest : public OpenSslTestBase {
+class OpensslContextImplTest : public OpensslContextTestBase {
 protected:
   Event::SimulatedTimeSystem time_system_;
   Stats::IsolatedStoreImpl store_;
   Envoy::Ssl::ContextManagerImpl manager_{time_system_};
 };
 
-TEST_F(SslContextImplTest, TestdNSNameMatching) {
+TEST_F(OpensslContextImplTest, TestdNSNameMatching) {
 
   initialize();
 
@@ -66,7 +78,7 @@ TEST_F(SslContextImplTest, TestdNSNameMatching) {
   EXPECT_FALSE(Envoy::Ssl::ContextImpl::dNSNameMatch("lyft.com", ""));
 }
 
-TEST_F(SslContextImplTest, TestVerifySubjectAltNameDNSMatched) {
+TEST_F(OpensslContextImplTest, TestVerifySubjectAltNameDNSMatched) {
   bssl::UniquePtr<X509> cert = readCertFromFile(
       TestEnvironment::substitute("{{ test_rundir }}/test/extensions/transport_sockets/openssl/test_data/san_dns_cert.pem"));
   std::vector<std::string> verify_subject_alt_name_list = {"server1.example.com",
@@ -74,7 +86,7 @@ TEST_F(SslContextImplTest, TestVerifySubjectAltNameDNSMatched) {
   EXPECT_TRUE(Envoy::Ssl::ContextImpl::verifySubjectAltName(cert.get(), verify_subject_alt_name_list));
 }
 
-TEST_F(SslContextImplTest, TestVerifySubjectAltNameURIMatched) {
+TEST_F(OpensslContextImplTest, TestVerifySubjectAltNameURIMatched) {
   bssl::UniquePtr<X509> cert = readCertFromFile(
       TestEnvironment::substitute("{{ test_rundir }}/test/extensions/transport_sockets/openssl/test_data/san_uri_cert.pem"));
   std::vector<std::string> verify_subject_alt_name_list = {"spiffe://lyft.com/fake-team",
@@ -82,14 +94,14 @@ TEST_F(SslContextImplTest, TestVerifySubjectAltNameURIMatched) {
   EXPECT_TRUE(Envoy::Ssl::ContextImpl::verifySubjectAltName(cert.get(), verify_subject_alt_name_list));
 }
 
-TEST_F(SslContextImplTest, TestVerifySubjectAltNameNotMatched) {
+TEST_F(OpensslContextImplTest, TestVerifySubjectAltNameNotMatched) {
   bssl::UniquePtr<X509> cert = readCertFromFile(
       TestEnvironment::substitute("{{ test_rundir }}/test/extensions/transport_sockets/openssl/test_data/san_dns_cert.pem"));
   std::vector<std::string> verify_subject_alt_name_list = {"foo", "bar"};
   EXPECT_FALSE(Envoy::Ssl::ContextImpl::verifySubjectAltName(cert.get(), verify_subject_alt_name_list));
 }
 
-TEST_F(SslContextImplTest, TestCipherSuites) {
+TEST_F(OpensslContextImplTest, TestCipherSuites) {
   const std::string yaml = R"EOF(
   common_tls_context:
     tls_params:
@@ -105,7 +117,7 @@ TEST_F(SslContextImplTest, TestCipherSuites) {
                             "ciphers were rejected when tried individually: BOGUS1, BOGUS2");
 }
 
-TEST_F(SslContextImplTest, TestExpiringCert) {
+TEST_F(OpensslContextImplTest, TestExpiringCert) {
   const std::string yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -129,7 +141,7 @@ TEST_F(SslContextImplTest, TestExpiringCert) {
               14 == context->daysUntilFirstCertExpires());
 }
 
-TEST_F(SslContextImplTest, TestExpiredCert) {
+TEST_F(OpensslContextImplTest, TestExpiredCert) {
   const std::string yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -146,7 +158,7 @@ TEST_F(SslContextImplTest, TestExpiredCert) {
   EXPECT_EQ(0U, context->daysUntilFirstCertExpires());
 }
 
-TEST_F(SslContextImplTest, TestGetCertInformation) {
+TEST_F(OpensslContextImplTest, TestGetCertInformation) {
   const std::string yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -195,7 +207,7 @@ TEST_F(SslContextImplTest, TestGetCertInformation) {
       message_differencer.Compare(cert_chain_details, *context->getCertChainInformation()[0]));
 }
 
-TEST_F(SslContextImplTest, TestGetCertInformationWithSAN) {
+TEST_F(OpensslContextImplTest, TestGetCertInformationWithSAN) {
   const std::string yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -248,7 +260,7 @@ TEST_F(SslContextImplTest, TestGetCertInformationWithSAN) {
       message_differencer.Compare(cert_chain_details, *context->getCertChainInformation()[0]));
 }
 
-TEST_F(SslContextImplTest, TestGetCertInformationWithExpiration) {
+TEST_F(OpensslContextImplTest, TestGetCertInformationWithExpiration) {
   const std::string yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -288,7 +300,7 @@ TEST_F(SslContextImplTest, TestGetCertInformationWithExpiration) {
   EXPECT_TRUE(message_differencer.Compare(certificate_details, *context->getCaCertInformation()));
 }
 
-TEST_F(SslContextImplTest, TestNoCert) {
+TEST_F(OpensslContextImplTest, TestNoCert) {
   Json::ObjectSharedPtr loader = TestEnvironment::jsonLoadFromString("{}");
   Envoy::Ssl::ClientContextConfigImpl cfg(*loader, factory_context_);
   Envoy::Ssl::ClientContextSharedPtr context(manager_.createSslClientContext(store_, cfg));
@@ -296,7 +308,7 @@ TEST_F(SslContextImplTest, TestNoCert) {
   EXPECT_TRUE(context->getCertChainInformation().empty());
 }
 
-class SslServerContextImplTicketTest : public SslContextImplTest {
+class SslServerContextImplTicketTest : public OpensslContextImplTest {
 public:
   void loadConfig(Envoy::Ssl::ServerContextConfigImpl& cfg) {
 	  Envoy::Ssl::ServerContextSharedPtr server_ctx(

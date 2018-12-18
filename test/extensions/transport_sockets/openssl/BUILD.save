@@ -12,8 +12,8 @@ envoy_package()
 envoy_cc_test(
     name = "ssl_socket_test",
     srcs = [
-        "openssl_certs_test.h",
-        "openssl_socket_test.cc",
+        "ssl_certs_test.h",
+        "ssl_socket_test.cc",
     ],
     data = [
         "gen_unittest_certs.sh",
@@ -42,7 +42,6 @@ envoy_cc_test(
         "//test/mocks/runtime:runtime_mocks",
         "//test/mocks/server:server_mocks",
         "//test/mocks/stats:stats_mocks",
-        "//test/mocks/secret:secret_mocks",
         "//test/test_common:environment_lib",
         "//test/test_common:network_utility_lib",
         "//test/test_common:simulated_time_system_lib",
@@ -51,10 +50,54 @@ envoy_cc_test(
     ],
 )
 
-envoy_cc_test_library(
-    name = "openssl_test_utils",
+envoy_cc_test(
+    name = "context_impl_test",
     srcs = [
-        "openssl_test_utility.h",
+        "context_impl_test.cc",
+        "ssl_certs_test.h",
+    ],
+    data = [
+        "gen_unittest_certs.sh",
+        "//test/extensions/transport_sockets/openssl/test_data:certs",
+    ],
+    deps = [
+        ":ssl_test_utils",
+        "//source/common/json:json_loader_lib",
+        "//source/common/ssl:context_config_lib",
+        "//source/common/ssl:context_lib",
+        "//source/common/stats:isolated_store_lib",
+        "//source/common/stats:stats_lib",
+        "//test/mocks/runtime:runtime_mocks",
+        "//test/mocks/secret:secret_mocks",
+        "//test/mocks/server:server_mocks",
+        "//test/test_common:environment_lib",
+        "//test/test_common:simulated_time_system_lib",
+        "//test/integration:http_integration_lib",
+    ],
+)
+
+envoy_cc_test(
+    name = "utility_test",
+    srcs = [
+        "utility_test.cc",
+    ],
+    data = [
+        "gen_unittest_certs.sh",
+        "//test/extensions/transport_sockets/openssl/test_data:certs",
+    ],
+    external_deps = ["ssl"],
+    deps = [
+        ":ssl_test_utils",
+        "//source/common/ssl:utility_lib",
+        "//test/test_common:environment_lib",
+        "//test/test_common:simulated_time_system_lib",
+    ],
+)
+
+envoy_cc_test_library(
+    name = "ssl_test_utils",
+    srcs = [
+        "ssl_test_utility.h",
     ],
     deps = [
         "//source/common/ssl:utility_lib",

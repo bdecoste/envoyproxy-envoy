@@ -6,9 +6,9 @@
 #include "common/network/raw_buffer_socket.h"
 #include "common/ssl/context_impl.h"
 
-//#include "extensions/transport_sockets/openssl/noop_transport_socket_callbacks.h"
-//#include "extensions/transport_sockets/openssl/openssl_frame_protector.h"
-//#include "extensions/transport_sockets/openssl/openssl_handshaker.h"
+#include "envoy/secret/secret_callbacks.h"
+
+#include "envoy/stats/stats_macros.h"
 
 #include "openssl/ssl.h"
 
@@ -17,31 +17,24 @@ namespace Extensions {
 namespace TransportSockets {
 namespace Openssl {
 
-/**
- * A factory function to create OpensslHandshaker
- * @param dispatcher the dispatcher for the thread where the socket is running on.
- * @param local_address the local address of the connection.
- * @param remote_address the remote address of the connection.
- */
-//typedef std::function<OpensslHandshakerPtr(
-//    Event::Dispatcher& dispatcher, const Network::Address::InstanceConstSharedPtr& local_address,
-//    const Network::Address::InstanceConstSharedPtr& remote_address)>
-//    HandshakerFactory;
+// clang-format off
+#define ALL_SSL_SOCKET_FACTORY_STATS(COUNTER)                                 \
+  COUNTER(ssl_context_update_by_sds)                                          \
+  COUNTER(upstream_context_secrets_not_ready)                                 \
+  COUNTER(downstream_context_secrets_not_ready)
+// clang-format on
 
-/**
- * A function to validate the peer of the connection.
- * @param peer the detail peer information of the connection.
- * @param err an error message to indicate why the peer is invalid. This is an
- * output param that should be populated by the function implementation.
- * @return true if the peer is valid or false if the peer is invalid.
- */
-//typedef std::function<bool(const tsi_peer& peer, std::string& err)> HandshakeValidator;
+struct OpensslSocketFactoryStats {
+  ALL_SSL_SOCKET_FACTORY_STATS(GENERATE_COUNTER_STRUCT)
+};
+
+enum class InitialState { Client, Server };
 
 /**
  * A implementation of Network::TransportSocket based on gRPC TSI
  */
 class OpensslSocket : public Network::TransportSocket,
-                  public Logger::Loggable<Logger::Id::connection> {
+                      public Logger::Loggable<Logger::Id::connection> {
 public:
   // For Test
   OpensslSocket(Network::TransportSocketPtr&& raw_socket_ptr);
@@ -53,6 +46,9 @@ public:
    * The connection will be closed immediately if it returns false.
    */
   OpensslSocket();
+
+  OpensslSocket(Envoy::Ssl::ContextSharedPtr ctx, InitialState state,
+              Network::TransportSocketOptionsSharedPtr transport_socket_options);
 
   // Network::TransportSocket
   void setTransportSocketCallbacks(Envoy::Network::TransportSocketCallbacks& callbacks) override;
@@ -89,8 +85,8 @@ private:
   bool shutdown_sent_{};
   uint64_t bytes_to_retry_{};
 
-  bssl::UniquePtr<SSL> ssl_;
   Envoy::Ssl::ContextImplSharedPtr ctx_;
+  bssl::UniquePtr<SSL> ssl_;
 
   void drainErrorQueue();
   void shutdownSsl();
@@ -107,9 +103,53 @@ public:
   Network::TransportSocketPtr
   createTransportSocket(Network::TransportSocketOptionsSharedPtr options) const override;
 
+};
+
+class ClientOpensslSocketFactory : public Network::TransportSocketFactory,
+                                   public Secret::SecretCallbacks,
+                                   Logger::Loggable<Logger::Id::config> {
+public:
+  ClientOpensslSocketFactory(Envoy::Ssl::ClientContextConfigPtr config, Envoy::Ssl::ContextManager& manager,
+                         Stats::Scope& stats_scope);
+
+  Network::TransportSocketPtr
+  createTransportSocket(Network::TransportSocketOptionsSharedPtr options) const override;
+  bool implementsSecureTransport() const override;
+
+  // Secret::SecretCallbacks
+  void onAddOrUpdateSecret() override;
+
 private:
-//  HandshakerFactory handshaker_factory_;
-//  HandshakeValidator handshake_validator_;
+  Envoy::Ssl::ContextManager& manager_;
+  Stats::Scope& stats_scope_;
+  OpensslSocketFactoryStats stats_;
+  Envoy::Ssl::ClientContextConfigPtr config_;
+  mutable absl::Mutex ssl_ctx_mu_;
+  Envoy::Ssl::ClientContextSharedPtr ssl_ctx_ GUARDED_BY(ssl_ctx_mu_);
+};
+
+class ServerOpensslSocketFactory : public Network::TransportSocketFactory,
+                                   public Secret::SecretCallbacks,
+                                   Logger::Loggable<Logger::Id::config> {
+public:
+  ServerOpensslSocketFactory(Envoy::Ssl::ServerContextConfigPtr config, Envoy::Ssl::ContextManager& manager,
+                         Stats::Scope& stats_scope, const std::vector<std::string>& server_names);
+
+  Network::TransportSocketPtr
+  createTransportSocket(Network::TransportSocketOptionsSharedPtr options) const override;
+  bool implementsSecureTransport() const override;
+
+  // Secret::SecretCallbacks
+  void onAddOrUpdateSecret() override;
+
+private:
+  Envoy::Ssl::ContextManager& manager_;
+  Stats::Scope& stats_scope_;
+  OpensslSocketFactoryStats stats_;
+  Envoy::Ssl::ServerContextConfigPtr config_;
+  const std::vector<std::string> server_names_;
+  mutable absl::Mutex ssl_ctx_mu_;
+  Envoy::Ssl::ServerContextSharedPtr ssl_ctx_ GUARDED_BY(ssl_ctx_mu_);
 };
 
 } // namespace Openssl

@@ -18,7 +18,8 @@
 
 #include "extensions/filters/listener/tls_inspector/tls_inspector.h"
 
-#include "test/extensions/transport_sockets/openssl/ssl_certs_test.h"
+#include "test/extensions/transport_sockets/openssl/openssl_certs_test.h"
+#include "test/integration/http_integration.h"
 #include "test/mocks/buffer/mocks.h"
 #include "test/mocks/network/mocks.h"
 #include "test/mocks/secret/mocks.h"
@@ -356,20 +357,50 @@ void configureServerAndExpiredClientCertificate(envoy::api::v2::Listener& listen
 
 } // namespace
 
-class SslSocketTest : public SslCertsTest,
-                      public testing::WithParamInterface<Network::Address::IpVersion> {
+class OpensslSocketTestBase : public SslCertsTest,
+                              public HttpIntegrationTest,
+						      public testing::WithParamInterface<Network::Address::IpVersion> {
+public:
+	OpensslSocketTestBase()
+	      : HttpIntegrationTest(Http::CodecClient::Type::HTTP1, GetParam(), realTime()){}
+
+  void initialize() override {
+std::cout << "******************************** initialize \n";
+	  config_helper_.addConfigModifier([this](envoy::config::bootstrap::v2::Bootstrap& bootstrap) {
+	        auto* transport_socket = bootstrap.mutable_static_resources()
+	                                     ->mutable_listeners(0)
+	                                     ->mutable_filter_chains(0)
+	                                     ->mutable_transport_socket();
+	        transport_socket->set_name("envoy.transport_sockets.openssl");
+	  });
+  }
+
+  void SetUp() override {
+
+  }
+
+  void TearDown() override {
+
+  }
+};
+
+class OpensslSocketTest : public OpensslSocketTestBase {
+
 protected:
-  SslSocketTest() : dispatcher_(std::make_unique<Event::DispatcherImpl>(test_time_.timeSystem())) {}
+  OpensslSocketTest() : dispatcher_(std::make_unique<Event::DispatcherImpl>(test_time_.timeSystem())) {}
 
   DangerousDeprecatedTestTime test_time_;
   std::unique_ptr<Event::DispatcherImpl> dispatcher_;
 };
 
-INSTANTIATE_TEST_CASE_P(IpVersions, SslSocketTest,
+INSTANTIATE_TEST_CASE_P(IpVersions, OpensslSocketTest,
                         testing::ValuesIn(TestEnvironment::getIpVersionsForTest()),
                         TestUtility::ipTestParamsToString);
 
-TEST_P(SslSocketTest, GetCertDigest) {
+TEST_P(OpensslSocketTest, GetCertDigest) {
+
+  initialize();
+
   const std::string client_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -396,7 +427,7 @@ TEST_P(SslSocketTest, GetCertDigest) {
            "f3828eb24fd779cf", "", "", "", "ssl.handshake", true, GetParam());
 }
 
-TEST_P(SslSocketTest, GetCertDigestInline) {
+TEST_P(OpensslSocketTest, DISABLED_GetCertDigestInline) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
@@ -534,7 +565,7 @@ TEST_P(SslSocketTest, GetCertDigestInline) {
              nullptr);
 }
 
-TEST_P(SslSocketTest, GetCertDigestServerCertWithIntermediateCA) {
+TEST_P(OpensslSocketTest, DISABLED_GetCertDigestServerCertWithIntermediateCA) {
   const std::string client_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -561,7 +592,7 @@ TEST_P(SslSocketTest, GetCertDigestServerCertWithIntermediateCA) {
            "f3828eb24fd779cf", "", "", "", "ssl.handshake", true, GetParam());
 }
 
-TEST_P(SslSocketTest, GetCertDigestServerCertWithoutCommonName) {
+TEST_P(OpensslSocketTest, DISABLED_GetCertDigestServerCertWithoutCommonName) {
   const std::string client_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -588,7 +619,7 @@ TEST_P(SslSocketTest, GetCertDigestServerCertWithoutCommonName) {
            "f3828eb24fd779cf", "", "", "", "ssl.handshake", true, GetParam());
 }
 
-TEST_P(SslSocketTest, GetUriWithUriSan) {
+TEST_P(OpensslSocketTest, DISABLED_GetUriWithUriSan) {
   const std::string client_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -615,7 +646,7 @@ TEST_P(SslSocketTest, GetUriWithUriSan) {
            "de8a932ffc6a57da", "", "", "", "ssl.handshake", true, GetParam());
 }
 
-TEST_P(SslSocketTest, GetNoUriWithDnsSan) {
+TEST_P(OpensslSocketTest, DISABLED_GetNoUriWithDnsSan) {
   const std::string client_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -642,7 +673,7 @@ TEST_P(SslSocketTest, GetNoUriWithDnsSan) {
            "ssl.handshake", true, GetParam());
 }
 
-TEST_P(SslSocketTest, NoCert) {
+TEST_P(OpensslSocketTest, DISABLED_NoCert) {
   const std::string client_ctx_yaml = R"EOF(
     common_tls_context:
   )EOF";
@@ -660,7 +691,7 @@ TEST_P(SslSocketTest, NoCert) {
            GetParam());
 }
 
-TEST_P(SslSocketTest, GetUriWithLocalUriSan) {
+TEST_P(OpensslSocketTest, DISABLED_GetUriWithLocalUriSan) {
   const std::string client_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -686,7 +717,7 @@ TEST_P(SslSocketTest, GetUriWithLocalUriSan) {
            "f3828eb24fd779cf", "", "", "", "ssl.handshake", true, GetParam());
 }
 
-TEST_P(SslSocketTest, GetSubjectsWithBothCerts) {
+TEST_P(OpensslSocketTest, DISABLED_GetSubjectsWithBothCerts) {
   const std::string client_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -715,7 +746,7 @@ TEST_P(SslSocketTest, GetSubjectsWithBothCerts) {
            "ssl.handshake", true, GetParam());
 }
 
-TEST_P(SslSocketTest, GetPeerCert) {
+TEST_P(OpensslSocketTest, DISABLED_GetPeerCert) {
   const std::string client_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -762,7 +793,7 @@ TEST_P(SslSocketTest, GetPeerCert) {
            "ssl.handshake", true, GetParam());
 }
 
-TEST_P(SslSocketTest, FailedClientAuthCaVerificationNoClientCert) {
+TEST_P(OpensslSocketTest, DISABLED_FailedClientAuthCaVerificationNoClientCert) {
   const std::string client_ctx_yaml = R"EOF(
     common_tls_context:
   )EOF";
@@ -784,7 +815,7 @@ TEST_P(SslSocketTest, FailedClientAuthCaVerificationNoClientCert) {
            false, GetParam());
 }
 
-TEST_P(SslSocketTest, FailedClientAuthCaVerification) {
+TEST_P(OpensslSocketTest, DISABLED_FailedClientAuthCaVerification) {
   const std::string client_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -810,7 +841,7 @@ TEST_P(SslSocketTest, FailedClientAuthCaVerification) {
            false, GetParam());
 }
 
-TEST_P(SslSocketTest, FailedClientAuthSanVerificationNoClientCert) {
+TEST_P(OpensslSocketTest, DISABLED_FailedClientAuthSanVerificationNoClientCert) {
   const std::string client_ctx_yaml = R"EOF(
     common_tls_context:
   )EOF";
@@ -832,7 +863,7 @@ TEST_P(SslSocketTest, FailedClientAuthSanVerificationNoClientCert) {
            false, GetParam());
 }
 
-TEST_P(SslSocketTest, FailedClientAuthSanVerification) {
+TEST_P(OpensslSocketTest, DISABLED_FailedClientAuthSanVerification) {
   const std::string client_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -860,7 +891,7 @@ TEST_P(SslSocketTest, FailedClientAuthSanVerification) {
 }
 
 // By default, expired certificates are not permitted.
-TEST_P(SslSocketTest, FailedClientCertificateDefaultExpirationVerification) {
+TEST_P(OpensslSocketTest, DISABLED_FailedClientCertificateDefaultExpirationVerification) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::auth::UpstreamTlsContext client;
 
@@ -872,7 +903,7 @@ TEST_P(SslSocketTest, FailedClientCertificateDefaultExpirationVerification) {
 
 // Expired certificates will not be accepted when explicitly disallowed via
 // allow_expired_certificate.
-TEST_P(SslSocketTest, FailedClientCertificateExpirationVerification) {
+TEST_P(OpensslSocketTest, DISABLED_FailedClientCertificateExpirationVerification) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::auth::UpstreamTlsContext client;
 
@@ -889,7 +920,7 @@ TEST_P(SslSocketTest, FailedClientCertificateExpirationVerification) {
 }
 
 // Expired certificates will be accepted when explicitly allowed via allow_expired_certificate.
-TEST_P(SslSocketTest, ClientCertificateExpirationAllowedVerification) {
+TEST_P(OpensslSocketTest, DISABLED_ClientCertificateExpirationAllowedVerification) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::auth::UpstreamTlsContext client;
 
@@ -906,7 +937,7 @@ TEST_P(SslSocketTest, ClientCertificateExpirationAllowedVerification) {
 }
 
 // Allow expired certificates, but add a certificate hash requirement so it still fails.
-TEST_P(SslSocketTest, FailedClientCertAllowExpiredBadHashVerification) {
+TEST_P(OpensslSocketTest, DISABLED_FailedClientCertAllowExpiredBadHashVerification) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::auth::UpstreamTlsContext client;
 
@@ -927,7 +958,7 @@ TEST_P(SslSocketTest, FailedClientCertAllowExpiredBadHashVerification) {
 }
 
 // Allow expired certificatess, but use the wrong CA so it should fail still.
-TEST_P(SslSocketTest, FailedClientCertAllowServerExpiredWrongCAVerification) {
+TEST_P(OpensslSocketTest, DISABLED_FailedClientCertAllowServerExpiredWrongCAVerification) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::auth::UpstreamTlsContext client;
 
@@ -949,7 +980,7 @@ TEST_P(SslSocketTest, FailedClientCertAllowServerExpiredWrongCAVerification) {
              "ssl.fail_verify_error", "ssl.connection_error", GetParam(), nullptr);
 }
 
-TEST_P(SslSocketTest, ClientCertificateHashVerification) {
+TEST_P(OpensslSocketTest, DISABLED_ClientCertificateHashVerification) {
   const std::string client_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -976,7 +1007,7 @@ TEST_P(SslSocketTest, ClientCertificateHashVerification) {
            "de8a932ffc6a57da", "", "", "", "ssl.handshake", true, GetParam());
 }
 
-TEST_P(SslSocketTest, ClientCertificateHashVerificationNoCA) {
+TEST_P(OpensslSocketTest, DISABLED_ClientCertificateHashVerificationNoCA) {
   const std::string client_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -1001,7 +1032,7 @@ TEST_P(SslSocketTest, ClientCertificateHashVerificationNoCA) {
            "de8a932ffc6a57da", "", "", "", "ssl.handshake", true, GetParam());
 }
 
-TEST_P(SslSocketTest, ClientCertificateHashListVerification) {
+TEST_P(OpensslSocketTest, DISABLED_ClientCertificateHashListVerification) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
@@ -1042,7 +1073,7 @@ TEST_P(SslSocketTest, ClientCertificateHashListVerification) {
              nullptr);
 }
 
-TEST_P(SslSocketTest, ClientCertificateHashListVerificationNoCA) {
+TEST_P(OpensslSocketTest, DISABLED_ClientCertificateHashListVerificationNoCA) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
@@ -1081,7 +1112,7 @@ TEST_P(SslSocketTest, ClientCertificateHashListVerificationNoCA) {
              nullptr);
 }
 
-TEST_P(SslSocketTest, FailedClientCertificateHashVerificationNoClientCertificate) {
+TEST_P(OpensslSocketTest, DISABLED_FailedClientCertificateHashVerificationNoClientCertificate) {
   const std::string client_ctx_yaml = R"EOF(
     common_tls_context:
   )EOF";
@@ -1103,7 +1134,7 @@ TEST_P(SslSocketTest, FailedClientCertificateHashVerificationNoClientCertificate
            false, GetParam());
 }
 
-TEST_P(SslSocketTest, FailedClientCertificateHashVerificationNoCANoClientCertificate) {
+TEST_P(OpensslSocketTest, DISABLED_FailedClientCertificateHashVerificationNoCANoClientCertificate) {
   const std::string client_ctx_yaml = R"EOF(
     common_tls_context:
   )EOF";
@@ -1123,7 +1154,7 @@ TEST_P(SslSocketTest, FailedClientCertificateHashVerificationNoCANoClientCertifi
            false, GetParam());
 }
 
-TEST_P(SslSocketTest, FailedClientCertificateHashVerificationWrongClientCertificate) {
+TEST_P(OpensslSocketTest, DISABLED_FailedClientCertificateHashVerificationWrongClientCertificate) {
   const std::string client_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -1150,7 +1181,7 @@ TEST_P(SslSocketTest, FailedClientCertificateHashVerificationWrongClientCertific
            "ssl.fail_verify_cert_hash", false, GetParam());
 }
 
-TEST_P(SslSocketTest, FailedClientCertificateHashVerificationNoCAWrongClientCertificate) {
+TEST_P(OpensslSocketTest, DISABLED_FailedClientCertificateHashVerificationNoCAWrongClientCertificate) {
   const std::string client_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -1175,7 +1206,7 @@ TEST_P(SslSocketTest, FailedClientCertificateHashVerificationNoCAWrongClientCert
            "ssl.fail_verify_cert_hash", false, GetParam());
 }
 
-TEST_P(SslSocketTest, FailedClientCertificateHashVerificationWrongCA) {
+TEST_P(OpensslSocketTest, DISABLED_FailedClientCertificateHashVerificationWrongCA) {
   const std::string client_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -1202,7 +1233,7 @@ TEST_P(SslSocketTest, FailedClientCertificateHashVerificationWrongCA) {
            false, GetParam());
 }
 
-TEST_P(SslSocketTest, CertificatesWithPassword) {
+TEST_P(OpensslSocketTest, DISABLED_CertificatesWithPassword) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
@@ -1247,7 +1278,7 @@ TEST_P(SslSocketTest, CertificatesWithPassword) {
              nullptr);
 }
 
-TEST_P(SslSocketTest, ClientCertificateSpkiVerification) {
+TEST_P(OpensslSocketTest, DISABLED_ClientCertificateSpkiVerification) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
@@ -1288,7 +1319,7 @@ TEST_P(SslSocketTest, ClientCertificateSpkiVerification) {
              nullptr);
 }
 
-TEST_P(SslSocketTest, ClientCertificateSpkiVerificationNoCA) {
+TEST_P(OpensslSocketTest, DISABLED_ClientCertificateSpkiVerificationNoCA) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
@@ -1327,7 +1358,7 @@ TEST_P(SslSocketTest, ClientCertificateSpkiVerificationNoCA) {
              nullptr);
 }
 
-TEST_P(SslSocketTest, FailedClientCertificateSpkiVerificationNoClientCertificate) {
+TEST_P(OpensslSocketTest, DISABLED_FailedClientCertificateSpkiVerificationNoClientCertificate) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
@@ -1358,7 +1389,7 @@ TEST_P(SslSocketTest, FailedClientCertificateSpkiVerificationNoClientCertificate
              "ssl.connection_error", GetParam(), nullptr);
 }
 
-TEST_P(SslSocketTest, FailedClientCertificateSpkiVerificationNoCANoClientCertificate) {
+TEST_P(OpensslSocketTest, DISABLED_FailedClientCertificateSpkiVerificationNoCANoClientCertificate) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
@@ -1387,7 +1418,7 @@ TEST_P(SslSocketTest, FailedClientCertificateSpkiVerificationNoCANoClientCertifi
              "ssl.connection_error", GetParam(), nullptr);
 }
 
-TEST_P(SslSocketTest, FailedClientCertificateSpkiVerificationWrongClientCertificate) {
+TEST_P(OpensslSocketTest, DISABLED_FailedClientCertificateSpkiVerificationWrongClientCertificate) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
@@ -1424,7 +1455,7 @@ TEST_P(SslSocketTest, FailedClientCertificateSpkiVerificationWrongClientCertific
              "ssl.connection_error", GetParam(), nullptr);
 }
 
-TEST_P(SslSocketTest, FailedClientCertificateSpkiVerificationNoCAWrongClientCertificate) {
+TEST_P(OpensslSocketTest, DISABLED_FailedClientCertificateSpkiVerificationNoCAWrongClientCertificate) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
@@ -1459,7 +1490,7 @@ TEST_P(SslSocketTest, FailedClientCertificateSpkiVerificationNoCAWrongClientCert
              "ssl.connection_error", GetParam(), nullptr);
 }
 
-TEST_P(SslSocketTest, FailedClientCertificateSpkiVerificationWrongCA) {
+TEST_P(OpensslSocketTest, DISABLED_FailedClientCertificateSpkiVerificationWrongCA) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
@@ -1496,7 +1527,7 @@ TEST_P(SslSocketTest, FailedClientCertificateSpkiVerificationWrongCA) {
              "ssl.connection_error", GetParam(), nullptr);
 }
 
-TEST_P(SslSocketTest, ClientCertificateHashAndSpkiVerification) {
+TEST_P(OpensslSocketTest, DISABLED_ClientCertificateHashAndSpkiVerification) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
@@ -1539,7 +1570,7 @@ TEST_P(SslSocketTest, ClientCertificateHashAndSpkiVerification) {
              nullptr);
 }
 
-TEST_P(SslSocketTest, ClientCertificateHashAndSpkiVerificationNoCA) {
+TEST_P(OpensslSocketTest, DISABLED_ClientCertificateHashAndSpkiVerificationNoCA) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
@@ -1580,7 +1611,7 @@ TEST_P(SslSocketTest, ClientCertificateHashAndSpkiVerificationNoCA) {
              nullptr);
 }
 
-TEST_P(SslSocketTest, FailedClientCertificateHashAndSpkiVerificationNoClientCertificate) {
+TEST_P(OpensslSocketTest, DISABLED_FailedClientCertificateHashAndSpkiVerificationNoClientCertificate) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
@@ -1611,7 +1642,7 @@ TEST_P(SslSocketTest, FailedClientCertificateHashAndSpkiVerificationNoClientCert
              "ssl.connection_error", GetParam(), nullptr);
 }
 
-TEST_P(SslSocketTest, FailedClientCertificateHashAndSpkiVerificationNoCANoClientCertificate) {
+TEST_P(OpensslSocketTest, DISABLED_FailedClientCertificateHashAndSpkiVerificationNoCANoClientCertificate) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
@@ -1640,7 +1671,7 @@ TEST_P(SslSocketTest, FailedClientCertificateHashAndSpkiVerificationNoCANoClient
              "ssl.connection_error", GetParam(), nullptr);
 }
 
-TEST_P(SslSocketTest, FailedClientCertificateHashAndSpkiVerificationWrongClientCertificate) {
+TEST_P(OpensslSocketTest, DISABLED_FailedClientCertificateHashAndSpkiVerificationWrongClientCertificate) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
@@ -1677,7 +1708,7 @@ TEST_P(SslSocketTest, FailedClientCertificateHashAndSpkiVerificationWrongClientC
              "ssl.connection_error", GetParam(), nullptr);
 }
 
-TEST_P(SslSocketTest, FailedClientCertificateHashAndSpkiVerificationNoCAWrongClientCertificate) {
+TEST_P(OpensslSocketTest, DISABLED_FailedClientCertificateHashAndSpkiVerificationNoCAWrongClientCertificate) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
@@ -1712,7 +1743,7 @@ TEST_P(SslSocketTest, FailedClientCertificateHashAndSpkiVerificationNoCAWrongCli
              "ssl.connection_error", GetParam(), nullptr);
 }
 
-TEST_P(SslSocketTest, FailedClientCertificateHashAndSpkiVerificationWrongCA) {
+TEST_P(OpensslSocketTest, DISABLED_FailedClientCertificateHashAndSpkiVerificationWrongCA) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
@@ -1751,7 +1782,7 @@ TEST_P(SslSocketTest, FailedClientCertificateHashAndSpkiVerificationWrongCA) {
 
 // Make sure that we do not flush code and do an immediate close if we have not completed the
 // handshake.
-TEST_P(SslSocketTest, FlushCloseDuringHandshake) {
+TEST_P(OpensslSocketTest, DISABLED_FlushCloseDuringHandshake) {
   const std::string server_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -1812,7 +1843,7 @@ TEST_P(SslSocketTest, FlushCloseDuringHandshake) {
 }
 
 // Test that half-close is sent and received correctly
-TEST_P(SslSocketTest, HalfClose) {
+TEST_P(OpensslSocketTest, DISABLED_HalfClose) {
   const std::string server_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -1900,7 +1931,7 @@ TEST_P(SslSocketTest, HalfClose) {
   dispatcher_->run(Event::Dispatcher::RunType::Block);
 }
 
-TEST_P(SslSocketTest, ClientAuthMultipleCAs) {
+TEST_P(OpensslSocketTest, DISABLED_ClientAuthMultipleCAs) {
   testing::NiceMock<Server::Configuration::MockTransportSocketFactoryContext> factory_context;
 
   const std::string server_ctx_yaml = R"EOF(
@@ -2116,7 +2147,7 @@ void testTicketSessionResumption(const std::string& server_ctx_yaml1,
 }
 } // namespace
 
-TEST_P(SslSocketTest, TicketSessionResumption) {
+TEST_P(OpensslSocketTest, DISABLED_TicketSessionResumption) {
   const std::string server_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -2137,7 +2168,7 @@ TEST_P(SslSocketTest, TicketSessionResumption) {
                               GetParam());
 }
 
-TEST_P(SslSocketTest, TicketSessionResumptionWithClientCA) {
+TEST_P(OpensslSocketTest, DISABLED_TicketSessionResumptionWithClientCA) {
   const std::string server_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -2166,7 +2197,7 @@ TEST_P(SslSocketTest, TicketSessionResumptionWithClientCA) {
                               GetParam());
 }
 
-TEST_P(SslSocketTest, TicketSessionResumptionRotateKey) {
+TEST_P(OpensslSocketTest, DISABLED_TicketSessionResumptionRotateKey) {
   const std::string server_ctx_yaml1 = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -2200,7 +2231,7 @@ TEST_P(SslSocketTest, TicketSessionResumptionRotateKey) {
                               GetParam());
 }
 
-TEST_P(SslSocketTest, TicketSessionResumptionWrongKey) {
+TEST_P(OpensslSocketTest, DISABLED_TicketSessionResumptionWrongKey) {
   const std::string server_ctx_yaml1 = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -2235,7 +2266,7 @@ TEST_P(SslSocketTest, TicketSessionResumptionWrongKey) {
 
 // Sessions cannot be resumed even though the server certificates are the same,
 // because of the different SNI requirements.
-TEST_P(SslSocketTest, TicketSessionResumptionDifferentServerNames) {
+TEST_P(OpensslSocketTest, DISABLED_TicketSessionResumptionDifferentServerNames) {
   const std::string server_ctx_yaml1 = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -2272,7 +2303,7 @@ TEST_P(SslSocketTest, TicketSessionResumptionDifferentServerNames) {
 
 // Sessions can be resumed because the server certificates are different but the CN/SANs and
 // issuer are identical
-TEST_P(SslSocketTest, TicketSessionResumptionDifferentServerCert) {
+TEST_P(OpensslSocketTest, DISABLED_TicketSessionResumptionDifferentServerCert) {
   const std::string server_ctx_yaml1 = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -2307,7 +2338,7 @@ TEST_P(SslSocketTest, TicketSessionResumptionDifferentServerCert) {
 
 // Sessions cannot be resumed because the server certificates are different, CN/SANs are identical,
 // but the issuer is different.
-TEST_P(SslSocketTest, TicketSessionResumptionDifferentServerCertIntermediateCA) {
+TEST_P(OpensslSocketTest, DISABLED_TicketSessionResumptionDifferentServerCertIntermediateCA) {
   const std::string server_ctx_yaml1 = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -2342,7 +2373,7 @@ TEST_P(SslSocketTest, TicketSessionResumptionDifferentServerCertIntermediateCA) 
 
 // Sessions cannot be resumed because the server certificates are different and the SANs
 // are not identical
-TEST_P(SslSocketTest, TicketSessionResumptionDifferentServerCertDifferentSAN) {
+TEST_P(OpensslSocketTest, DISABLED_TicketSessionResumptionDifferentServerCertDifferentSAN) {
   const std::string server_ctx_yaml1 = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -2377,7 +2408,7 @@ TEST_P(SslSocketTest, TicketSessionResumptionDifferentServerCertDifferentSAN) {
 
 // Test that if two listeners use the same cert and session ticket key, but
 // different client CA, that sessions cannot be resumed.
-TEST_P(SslSocketTest, ClientAuthCrossListenerSessionResumption) {
+TEST_P(OpensslSocketTest, DISABLED_ClientAuthCrossListenerSessionResumption) {
   const std::string server_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -2658,7 +2689,7 @@ void testClientSessionResumption(const std::string& server_ctx_yaml,
 }
 
 // Test client session resumption using default settings (should be enabled).
-TEST_P(SslSocketTest, ClientSessionResumptionDefault) {
+TEST_P(OpensslSocketTest, DISABLED_ClientSessionResumptionDefault) {
   const std::string server_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -2676,7 +2707,7 @@ TEST_P(SslSocketTest, ClientSessionResumptionDefault) {
 }
 
 // Make sure client session resumption is not happening with TLS 1.0-1.2 when it's disabled.
-TEST_P(SslSocketTest, ClientSessionResumptionDisabledTls12) {
+TEST_P(OpensslSocketTest, DISABLED_ClientSessionResumptionDisabledTls12) {
   const std::string server_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -2695,7 +2726,7 @@ TEST_P(SslSocketTest, ClientSessionResumptionDisabledTls12) {
 }
 
 // Test client session resumption with TLS 1.0-1.2.
-TEST_P(SslSocketTest, ClientSessionResumptionEnabledTls12) {
+TEST_P(OpensslSocketTest, DISABLED_ClientSessionResumptionEnabledTls12) {
   const std::string server_ctx_yaml = R"EOF(
   common_tls_context:
     tls_params:
@@ -2720,7 +2751,7 @@ TEST_P(SslSocketTest, ClientSessionResumptionEnabledTls12) {
 }
 
 // Make sure client session resumption is not happening with TLS 1.3 when it's disabled.
-TEST_P(SslSocketTest, ClientSessionResumptionDisabledTls13) {
+TEST_P(OpensslSocketTest, DISABLED_ClientSessionResumptionDisabledTls13) {
   const std::string server_ctx_yaml = R"EOF(
   common_tls_context:
     tls_params:
@@ -2745,7 +2776,7 @@ TEST_P(SslSocketTest, ClientSessionResumptionDisabledTls13) {
 }
 
 // Test client session resumption with TLS 1.3 (it's different than in older versions of TLS).
-TEST_P(SslSocketTest, ClientSessionResumptionEnabledTls13) {
+TEST_P(OpensslSocketTest, DISABLED_ClientSessionResumptionEnabledTls13) {
   const std::string server_ctx_yaml = R"EOF(
   common_tls_context:
     tls_params:
@@ -2769,7 +2800,7 @@ TEST_P(SslSocketTest, ClientSessionResumptionEnabledTls13) {
   testClientSessionResumption(server_ctx_yaml, client_ctx_yaml, true, GetParam());
 }
 
-TEST_P(SslSocketTest, SslError) {
+TEST_P(OpensslSocketTest, DISABLED_SslError) {
   const std::string server_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
@@ -2830,7 +2861,7 @@ TEST_P(SslSocketTest, SslError) {
   EXPECT_EQ(1UL, server_stats_store.counter("ssl.connection_error").value());
 }
 
-TEST_P(SslSocketTest, ProtocolVersions) {
+TEST_P(OpensslSocketTest, DISABLED_ProtocolVersions) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
@@ -2933,7 +2964,7 @@ TEST_P(SslSocketTest, ProtocolVersions) {
              "ssl.versions.TLSv1", GetParam(), nullptr);
 }
 
-TEST_P(SslSocketTest, ALPN) {
+TEST_P(OpensslSocketTest, DISABLED_ALPN) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
@@ -2999,7 +3030,7 @@ TEST_P(SslSocketTest, ALPN) {
   server_ctx->clear_alpn_protocols();
 }
 
-TEST_P(SslSocketTest, CipherSuites) {
+TEST_P(OpensslSocketTest, DISABLED_CipherSuites) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
@@ -3043,7 +3074,7 @@ TEST_P(SslSocketTest, CipherSuites) {
   server_params->clear_cipher_suites();
 }
 
-TEST_P(SslSocketTest, EcdhCurves) {
+TEST_P(OpensslSocketTest, DISABLED_EcdhCurves) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
@@ -3091,7 +3122,7 @@ TEST_P(SslSocketTest, EcdhCurves) {
   server_params->clear_cipher_suites();
 }
 
-TEST_P(SslSocketTest, RevokedCertificate) {
+TEST_P(OpensslSocketTest, DISABLED_RevokedCertificate) {
 
   const std::string server_ctx_yaml = R"EOF(
   common_tls_context:
@@ -3134,7 +3165,7 @@ TEST_P(SslSocketTest, RevokedCertificate) {
            "ssl.handshake", true, GetParam());
 }
 
-TEST_P(SslSocketTest, RevokedCertificateCRLInTrustedCA) {
+TEST_P(OpensslSocketTest, DISABLED_RevokedCertificateCRLInTrustedCA) {
 
   const std::string server_ctx_yaml = R"EOF(
   common_tls_context:
@@ -3175,7 +3206,7 @@ TEST_P(SslSocketTest, RevokedCertificateCRLInTrustedCA) {
            "ssl.handshake", true, GetParam());
 }
 
-TEST_P(SslSocketTest, GetRequestedServerName) {
+TEST_P(OpensslSocketTest, DISABLED_GetRequestedServerName) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
@@ -3192,7 +3223,7 @@ TEST_P(SslSocketTest, GetRequestedServerName) {
              "ssl.handshake", GetParam(), nullptr);
 }
 
-TEST_P(SslSocketTest, OverrideRequestedServerName) {
+TEST_P(OpensslSocketTest, DISABLED_OverrideRequestedServerName) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
@@ -3212,7 +3243,7 @@ TEST_P(SslSocketTest, OverrideRequestedServerName) {
              "ssl.handshake", GetParam(), transport_socket_options);
 }
 
-TEST_P(SslSocketTest, OverrideRequestedServerNameWithoutSniInUpstreamTlsContext) {
+TEST_P(OpensslSocketTest, DISABLED_OverrideRequestedServerNameWithoutSniInUpstreamTlsContext) {
   envoy::api::v2::Listener listener;
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
@@ -3232,7 +3263,7 @@ TEST_P(SslSocketTest, OverrideRequestedServerNameWithoutSniInUpstreamTlsContext)
 
 // Validate that if downstream secrets are not yet downloaded from SDS server, Envoy creates
 // NotReadySslSocket object to handle downstream connection.
-TEST_P(SslSocketTest, DownstreamNotReadySslSocket) {
+TEST_P(OpensslSocketTest, DISABLED_DownstreamNotReadySslSocket) {
   Stats::IsolatedStoreImpl stats_store;
   testing::NiceMock<Server::Configuration::MockTransportSocketFactoryContext> factory_context;
   NiceMock<LocalInfo::MockLocalInfo> local_info;
@@ -3272,7 +3303,7 @@ TEST_P(SslSocketTest, DownstreamNotReadySslSocket) {
 
 // Validate that if upstream secrets are not yet downloaded from SDS server, Envoy creates
 // NotReadySslSocket object to handle upstream connection.
-TEST_P(SslSocketTest, UpstreamNotReadySslSocket) {
+TEST_P(OpensslSocketTest, DISABLED_UpstreamNotReadySslSocket) {
   Stats::IsolatedStoreImpl stats_store;
   testing::NiceMock<Server::Configuration::MockTransportSocketFactoryContext> factory_context;
   NiceMock<LocalInfo::MockLocalInfo> local_info;
@@ -3310,7 +3341,7 @@ TEST_P(SslSocketTest, UpstreamNotReadySslSocket) {
   EXPECT_EQ(Network::PostIoAction::Close, result.action_);
 }
 
-class SslReadBufferLimitTest : public SslSocketTest {
+class SslReadBufferLimitTest : public OpensslSocketTest {
 public:
   void initialize() {
     MessageUtil::loadFromYaml(TestEnvironment::substitute(server_ctx_yaml_),
@@ -3520,25 +3551,25 @@ INSTANTIATE_TEST_CASE_P(IpVersions, SslReadBufferLimitTest,
                         testing::ValuesIn(TestEnvironment::getIpVersionsForTest()),
                         TestUtility::ipTestParamsToString);
 
-TEST_P(SslReadBufferLimitTest, NoLimit) {
+TEST_P(SslReadBufferLimitTest, DISABLED_NoLimit) {
   readBufferLimitTest(0, 256 * 1024, 256 * 1024, 1, false);
 }
 
-TEST_P(SslReadBufferLimitTest, NoLimitReserveSpace) { readBufferLimitTest(0, 512, 512, 1, true); }
+TEST_P(SslReadBufferLimitTest, DISABLED_NoLimitReserveSpace) { readBufferLimitTest(0, 512, 512, 1, true); }
 
-TEST_P(SslReadBufferLimitTest, NoLimitSmallWrites) {
+TEST_P(SslReadBufferLimitTest, DISABLED_NoLimitSmallWrites) {
   readBufferLimitTest(0, 256 * 1024, 1, 256 * 1024, false);
 }
 
-TEST_P(SslReadBufferLimitTest, SomeLimit) {
+TEST_P(SslReadBufferLimitTest, DISABLED_SomeLimit) {
   readBufferLimitTest(32 * 1024, 32 * 1024, 256 * 1024, 1, false);
 }
 
-TEST_P(SslReadBufferLimitTest, WritesSmallerThanBufferLimit) { singleWriteTest(5 * 1024, 1024); }
+TEST_P(SslReadBufferLimitTest, DISABLED_WritesSmallerThanBufferLimit) { singleWriteTest(5 * 1024, 1024); }
 
-TEST_P(SslReadBufferLimitTest, WritesLargerThanBufferLimit) { singleWriteTest(1024, 5 * 1024); }
+TEST_P(SslReadBufferLimitTest, DISABLED_WritesLargerThanBufferLimit) { singleWriteTest(1024, 5 * 1024); }
 
-TEST_P(SslReadBufferLimitTest, TestBind) {
+TEST_P(SslReadBufferLimitTest, DISABLED_TestBind) {
   std::string address_string = TestUtility::getIpv4Loopback();
   if (GetParam() == Network::Address::IpVersion::v4) {
     source_address_ = Network::Address::InstanceConstSharedPtr{
