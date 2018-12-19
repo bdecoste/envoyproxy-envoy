@@ -45,11 +45,86 @@ envoy_cc_library(
         "//source/common/common:enum_to_int",
         "//source/common/network:raw_buffer_socket_lib",
         "//source/common/protobuf:utility_lib",
-        "//source/common/ssl:context_lib",
+        ":context_lib",
+        ":bssl_wrapper",
         "//include/envoy/secret:secret_callbacks_interface",
         "//include/envoy/secret:secret_provider_interface",
         "//source/common/secret:sds_api_lib",
         "//include/envoy/stats:stats_macros",
     ],
 )
+
+envoy_cc_library(
+    name = "context_lib",
+    srcs = [
+        "context_impl.cc",
+        "context_manager_impl.cc",
+    ],
+    hdrs = [
+        "context_impl.h",
+        "context_manager_impl.h",
+    ],
+    external_deps = [
+        "abseil_synchronization",
+        "openssl",
+    ],
+    deps = [
+        ":utility_lib",
+        ":bssl_wrapper",
+        ":openssl_impl_lib",
+        "//include/envoy/ssl:context_config_interface",
+        "//include/envoy/ssl:context_interface",
+        "//include/envoy/ssl:context_manager_interface",
+        "//include/envoy/stats:stats_interface",
+        "//include/envoy/stats:stats_macros",
+        "//source/common/common:assert_lib",
+        "//source/common/common:base64_lib",
+        "//source/common/common:hex_lib",
+        "//source/common/common:utility_lib",
+        "//source/common/protobuf:utility_lib",
+        "@envoy_api//envoy/admin/v2alpha:certs_cc",
+    ],
+)
+
+envoy_cc_library(
+    name = "utility_lib",
+    srcs = ["utility.cc"],
+    hdrs = ["utility.h"],
+    external_deps = [
+        "openssl",
+    ],
+    deps = [
+        ":bssl_wrapper",
+        ":openssl_impl_lib",
+        "//source/common/common:assert_lib",
+        "//source/common/common:utility_lib",
+    ],
+)
+
+envoy_cc_library(
+    name = "openssl_impl_lib",
+    srcs = ["openssl_impl.cc"],
+    hdrs = ["openssl_impl.h"],
+    external_deps = [
+        "openssl",
+    ],
+    deps = [
+        ":bssl_wrapper",
+    ],
+)
+
+
+envoy_cc_library(
+    name = "bssl_wrapper",
+    srcs = [
+        "bssl_wrapper.cc",
+    ],
+    hdrs = [
+        "bssl_wrapper.h",
+    ],
+    external_deps = [
+        "openssl",
+    ],
+)
+
 

@@ -4,7 +4,8 @@
 
 #include "common/buffer/buffer_impl.h"
 #include "common/network/raw_buffer_socket.h"
-#include "common/ssl/context_impl.h"
+#include "extensions/transport_sockets/openssl/context_impl.h"
+#include "extensions/transport_sockets/openssl/bssl_wrapper.h"
 
 #include "envoy/secret/secret_callbacks.h"
 
@@ -85,7 +86,7 @@ private:
   bool shutdown_sent_{};
   uint64_t bytes_to_retry_{};
 
-  Envoy::Ssl::ContextImplSharedPtr ctx_;
+  ContextImplSharedPtr ctx_;
   bssl::UniquePtr<SSL> ssl_;
 
   void drainErrorQueue();

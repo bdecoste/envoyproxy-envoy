@@ -19,7 +19,9 @@ envoy_cc_test(
         "gen_unittest_certs.sh",
         "//test/extensions/transport_sockets/openssl/test_data:certs",
     ],
-    external_deps = ["ssl"],
+    external_deps = [
+        "openssl"
+    ],
     deps = [
         "//include/envoy/network:transport_socket_interface",
         "//source/common/buffer:buffer_lib",
@@ -31,12 +33,12 @@ envoy_cc_test(
         "//source/common/network:transport_socket_options_lib",
         "//source/common/network:utility_lib",
         "//source/common/ssl:context_config_lib",
-        "//source/common/ssl:context_lib",
-        "//source/common/ssl:ssl_socket_lib",
-        "//source/common/ssl:utility_lib",
+        "//source/extensions/transport_sockets/openssl:context_lib",
+        "//source/extensions/transport_sockets/openssl:ssl_socket_lib",
+        "//source/extensions/transport_sockets/openssl:utility_lib",
         "//source/common/stats:isolated_store_lib",
         "//source/common/stats:stats_lib",
-        "//source/extensions/filters/listener/tls_inspector:tls_inspector_lib",
+        "//source/extensions/transport_sockets/openssl:openssl_socket",
         "//test/mocks/buffer:buffer_mocks",
         "//test/mocks/network:network_mocks",
         "//test/mocks/runtime:runtime_mocks",
@@ -57,7 +59,7 @@ envoy_cc_test_library(
         "openssl_test_utility.h",
     ],
     deps = [
-        "//source/common/ssl:utility_lib",
+        "//source/extensions/transport_sockets/openssl:utility_lib",
         "//test/test_common:environment_lib",
     ],
 )

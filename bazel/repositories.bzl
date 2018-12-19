@@ -269,6 +269,7 @@ def envoy_dependencies(path = "@envoy_deps//", skip_targets = []):
     # semi-standard in the Bazel community, intended to avoid both duplicate
     # dependencies and name conflicts.
     _boringssl()
+    _openssl()
     _com_google_absl()
     _com_github_bombela_backward()
     _com_github_circonus_labs_libcircllhist()
@@ -303,6 +304,12 @@ def _boringssl():
         name = "ssl",
         actual = "@boringssl//:ssl",
     )
+
+def _openssl():
+    native.bind(
+        name = "openssl",
+        actual = "@openssl_repo//:openssl-lib",
+)
 
 def _com_github_bombela_backward():
     _repository_impl(

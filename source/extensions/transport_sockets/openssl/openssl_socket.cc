@@ -32,13 +32,15 @@ public:
 
 OpensslSocket::OpensslSocket(Envoy::Ssl::ContextSharedPtr ctx, InitialState state,
                      Network::TransportSocketOptionsSharedPtr transport_socket_options)
-    : ctx_(std::dynamic_pointer_cast<Envoy::Ssl::ContextImpl>(ctx)),
+    : ctx_(std::dynamic_pointer_cast<ContextImpl>(ctx)),
       ssl_(ctx_->newSsl(transport_socket_options != nullptr
                             ? transport_socket_options->serverNameOverride()
                             : absl::nullopt)) {
   if (state == InitialState::Client) {
+	std::cout << "!!!!!!!!!!!!!!!!!!!!!! OpensslSocket Client " << ssl_.get() << " \n";
     SSL_set_connect_state(ssl_.get());
   } else {
+	std::cout << "!!!!!!!!!!!!!!!!!!!!!! OpensslSocket Server " << ssl_.get() << " \n";
     ASSERT(state == InitialState::Server);
     SSL_set_accept_state(ssl_.get());
   }
@@ -66,7 +68,7 @@ std::string OpensslSocket::protocol() const {
 }
 
 Network::PostIoAction OpensslSocket::doHandshake() {
-std::cout << "!!!!!!!!!!!!!!!!!!!!!! doHandshake \n";
+std::cout << "!!!!!!!!!!!!!!!!!!!!!! doHandshake " << ssl_.get() << " \n";
   ASSERT(!handshake_complete_);
   int rc = SSL_do_handshake(ssl_.get());
   if (rc == 1) {
@@ -94,6 +96,7 @@ std::cout << "!!!!!!!!!!!!!!!!!!!!!! doHandshake \n";
 }
 
 Network::IoResult OpensslSocket::doRead(Buffer::Instance& read_buffer) {
+std::cout << "!!!!!!!!!!!!!!!!!!!!!! doRead " << ssl_.get() << " \n";
  if (!handshake_complete_) {
 	Network::PostIoAction action = doHandshake();
 	if (action == Network::PostIoAction::Close || !handshake_complete_) {
@@ -177,6 +180,7 @@ void OpensslSocket::drainErrorQueue() {
 }
 
 Network::IoResult OpensslSocket::doWrite(Buffer::Instance& write_buffer, bool end_stream) {
+std::cout << "!!!!!!!!!!!!!!!!!!!!!! doWrite " << ssl_.get() << " \n";
   ASSERT(!shutdown_sent_ || write_buffer.length() == 0);
   if (!handshake_complete_) {
 	Network::PostIoAction action = doHandshake();

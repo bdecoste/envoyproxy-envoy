@@ -56,4 +56,11 @@ build:clang-msan --linkopt -fuse-ld=lld
 test --test_env=HEAPCHECK=normal --test_env=PPROF_PATH
 
 # Add compile option for all C++ files
+build --cxxopt -Wnon-virtual-dtor
+build --cxxopt -Wformat
+build --cxxopt -Wformat-security
+build --cxxopt -Wno-error=old-style-cast
+build --cxxopt -Wno-error=deprecated-declarations
+#build --cxxopt -w
+#build --cxxopt -ldl
 build --cxxopt -Wno-error=unused-parameter

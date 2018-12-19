@@ -12,11 +12,11 @@
 #include "common/network/listen_socket_impl.h"
 #include "common/network/transport_socket_options_impl.h"
 #include "common/network/utility.h"
-#include "common/ssl/context_config_impl.h"
-#include "common/ssl/context_impl.h"
-#include "common/ssl/ssl_socket.h"
+#include "extensions/transport_sockets/openssl/context_config_impl.h"
+#include "extensions/transport_sockets/openssl/context_impl.h"
+#include "extensions/transport_sockets/openssl/ssl_socket.h"
 
-#include "extensions/filters/listener/tls_inspector/tls_inspector.h"
+#include "extensions/transport_sockets/openssl/openssl_socket.h"
 
 #include "test/extensions/transport_sockets/openssl/openssl_certs_test.h"
 #include "test/integration/http_integration.h"
@@ -66,7 +66,7 @@ void testUtil(const std::string& client_ctx_yaml, const std::string& server_ctx_
   auto server_cfg = std::make_unique<Envoy::Ssl::ServerContextConfigImpl>(server_tls_context, factory_context);
   Envoy::Ssl::ContextManagerImpl manager(time_system);
   Stats::IsolatedStoreImpl server_stats_store;
-  Envoy::Ssl::ServerSslSocketFactory server_ssl_socket_factory(
+  ServerOpensslSocketFactory server_ssl_socket_factory(
       std::move(server_cfg), manager, server_stats_store, std::vector<std::string>{});
 
   DangerousDeprecatedTestTime test_time;
@@ -81,7 +81,7 @@ void testUtil(const std::string& client_ctx_yaml, const std::string& server_ctx_
   MessageUtil::loadFromYaml(TestEnvironment::substitute(client_ctx_yaml), client_tls_context);
   auto client_cfg = std::make_unique<Envoy::Ssl::ClientContextConfigImpl>(client_tls_context, factory_context);
   Stats::IsolatedStoreImpl client_stats_store;
-  Envoy::Ssl::ClientSslSocketFactory client_ssl_socket_factory(std::move(client_cfg), manager,
+  ClientOpensslSocketFactory client_ssl_socket_factory(std::move(client_cfg), manager,
                                                         client_stats_store);
   Network::ClientConnectionPtr client_connection = dispatcher.createClientConnection(
       socket.localAddress(), Network::Address::InstanceConstSharedPtr(),
