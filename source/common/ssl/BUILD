@@ -9,6 +9,13 @@ load(
 envoy_package()
 
 envoy_cc_library(
+    name = "context_manager_lib",
+    hdrs = [
+        "context_manager_impl.h",
+    ],
+)
+
+envoy_cc_library(
     name = "tls_certificate_config_impl_lib",
     srcs = ["tls_certificate_config_impl.cc"],
     hdrs = ["tls_certificate_config_impl.h"],

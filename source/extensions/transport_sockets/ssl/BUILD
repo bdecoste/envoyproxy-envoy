@@ -79,7 +79,6 @@ envoy_cc_library(
     ],
     hdrs = [
         "context_impl.h",
-        "context_manager_impl.h",
     ],
     external_deps = [
         "abseil_synchronization",
@@ -92,6 +91,7 @@ envoy_cc_library(
         "//include/envoy/ssl:context_manager_interface",
         "//include/envoy/stats:stats_interface",
         "//include/envoy/stats:stats_macros",
+        "//source/common/ssl:context_manager_lib",
         "//source/common/common:assert_lib",
         "//source/common/common:base64_lib",
         "//source/common/common:hex_lib",

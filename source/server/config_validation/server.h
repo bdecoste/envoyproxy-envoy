@@ -23,7 +23,7 @@
 #include "server/listener_manager_impl.h"
 #include "server/server.h"
 
-#include "extensions/transport_sockets/ssl/context_manager_impl.h"
+#include "common/ssl/context_manager_impl.h"
 
 #include "absl/types/optional.h"
 

@@ -2,9 +2,9 @@
 
 #include "common/json/json_loader.h"
 #include "common/network/utility.h"
+#include "common/ssl/context_manager_impl.h"
 
 #include "extensions/transport_sockets/ssl/context_config_impl.h"
-#include "extensions/transport_sockets/ssl/context_manager_impl.h"
 #include "extensions/transport_sockets/ssl/ssl_socket.h"
 
 #include "test/config/utility.h"

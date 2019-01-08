@@ -23,8 +23,7 @@
 
 #include "common/http/context_impl.h"
 #include "common/secret/secret_manager_impl.h"
-
-#include "extensions/transport_sockets/ssl/context_manager_impl.h"
+#include "common/ssl/context_manager_impl.h"
 
 #include "test/mocks/access_log/mocks.h"
 #include "test/mocks/api/mocks.h"

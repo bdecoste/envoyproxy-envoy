@@ -2,9 +2,8 @@
 
 #include "envoy/service/discovery/v2/hds.pb.h"
 
+#include "common/ssl/context_manager_impl.h"
 #include "common/upstream/health_discovery_service.h"
-
-#include "extensions/transport_sockets/ssl/context_manager_impl.h"
 
 #include "test/mocks/access_log/mocks.h"
 #include "test/mocks/event/mocks.h"

@@ -23,6 +23,7 @@
 #include "common/http/context_impl.h"
 #include "common/runtime/runtime_impl.h"
 #include "common/secret/secret_manager_impl.h"
+#include "common/ssl/context_manager_impl.h"
 #include "common/upstream/health_discovery_service.h"
 
 #include "server/configuration_impl.h"
@@ -34,7 +35,6 @@
 #include "server/worker_impl.h"
 
 #include "extensions/filters/common/ratelimit/ratelimit_registration.h"
-#include "extensions/transport_sockets/ssl/context_manager_impl.h"
 
 #include "absl/types/optional.h"
 
@@ -96,7 +96,7 @@ public:
 
   /**
    * Helper for flushing counters, gauges and histograms to sinks. This takes care of calling
-   * flush() on each sink and clearing the cache afterward.
+   * flush() on each sink and clearing the cache afterward.extensions/transport_sockets
    * @param sinks supplies the list of sinks.
    * @param source provides the metrics being flushed.
    */
