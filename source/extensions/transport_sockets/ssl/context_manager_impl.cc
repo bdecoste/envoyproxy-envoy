@@ -1,10 +1,9 @@
-#include "common/ssl/context_manager_impl.h"
-
 #include <functional>
 
 #include "envoy/stats/scope.h"
 
 #include "common/common/assert.h"
+#include "common/ssl/context_manager_impl.h"
 
 #include "extensions/transport_sockets/ssl/context_impl.h"
 

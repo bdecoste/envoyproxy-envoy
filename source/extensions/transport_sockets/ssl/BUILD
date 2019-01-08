@@ -91,12 +91,12 @@ envoy_cc_library(
         "//include/envoy/ssl:context_manager_interface",
         "//include/envoy/stats:stats_interface",
         "//include/envoy/stats:stats_macros",
-        "//source/common/ssl:context_manager_lib",
         "//source/common/common:assert_lib",
         "//source/common/common:base64_lib",
         "//source/common/common:hex_lib",
         "//source/common/common:utility_lib",
         "//source/common/protobuf:utility_lib",
+        "//source/common/ssl:context_manager_lib",
         "@envoy_api//envoy/admin/v2alpha:certs_cc",
     ],
 )
