@@ -7,8 +7,9 @@
 #include "common/event/dispatcher_impl.h"
 #include "common/network/connection_impl.h"
 #include "common/network/utility.h"
-#include "common/ssl/context_config_impl.h"
-#include "common/ssl/context_manager_impl.h"
+
+#include "extensions/transport_sockets/ssl/context_config_impl.h"
+#include "extensions/transport_sockets/ssl/context_manager_impl.h"
 
 #include "test/common/grpc/grpc_client_integration.h"
 #include "test/config/integration/certs/clientcert_hash.h"

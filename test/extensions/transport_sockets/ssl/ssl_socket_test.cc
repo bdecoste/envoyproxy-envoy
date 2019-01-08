@@ -12,19 +12,19 @@
 #include "common/network/listen_socket_impl.h"
 #include "common/network/transport_socket_options_impl.h"
 #include "common/network/utility.h"
-#include "common/ssl/context_config_impl.h"
-#include "common/ssl/context_impl.h"
-#include "common/ssl/ssl_socket.h"
 
 #include "extensions/filters/listener/tls_inspector/tls_inspector.h"
+#include "extensions/transport_sockets/ssl/context_config_impl.h"
+#include "extensions/transport_sockets/ssl/context_impl.h"
+#include "extensions/transport_sockets/ssl/ssl_socket.h"
 
-#include "test/common/ssl/ssl_certs_test.h"
-#include "test/common/ssl/test_data/no_san_cert_info.h"
-#include "test/common/ssl/test_data/password_protected_cert_info.h"
-#include "test/common/ssl/test_data/san_dns2_cert_info.h"
-#include "test/common/ssl/test_data/san_dns_cert_info.h"
-#include "test/common/ssl/test_data/san_uri_cert_info.h"
-#include "test/common/ssl/test_data/selfsigned_ecdsa_p256_cert_info.h"
+#include "test/extensions/transport_sockets/ssl/ssl_certs_test.h"
+#include "test/extensions/transport_sockets/ssl/test_data/no_san_cert_info.h"
+#include "test/extensions/transport_sockets/ssl/test_data/password_protected_cert_info.h"
+#include "test/extensions/transport_sockets/ssl/test_data/san_dns2_cert_info.h"
+#include "test/extensions/transport_sockets/ssl/test_data/san_dns_cert_info.h"
+#include "test/extensions/transport_sockets/ssl/test_data/san_uri_cert_info.h"
+#include "test/extensions/transport_sockets/ssl/test_data/selfsigned_ecdsa_p256_cert_info.h"
 #include "test/mocks/buffer/mocks.h"
 #include "test/mocks/network/mocks.h"
 #include "test/mocks/secret/mocks.h"
@@ -556,15 +556,16 @@ void configureServerAndExpiredClientCertificate(envoy::api::v2::Listener& listen
       filter_chain->mutable_tls_context()
           ->mutable_common_tls_context()
           ->mutable_validation_context();
-  server_validation_ctx->mutable_trusted_ca()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"));
+  server_validation_ctx->mutable_trusted_ca()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"));
 
   envoy::api::v2::auth::TlsCertificate* client_cert =
       client.mutable_common_tls_context()->add_tls_certificates();
   client_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
-      "{{ test_rundir }}/test/common/ssl/test_data/expired_san_uri_cert.pem"));
+      "{{ test_rundir "
+      "}}/test/extensions/transport_sockets/ssl/test_data/expired_san_uri_cert.pem"));
   client_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
-      "{{ test_rundir }}/test/common/ssl/test_data/expired_san_uri_key.pem"));
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/expired_san_uri_key.pem"));
 }
 
 } // namespace
@@ -591,21 +592,21 @@ TEST_P(SslSocketTest, GetCertDigest) {
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_key.pem"
 )EOF";
 
   const std::string server_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_key.pem"
     validation_context:
       trusted_ca:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"
 )EOF";
 
   TestUtilOptions test_options(client_ctx_yaml, server_ctx_yaml, true, GetParam());
@@ -619,35 +620,38 @@ TEST_P(SslSocketTest, GetCertDigestInline) {
   envoy::api::v2::auth::TlsCertificate* server_cert =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->add_tls_certificates();
 
-  // From test/common/ssl/test_data/san_dns_cert.pem.
+  // From test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem.
   server_cert->mutable_certificate_chain()->set_inline_bytes(
       TestEnvironment::readFileToStringForTest(TestEnvironment::substitute(
-          "{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem")));
+          "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem")));
 
-  // From test/common/ssl/test_data/san_dns_key.pem.
-  server_cert->mutable_private_key()->set_inline_bytes(TestEnvironment::readFileToStringForTest(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem")));
+  // From test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem.
+  server_cert->mutable_private_key()->set_inline_bytes(
+      TestEnvironment::readFileToStringForTest(TestEnvironment::substitute(
+          "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem")));
 
-  // From test/common/ssl/test_data/ca_certificates.pem.
+  // From test/extensions/transport_sockets/ssl/test_data/ca_certificates.pem.
   filter_chain->mutable_tls_context()
       ->mutable_common_tls_context()
       ->mutable_validation_context()
       ->mutable_trusted_ca()
       ->set_inline_bytes(TestEnvironment::readFileToStringForTest(TestEnvironment::substitute(
-          "{{ test_rundir }}/test/common/ssl/test_data/ca_certificates.pem")));
+          "{{ test_rundir "
+          "}}/test/extensions/transport_sockets/ssl/test_data/ca_certificates.pem")));
 
   envoy::api::v2::auth::UpstreamTlsContext client_ctx;
   envoy::api::v2::auth::TlsCertificate* client_cert =
       client_ctx.mutable_common_tls_context()->add_tls_certificates();
 
-  // From test/common/ssl/test_data/san_uri_cert.pem.
+  // From test/extensions/transport_sockets/ssl/test_data/san_uri_cert.pem.
   client_cert->mutable_certificate_chain()->set_inline_bytes(
       TestEnvironment::readFileToStringForTest(TestEnvironment::substitute(
-          "{{ test_rundir }}/test/common/ssl/test_data/san_uri_cert.pem")));
+          "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_cert.pem")));
 
-  // From test/common/ssl/test_data/san_uri_key.pem.
-  client_cert->mutable_private_key()->set_inline_bytes(TestEnvironment::readFileToStringForTest(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_uri_key.pem")));
+  // From test/extensions/transport_sockets/ssl/test_data/san_uri_key.pem.
+  client_cert->mutable_private_key()->set_inline_bytes(
+      TestEnvironment::readFileToStringForTest(TestEnvironment::substitute(
+          "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_key.pem")));
 
   TestUtilOptionsV2 test_options(listener, client_ctx, true, GetParam());
   testUtilV2(test_options.setExpectedClientCertUri("spiffe://lyft.com/test-team")
@@ -659,21 +663,21 @@ TEST_P(SslSocketTest, GetCertDigestServerCertWithIntermediateCA) {
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_key.pem"
 )EOF";
 
   const std::string server_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_dns3_chain.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns3_chain.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_dns3_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns3_key.pem"
     validation_context:
       trusted_ca:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"
 )EOF";
 
   TestUtilOptions test_options(client_ctx_yaml, server_ctx_yaml, true, GetParam());
@@ -686,21 +690,21 @@ TEST_P(SslSocketTest, GetCertDigestServerCertWithoutCommonName) {
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_key.pem"
 )EOF";
 
   const std::string server_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_only_dns_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_only_dns_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_only_dns_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_only_dns_key.pem"
     validation_context:
       trusted_ca:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"
 )EOF";
 
   TestUtilOptions test_options(client_ctx_yaml, server_ctx_yaml, true, GetParam());
@@ -713,9 +717,9 @@ TEST_P(SslSocketTest, GetUriWithUriSan) {
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_uri_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_uri_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_key.pem"
 )EOF";
 
   const std::string server_ctx_yaml = R"EOF(
@@ -727,7 +731,7 @@ TEST_P(SslSocketTest, GetUriWithUriSan) {
         filename: "{{ test_tmpdir }}/unittestkey.pem"
     validation_context:
       trusted_ca:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"
       verify_subject_alt_name: "spiffe://lyft.com/test-team"
 )EOF";
 
@@ -741,9 +745,9 @@ TEST_P(SslSocketTest, GetNoUriWithDnsSan) {
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"
 )EOF";
 
   const std::string server_ctx_yaml = R"EOF(
@@ -755,7 +759,7 @@ TEST_P(SslSocketTest, GetNoUriWithDnsSan) {
         filename: "{{ test_tmpdir }}/unittestkey.pem"
     validation_context:
       trusted_ca:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"
 )EOF";
 
   // The SAN field only has DNS, expect "" for uriSanPeerCertificate().
@@ -801,13 +805,13 @@ TEST_P(SslSocketTest, MultiCertPreferEcdsa) {
   common_tls_context:
     tls_certificates:
     - certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/selfsigned_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/selfsigned_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/selfsigned_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/selfsigned_key.pem"
     - certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/selfsigned_ecdsa_p256_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/selfsigned_ecdsa_p256_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/selfsigned_ecdsa_p256_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/selfsigned_ecdsa_p256_key.pem"
 )EOF";
 
   TestUtilOptions test_options(client_ctx_yaml, server_ctx_yaml, true, GetParam());
@@ -819,21 +823,21 @@ TEST_P(SslSocketTest, GetUriWithLocalUriSan) {
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_key.pem"
 )EOF";
 
   const std::string server_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_uri_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_uri_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_key.pem"
     validation_context:
       trusted_ca:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"
 )EOF";
 
   TestUtilOptions test_options(client_ctx_yaml, server_ctx_yaml, true, GetParam());
@@ -846,21 +850,21 @@ TEST_P(SslSocketTest, GetSubjectsWithBothCerts) {
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_key.pem"
 )EOF";
 
   const std::string server_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_uri_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_uri_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_key.pem"
     validation_context:
       trusted_ca:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"
   require_client_certificate: true
 )EOF";
 
@@ -877,27 +881,28 @@ TEST_P(SslSocketTest, GetPeerCert) {
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_key.pem"
 )EOF";
 
   const std::string server_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_uri_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_uri_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_key.pem"
     validation_context:
       trusted_ca:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"
   require_client_certificate: true
 )EOF";
 
   TestUtilOptions test_options(client_ctx_yaml, server_ctx_yaml, true, GetParam());
-  std::string expected_peer_cert = TestEnvironment::readFileToStringForTest(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/no_san_cert.pem"));
+  std::string expected_peer_cert =
+      TestEnvironment::readFileToStringForTest(TestEnvironment::substitute(
+          "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_cert.pem"));
   testUtil(test_options.setExpectedSerialNumber(TEST_NO_SAN_CERT_SERIAL)
                .setExpectedSubjectl(
                    "CN=Test Server,OU=Lyft Engineering,O=Lyft,L=San Francisco,ST=California,C=US")
@@ -920,7 +925,7 @@ TEST_P(SslSocketTest, FailedClientAuthCaVerificationNoClientCert) {
         filename: "{{ test_tmpdir }}/unittestkey.pem"
     validation_context:
       trusted_ca:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"
   require_client_certificate: true
 )EOF";
 
@@ -933,9 +938,9 @@ TEST_P(SslSocketTest, FailedClientAuthCaVerification) {
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/selfsigned_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/selfsigned_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/selfsigned_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/selfsigned_key.pem"
 )EOF";
 
   const std::string server_ctx_yaml = R"EOF(
@@ -947,7 +952,7 @@ TEST_P(SslSocketTest, FailedClientAuthCaVerification) {
         filename: "{{ test_tmpdir }}/unittestkey.pem"
     validation_context:
       trusted_ca:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"
 )EOF";
 
   TestUtilOptions test_options(client_ctx_yaml, server_ctx_yaml, false, GetParam());
@@ -968,7 +973,7 @@ TEST_P(SslSocketTest, FailedClientAuthSanVerificationNoClientCert) {
         filename: "{{ test_tmpdir }}/unittestkey.pem"
     validation_context:
       trusted_ca:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"
       verify_subject_alt_name: "example.com"
 )EOF";
 
@@ -981,9 +986,9 @@ TEST_P(SslSocketTest, FailedClientAuthSanVerification) {
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_key.pem"
 )EOF";
 
   const std::string server_ctx_yaml = R"EOF(
@@ -995,7 +1000,7 @@ TEST_P(SslSocketTest, FailedClientAuthSanVerification) {
         filename: "{{ test_tmpdir }}/unittestkey.pem"
     validation_context:
       trusted_ca:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"
       verify_subject_alt_name: "example.com"
 )EOF";
 
@@ -1087,8 +1092,8 @@ TEST_P(SslSocketTest, FailedClientCertAllowServerExpiredWrongCAVerification) {
   server_validation_ctx->set_allow_expired_certificate(true);
 
   // This fake CA was not used to sign the client's certificate.
-  server_validation_ctx->mutable_trusted_ca()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/fake_ca_cert.pem"));
+  server_validation_ctx->mutable_trusted_ca()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/fake_ca_cert.pem"));
 
   TestUtilOptionsV2 test_options(listener, client, false, GetParam());
   testUtilV2(test_options.setExpectedClientCertUri("spiffe://lyft.com/test-team"));
@@ -1099,9 +1104,9 @@ TEST_P(SslSocketTest, ClientCertificateHashVerification) {
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_uri_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_uri_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_key.pem"
 )EOF";
 
   const std::string server_ctx_yaml = absl::StrCat(R"EOF(
@@ -1113,7 +1118,7 @@ TEST_P(SslSocketTest, ClientCertificateHashVerification) {
         filename: "{{ test_tmpdir }}/unittestkey.pem"
     validation_context:
       trusted_ca:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"
       verify_certificate_hash: ")EOF",
                                                    TEST_SAN_URI_CERT_HASH, "\"");
 
@@ -1127,9 +1132,9 @@ TEST_P(SslSocketTest, ClientCertificateHashVerificationNoCA) {
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_uri_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_uri_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_key.pem"
 )EOF";
 
   const std::string server_ctx_yaml = absl::StrCat(R"EOF(
@@ -1153,16 +1158,16 @@ TEST_P(SslSocketTest, ClientCertificateHashListVerification) {
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->add_tls_certificates();
-  server_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"));
-  server_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"));
+  server_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"));
+  server_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"));
   envoy::api::v2::auth::CertificateValidationContext* server_validation_ctx =
       filter_chain->mutable_tls_context()
           ->mutable_common_tls_context()
           ->mutable_validation_context();
-  server_validation_ctx->mutable_trusted_ca()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"));
+  server_validation_ctx->mutable_trusted_ca()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"));
   server_validation_ctx->add_verify_certificate_hash(
       "0000000000000000000000000000000000000000000000000000000000000000");
   server_validation_ctx->add_verify_certificate_hash(TEST_SAN_URI_CERT_HASH);
@@ -1170,10 +1175,10 @@ TEST_P(SslSocketTest, ClientCertificateHashListVerification) {
   envoy::api::v2::auth::UpstreamTlsContext client;
   envoy::api::v2::auth::TlsCertificate* client_cert =
       client.mutable_common_tls_context()->add_tls_certificates();
-  client_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_uri_cert.pem"));
-  client_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_uri_key.pem"));
+  client_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_cert.pem"));
+  client_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_key.pem"));
 
   TestUtilOptionsV2 test_options(listener, client, true, GetParam());
   testUtilV2(test_options.setExpectedClientCertUri("spiffe://lyft.com/test-team")
@@ -1189,10 +1194,10 @@ TEST_P(SslSocketTest, ClientCertificateHashListVerificationNoCA) {
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->add_tls_certificates();
-  server_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"));
-  server_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"));
+  server_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"));
+  server_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"));
   envoy::api::v2::auth::CertificateValidationContext* server_validation_ctx =
       filter_chain->mutable_tls_context()
           ->mutable_common_tls_context()
@@ -1204,10 +1209,10 @@ TEST_P(SslSocketTest, ClientCertificateHashListVerificationNoCA) {
   envoy::api::v2::auth::UpstreamTlsContext client;
   envoy::api::v2::auth::TlsCertificate* client_cert =
       client.mutable_common_tls_context()->add_tls_certificates();
-  client_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_uri_cert.pem"));
-  client_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_uri_key.pem"));
+  client_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_cert.pem"));
+  client_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_key.pem"));
 
   TestUtilOptionsV2 test_options(listener, client, true, GetParam());
   testUtilV2(test_options.setExpectedClientCertUri("spiffe://lyft.com/test-team")
@@ -1232,7 +1237,7 @@ TEST_P(SslSocketTest, FailedClientCertificateHashVerificationNoClientCertificate
         filename: "{{ test_tmpdir }}/unittestkey.pem"
     validation_context:
       trusted_ca:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"
       verify_certificate_hash: ")EOF",
                                                    TEST_SAN_URI_CERT_HASH, "\"");
 
@@ -1265,9 +1270,9 @@ TEST_P(SslSocketTest, FailedClientCertificateHashVerificationWrongClientCertific
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_key.pem"
 )EOF";
 
   const std::string server_ctx_yaml = absl::StrCat(R"EOF(
@@ -1279,7 +1284,7 @@ TEST_P(SslSocketTest, FailedClientCertificateHashVerificationWrongClientCertific
         filename: "{{ test_tmpdir }}/unittestkey.pem"
     validation_context:
       trusted_ca:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"
       verify_certificate_hash: ")EOF",
                                                    TEST_SAN_URI_CERT_HASH, "\"");
 
@@ -1292,9 +1297,9 @@ TEST_P(SslSocketTest, FailedClientCertificateHashVerificationNoCAWrongClientCert
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_key.pem"
 )EOF";
 
   const std::string server_ctx_yaml = absl::StrCat(R"EOF(
@@ -1317,9 +1322,9 @@ TEST_P(SslSocketTest, FailedClientCertificateHashVerificationWrongCA) {
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_uri_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_uri_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_key.pem"
 )EOF";
 
   const std::string server_ctx_yaml = absl::StrCat(R"EOF(
@@ -1331,7 +1336,7 @@ TEST_P(SslSocketTest, FailedClientCertificateHashVerificationWrongCA) {
         filename: "{{ test_tmpdir }}/unittestkey.pem"
     validation_context:
       trusted_ca:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/fake_ca_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/fake_ca_cert.pem"
       verify_certificate_hash: ")EOF",
                                                    TEST_SAN_URI_CERT_HASH, "\"");
 
@@ -1345,17 +1350,20 @@ TEST_P(SslSocketTest, CertificatesWithPassword) {
   envoy::api::v2::auth::TlsCertificate* server_cert =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->add_tls_certificates();
   server_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
-      "{{ test_rundir }}/test/common/ssl/test_data/password_protected_cert.pem"));
+      "{{ test_rundir "
+      "}}/test/extensions/transport_sockets/ssl/test_data/password_protected_cert.pem"));
   server_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
-      "{{ test_rundir }}/test/common/ssl/test_data/password_protected_key.pem"));
+      "{{ test_rundir "
+      "}}/test/extensions/transport_sockets/ssl/test_data/password_protected_key.pem"));
   server_cert->mutable_password()->set_filename(TestEnvironment::substitute(
-      "{{ test_rundir }}/test/common/ssl/test_data/password_protected_password.txt"));
+      "{{ test_rundir "
+      "}}/test/extensions/transport_sockets/ssl/test_data/password_protected_password.txt"));
   envoy::api::v2::auth::CertificateValidationContext* server_validation_ctx =
       filter_chain->mutable_tls_context()
           ->mutable_common_tls_context()
           ->mutable_validation_context();
-  server_validation_ctx->mutable_trusted_ca()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"));
+  server_validation_ctx->mutable_trusted_ca()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"));
   server_validation_ctx->add_verify_certificate_hash(
       "0000000000000000000000000000000000000000000000000000000000000000");
   server_validation_ctx->add_verify_certificate_hash(TEST_PASSWORD_PROTECTED_CERT_HASH);
@@ -1364,12 +1372,15 @@ TEST_P(SslSocketTest, CertificatesWithPassword) {
   envoy::api::v2::auth::TlsCertificate* client_cert =
       client.mutable_common_tls_context()->add_tls_certificates();
   client_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
-      "{{ test_rundir }}/test/common/ssl/test_data/password_protected_cert.pem"));
+      "{{ test_rundir "
+      "}}/test/extensions/transport_sockets/ssl/test_data/password_protected_cert.pem"));
   client_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
-      "{{ test_rundir }}/test/common/ssl/test_data/password_protected_key.pem"));
+      "{{ test_rundir "
+      "}}/test/extensions/transport_sockets/ssl/test_data/password_protected_key.pem"));
   client_cert->mutable_password()->set_inline_string(
       TestEnvironment::readFileToStringForTest(TestEnvironment::substitute(
-          "{{ test_rundir }}/test/common/ssl/test_data/password_protected_password.txt")));
+          "{{ test_rundir "
+          "}}/test/extensions/transport_sockets/ssl/test_data/password_protected_password.txt")));
 
   TestUtilOptionsV2 test_options(listener, client, true, GetParam());
   testUtilV2(test_options.setExpectedClientCertUri("spiffe://lyft.com/test-team")
@@ -1386,26 +1397,26 @@ TEST_P(SslSocketTest, ClientCertificateSpkiVerification) {
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->add_tls_certificates();
-  server_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"));
-  server_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"));
+  server_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"));
+  server_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"));
   envoy::api::v2::auth::CertificateValidationContext* server_validation_ctx =
       filter_chain->mutable_tls_context()
           ->mutable_common_tls_context()
           ->mutable_validation_context();
-  server_validation_ctx->mutable_trusted_ca()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"));
+  server_validation_ctx->mutable_trusted_ca()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"));
   server_validation_ctx->add_verify_certificate_spki(TEST_SAN_DNS_CERT_SPKI);
   server_validation_ctx->add_verify_certificate_spki(TEST_SAN_URI_CERT_SPKI);
 
   envoy::api::v2::auth::UpstreamTlsContext client;
   envoy::api::v2::auth::TlsCertificate* client_cert =
       client.mutable_common_tls_context()->add_tls_certificates();
-  client_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_uri_cert.pem"));
-  client_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_uri_key.pem"));
+  client_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_cert.pem"));
+  client_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_key.pem"));
 
   TestUtilOptionsV2 test_options(listener, client, true, GetParam());
   testUtilV2(test_options.setExpectedClientCertUri("spiffe://lyft.com/test-team")
@@ -1421,10 +1432,10 @@ TEST_P(SslSocketTest, ClientCertificateSpkiVerificationNoCA) {
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->add_tls_certificates();
-  server_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"));
-  server_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"));
+  server_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"));
+  server_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"));
   envoy::api::v2::auth::CertificateValidationContext* server_validation_ctx =
       filter_chain->mutable_tls_context()
           ->mutable_common_tls_context()
@@ -1435,10 +1446,10 @@ TEST_P(SslSocketTest, ClientCertificateSpkiVerificationNoCA) {
   envoy::api::v2::auth::UpstreamTlsContext client;
   envoy::api::v2::auth::TlsCertificate* client_cert =
       client.mutable_common_tls_context()->add_tls_certificates();
-  client_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_uri_cert.pem"));
-  client_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_uri_key.pem"));
+  client_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_cert.pem"));
+  client_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_key.pem"));
 
   TestUtilOptionsV2 test_options(listener, client, true, GetParam());
   testUtilV2(test_options.setExpectedClientCertUri("spiffe://lyft.com/test-team")
@@ -1454,16 +1465,16 @@ TEST_P(SslSocketTest, FailedClientCertificateSpkiVerificationNoClientCertificate
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->add_tls_certificates();
-  server_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"));
-  server_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"));
+  server_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"));
+  server_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"));
   envoy::api::v2::auth::CertificateValidationContext* server_validation_ctx =
       filter_chain->mutable_tls_context()
           ->mutable_common_tls_context()
           ->mutable_validation_context();
-  server_validation_ctx->mutable_trusted_ca()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"));
+  server_validation_ctx->mutable_trusted_ca()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"));
   server_validation_ctx->add_verify_certificate_spki(TEST_SAN_DNS_CERT_SPKI);
   server_validation_ctx->add_verify_certificate_spki(TEST_SAN_URI_CERT_SPKI);
 
@@ -1481,10 +1492,10 @@ TEST_P(SslSocketTest, FailedClientCertificateSpkiVerificationNoCANoClientCertifi
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->add_tls_certificates();
-  server_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"));
-  server_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"));
+  server_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"));
+  server_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"));
   envoy::api::v2::auth::CertificateValidationContext* server_validation_ctx =
       filter_chain->mutable_tls_context()
           ->mutable_common_tls_context()
@@ -1507,26 +1518,26 @@ TEST_P(SslSocketTest, FailedClientCertificateSpkiVerificationWrongClientCertific
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->add_tls_certificates();
-  server_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"));
-  server_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"));
+  server_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"));
+  server_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"));
   envoy::api::v2::auth::CertificateValidationContext* server_validation_ctx =
       filter_chain->mutable_tls_context()
           ->mutable_common_tls_context()
           ->mutable_validation_context();
-  server_validation_ctx->mutable_trusted_ca()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"));
+  server_validation_ctx->mutable_trusted_ca()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"));
   server_validation_ctx->add_verify_certificate_spki(TEST_SAN_DNS_CERT_SPKI);
   server_validation_ctx->add_verify_certificate_spki(TEST_SAN_URI_CERT_SPKI);
 
   envoy::api::v2::auth::UpstreamTlsContext client;
   envoy::api::v2::auth::TlsCertificate* client_cert =
       client.mutable_common_tls_context()->add_tls_certificates();
-  client_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/no_san_cert.pem"));
-  client_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/no_san_key.pem"));
+  client_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_cert.pem"));
+  client_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_key.pem"));
 
   TestUtilOptionsV2 test_options(listener, client, false, GetParam());
   testUtilV2(test_options.setExpectedServerStats("ssl.fail_verify_cert_hash"));
@@ -1541,10 +1552,10 @@ TEST_P(SslSocketTest, FailedClientCertificateSpkiVerificationNoCAWrongClientCert
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->add_tls_certificates();
-  server_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"));
-  server_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"));
+  server_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"));
+  server_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"));
   envoy::api::v2::auth::CertificateValidationContext* server_validation_ctx =
       filter_chain->mutable_tls_context()
           ->mutable_common_tls_context()
@@ -1555,10 +1566,10 @@ TEST_P(SslSocketTest, FailedClientCertificateSpkiVerificationNoCAWrongClientCert
   envoy::api::v2::auth::UpstreamTlsContext client;
   envoy::api::v2::auth::TlsCertificate* client_cert =
       client.mutable_common_tls_context()->add_tls_certificates();
-  client_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/no_san_cert.pem"));
-  client_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/no_san_key.pem"));
+  client_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_cert.pem"));
+  client_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_key.pem"));
 
   TestUtilOptionsV2 test_options(listener, client, false, GetParam());
   testUtilV2(test_options.setExpectedServerStats("ssl.fail_verify_cert_hash"));
@@ -1573,26 +1584,26 @@ TEST_P(SslSocketTest, FailedClientCertificateSpkiVerificationWrongCA) {
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->add_tls_certificates();
-  server_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"));
-  server_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"));
+  server_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"));
+  server_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"));
   envoy::api::v2::auth::CertificateValidationContext* server_validation_ctx =
       filter_chain->mutable_tls_context()
           ->mutable_common_tls_context()
           ->mutable_validation_context();
-  server_validation_ctx->mutable_trusted_ca()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/fake_ca_cert.pem"));
+  server_validation_ctx->mutable_trusted_ca()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/fake_ca_cert.pem"));
   server_validation_ctx->add_verify_certificate_spki(TEST_SAN_DNS_CERT_SPKI);
   server_validation_ctx->add_verify_certificate_spki(TEST_SAN_URI_CERT_SPKI);
 
   envoy::api::v2::auth::UpstreamTlsContext client;
   envoy::api::v2::auth::TlsCertificate* client_cert =
       client.mutable_common_tls_context()->add_tls_certificates();
-  client_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_uri_cert.pem"));
-  client_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_uri_key.pem"));
+  client_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_cert.pem"));
+  client_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_key.pem"));
 
   TestUtilOptionsV2 test_options(listener, client, false, GetParam());
   testUtilV2(test_options);
@@ -1607,16 +1618,16 @@ TEST_P(SslSocketTest, ClientCertificateHashAndSpkiVerification) {
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->add_tls_certificates();
-  server_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"));
-  server_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"));
+  server_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"));
+  server_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"));
   envoy::api::v2::auth::CertificateValidationContext* server_validation_ctx =
       filter_chain->mutable_tls_context()
           ->mutable_common_tls_context()
           ->mutable_validation_context();
-  server_validation_ctx->mutable_trusted_ca()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"));
+  server_validation_ctx->mutable_trusted_ca()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"));
   server_validation_ctx->add_verify_certificate_hash(
       "0000000000000000000000000000000000000000000000000000000000000000");
   server_validation_ctx->add_verify_certificate_spki(TEST_SAN_DNS_CERT_SPKI);
@@ -1625,10 +1636,10 @@ TEST_P(SslSocketTest, ClientCertificateHashAndSpkiVerification) {
   envoy::api::v2::auth::UpstreamTlsContext client;
   envoy::api::v2::auth::TlsCertificate* client_cert =
       client.mutable_common_tls_context()->add_tls_certificates();
-  client_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_uri_cert.pem"));
-  client_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_uri_key.pem"));
+  client_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_cert.pem"));
+  client_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_key.pem"));
 
   TestUtilOptionsV2 test_options(listener, client, true, GetParam());
   testUtilV2(test_options.setExpectedClientCertUri("spiffe://lyft.com/test-team")
@@ -1644,10 +1655,10 @@ TEST_P(SslSocketTest, ClientCertificateHashAndSpkiVerificationNoCA) {
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->add_tls_certificates();
-  server_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"));
-  server_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"));
+  server_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"));
+  server_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"));
   envoy::api::v2::auth::CertificateValidationContext* server_validation_ctx =
       filter_chain->mutable_tls_context()
           ->mutable_common_tls_context()
@@ -1660,10 +1671,10 @@ TEST_P(SslSocketTest, ClientCertificateHashAndSpkiVerificationNoCA) {
   envoy::api::v2::auth::UpstreamTlsContext client;
   envoy::api::v2::auth::TlsCertificate* client_cert =
       client.mutable_common_tls_context()->add_tls_certificates();
-  client_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_uri_cert.pem"));
-  client_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_uri_key.pem"));
+  client_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_cert.pem"));
+  client_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_key.pem"));
 
   TestUtilOptionsV2 test_options(listener, client, true, GetParam());
   testUtilV2(test_options.setExpectedClientCertUri("spiffe://lyft.com/test-team")
@@ -1679,16 +1690,16 @@ TEST_P(SslSocketTest, FailedClientCertificateHashAndSpkiVerificationNoClientCert
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->add_tls_certificates();
-  server_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"));
-  server_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"));
+  server_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"));
+  server_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"));
   envoy::api::v2::auth::CertificateValidationContext* server_validation_ctx =
       filter_chain->mutable_tls_context()
           ->mutable_common_tls_context()
           ->mutable_validation_context();
-  server_validation_ctx->mutable_trusted_ca()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"));
+  server_validation_ctx->mutable_trusted_ca()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"));
   server_validation_ctx->add_verify_certificate_hash(
       "0000000000000000000000000000000000000000000000000000000000000000");
   server_validation_ctx->add_verify_certificate_spki(TEST_SAN_URI_CERT_SPKI);
@@ -1708,10 +1719,10 @@ TEST_P(SslSocketTest, FailedClientCertificateHashAndSpkiVerificationNoCANoClient
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->add_tls_certificates();
-  server_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"));
-  server_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"));
+  server_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"));
+  server_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"));
   envoy::api::v2::auth::CertificateValidationContext* server_validation_ctx =
       filter_chain->mutable_tls_context()
           ->mutable_common_tls_context()
@@ -1735,16 +1746,16 @@ TEST_P(SslSocketTest, FailedClientCertificateHashAndSpkiVerificationWrongClientC
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->add_tls_certificates();
-  server_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"));
-  server_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"));
+  server_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"));
+  server_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"));
   envoy::api::v2::auth::CertificateValidationContext* server_validation_ctx =
       filter_chain->mutable_tls_context()
           ->mutable_common_tls_context()
           ->mutable_validation_context();
-  server_validation_ctx->mutable_trusted_ca()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"));
+  server_validation_ctx->mutable_trusted_ca()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"));
   server_validation_ctx->add_verify_certificate_hash(
       "0000000000000000000000000000000000000000000000000000000000000000");
   server_validation_ctx->add_verify_certificate_spki(TEST_SAN_URI_CERT_SPKI);
@@ -1752,10 +1763,10 @@ TEST_P(SslSocketTest, FailedClientCertificateHashAndSpkiVerificationWrongClientC
   envoy::api::v2::auth::UpstreamTlsContext client;
   envoy::api::v2::auth::TlsCertificate* client_cert =
       client.mutable_common_tls_context()->add_tls_certificates();
-  client_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/no_san_cert.pem"));
-  client_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/no_san_key.pem"));
+  client_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_cert.pem"));
+  client_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_key.pem"));
 
   TestUtilOptionsV2 test_options(listener, client, false, GetParam());
   testUtilV2(test_options.setExpectedServerStats("ssl.fail_verify_cert_hash"));
@@ -1770,10 +1781,10 @@ TEST_P(SslSocketTest, FailedClientCertificateHashAndSpkiVerificationNoCAWrongCli
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->add_tls_certificates();
-  server_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"));
-  server_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"));
+  server_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"));
+  server_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"));
   envoy::api::v2::auth::CertificateValidationContext* server_validation_ctx =
       filter_chain->mutable_tls_context()
           ->mutable_common_tls_context()
@@ -1785,10 +1796,10 @@ TEST_P(SslSocketTest, FailedClientCertificateHashAndSpkiVerificationNoCAWrongCli
   envoy::api::v2::auth::UpstreamTlsContext client;
   envoy::api::v2::auth::TlsCertificate* client_cert =
       client.mutable_common_tls_context()->add_tls_certificates();
-  client_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/no_san_cert.pem"));
-  client_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/no_san_key.pem"));
+  client_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_cert.pem"));
+  client_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_key.pem"));
 
   TestUtilOptionsV2 test_options(listener, client, false, GetParam());
   testUtilV2(test_options.setExpectedServerStats("ssl.fail_verify_cert_hash"));
@@ -1803,16 +1814,16 @@ TEST_P(SslSocketTest, FailedClientCertificateHashAndSpkiVerificationWrongCA) {
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->add_tls_certificates();
-  server_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"));
-  server_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"));
+  server_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"));
+  server_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"));
   envoy::api::v2::auth::CertificateValidationContext* server_validation_ctx =
       filter_chain->mutable_tls_context()
           ->mutable_common_tls_context()
           ->mutable_validation_context();
-  server_validation_ctx->mutable_trusted_ca()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/fake_ca_cert.pem"));
+  server_validation_ctx->mutable_trusted_ca()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/fake_ca_cert.pem"));
   server_validation_ctx->add_verify_certificate_hash(
       "0000000000000000000000000000000000000000000000000000000000000000");
   server_validation_ctx->add_verify_certificate_spki(TEST_SAN_URI_CERT_SPKI);
@@ -1820,10 +1831,10 @@ TEST_P(SslSocketTest, FailedClientCertificateHashAndSpkiVerificationWrongCA) {
   envoy::api::v2::auth::UpstreamTlsContext client;
   envoy::api::v2::auth::TlsCertificate* client_cert =
       client.mutable_common_tls_context()->add_tls_certificates();
-  client_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_uri_cert.pem"));
-  client_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_uri_key.pem"));
+  client_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_cert.pem"));
+  client_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_key.pem"));
 
   TestUtilOptionsV2 test_options(listener, client, false, GetParam());
   testUtilV2(test_options);
@@ -1845,7 +1856,7 @@ TEST_P(SslSocketTest, FlushCloseDuringHandshake) {
         filename: "{{ test_tmpdir }}/unittestkey.pem"
     validation_context:
       trusted_ca:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/ca_certificates.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_certificates.pem"
 )EOF";
 
   envoy::api::v2::auth::DownstreamTlsContext tls_context;
@@ -1906,7 +1917,7 @@ TEST_P(SslSocketTest, HalfClose) {
         filename: "{{ test_tmpdir }}/unittestkey.pem"
     validation_context:
       trusted_ca:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/ca_certificates.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_certificates.pem"
 )EOF";
 
   envoy::api::v2::auth::DownstreamTlsContext server_tls_context;
@@ -1996,7 +2007,7 @@ TEST_P(SslSocketTest, ClientAuthMultipleCAs) {
         filename: "{{ test_tmpdir }}/unittestkey.pem"
     validation_context:
       trusted_ca:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/ca_certificates.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_certificates.pem"
 )EOF";
 
   envoy::api::v2::auth::DownstreamTlsContext server_tls_context;
@@ -2018,9 +2029,9 @@ TEST_P(SslSocketTest, ClientAuthMultipleCAs) {
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_key.pem"
 )EOF";
 
   envoy::api::v2::auth::UpstreamTlsContext tls_context;
@@ -2211,7 +2222,7 @@ TEST_P(SslSocketTest, TicketSessionResumption) {
         filename: "{{ test_tmpdir }}/unittestkey.pem"
   session_ticket_keys:
     keys:
-      filename: "{{ test_rundir }}/test/common/ssl/test_data/ticket_key_a"
+      filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ticket_key_a"
 )EOF";
 
   const std::string client_ctx_yaml = R"EOF(
@@ -2232,19 +2243,19 @@ TEST_P(SslSocketTest, TicketSessionResumptionWithClientCA) {
         filename: "{{ test_tmpdir }}/unittestkey.pem"
     validation_context:
       trusted_ca:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"
   session_ticket_keys:
     keys:
-      filename: "{{ test_rundir }}/test/common/ssl/test_data/ticket_key_a"
+      filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ticket_key_a"
 )EOF";
 
   const std::string client_ctx_yaml = R"EOF(
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_key.pem"
 )EOF";
 
   testTicketSessionResumption(server_ctx_yaml, {}, server_ctx_yaml, {}, client_ctx_yaml, true,
@@ -2261,7 +2272,7 @@ TEST_P(SslSocketTest, TicketSessionResumptionRotateKey) {
         filename: "{{ test_tmpdir }}/unittestkey.pem"
   session_ticket_keys:
     keys:
-      filename: "{{ test_rundir }}/test/common/ssl/test_data/ticket_key_a"
+      filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ticket_key_a"
 )EOF";
 
   const std::string server_ctx_yaml2 = R"EOF(
@@ -2273,8 +2284,8 @@ TEST_P(SslSocketTest, TicketSessionResumptionRotateKey) {
         filename: "{{ test_tmpdir }}/unittestkey.pem"
   session_ticket_keys:
     keys:
-      filename: "{{ test_rundir }}/test/common/ssl/test_data/ticket_key_b"
-      filename: "{{ test_rundir }}/test/common/ssl/test_data/ticket_key_a"
+      filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ticket_key_b"
+      filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ticket_key_a"
 )EOF";
 
   const std::string client_ctx_yaml = R"EOF(
@@ -2295,7 +2306,7 @@ TEST_P(SslSocketTest, TicketSessionResumptionWrongKey) {
         filename: "{{ test_tmpdir }}/unittestkey.pem"
   session_ticket_keys:
     keys:
-      filename: "{{ test_rundir }}/test/common/ssl/test_data/ticket_key_a"
+      filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ticket_key_a"
 )EOF";
 
   const std::string server_ctx_yaml2 = R"EOF(
@@ -2307,7 +2318,7 @@ TEST_P(SslSocketTest, TicketSessionResumptionWrongKey) {
         filename: "{{ test_tmpdir }}/unittestkey.pem"
   session_ticket_keys:
     keys:
-      filename: "{{ test_rundir }}/test/common/ssl/test_data/ticket_key_b"
+      filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ticket_key_b"
 )EOF";
 
   const std::string client_ctx_yaml = R"EOF(
@@ -2325,24 +2336,24 @@ TEST_P(SslSocketTest, TicketSessionResumptionDifferentServerNames) {
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"
   session_ticket_keys:
     keys:
-      filename: "{{ test_rundir }}/test/common/ssl/test_data/ticket_key_a"
+      filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ticket_key_a"
 )EOF";
 
   const std::string server_ctx_yaml2 = R"EOF(
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"
   session_ticket_keys:
     keys:
-      filename: "{{ test_rundir }}/test/common/ssl/test_data/ticket_key_a"
+      filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ticket_key_a"
 )EOF";
 
   std::vector<std::string> server_names1 = {"server1.example.com"};
@@ -2362,24 +2373,24 @@ TEST_P(SslSocketTest, TicketSessionResumptionDifferentServerCert) {
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"
   session_ticket_keys:
     keys:
-      filename: "{{ test_rundir }}/test/common/ssl/test_data/ticket_key_a"
+      filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ticket_key_a"
 )EOF";
 
   const std::string server_ctx_yaml2 = R"EOF(
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_dns2_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns2_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_dns2_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns2_key.pem"
   session_ticket_keys:
     keys:
-      filename: "{{ test_rundir }}/test/common/ssl/test_data/ticket_key_a"
+      filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ticket_key_a"
 )EOF";
 
   const std::string client_ctx_yaml = R"EOF(
@@ -2397,24 +2408,24 @@ TEST_P(SslSocketTest, TicketSessionResumptionDifferentServerCertIntermediateCA) 
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"
   session_ticket_keys:
     keys:
-      filename: "{{ test_rundir }}/test/common/ssl/test_data/ticket_key_a"
+      filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ticket_key_a"
 )EOF";
 
   const std::string server_ctx_yaml2 = R"EOF(
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_dns3_chain.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns3_chain.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_dns3_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns3_key.pem"
   session_ticket_keys:
     keys:
-      filename: "{{ test_rundir }}/test/common/ssl/test_data/ticket_key_a"
+      filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ticket_key_a"
 )EOF";
 
   const std::string client_ctx_yaml = R"EOF(
@@ -2432,24 +2443,24 @@ TEST_P(SslSocketTest, TicketSessionResumptionDifferentServerCertDifferentSAN) {
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"
   session_ticket_keys:
     keys:
-      filename: "{{ test_rundir }}/test/common/ssl/test_data/ticket_key_a"
+      filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ticket_key_a"
 )EOF";
 
   const std::string server_ctx_yaml2 = R"EOF(
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_multiple_dns_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_multiple_dns_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_multiple_dns_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_multiple_dns_key.pem"
   session_ticket_keys:
     keys:
-      filename: "{{ test_rundir }}/test/common/ssl/test_data/ticket_key_a"
+      filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ticket_key_a"
 )EOF";
 
   const std::string client_ctx_yaml = R"EOF(
@@ -2472,7 +2483,7 @@ TEST_P(SslSocketTest, ClientAuthCrossListenerSessionResumption) {
         filename: "{{ test_tmpdir }}/unittestkey.pem"
     validation_context:
       trusted_ca:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"
   require_client_certificate: true
 )EOF";
 
@@ -2485,11 +2496,11 @@ TEST_P(SslSocketTest, ClientAuthCrossListenerSessionResumption) {
         filename: "{{ test_tmpdir }}/unittestkey.pem"
     validation_context:
       trusted_ca:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/fake_ca_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/fake_ca_cert.pem"
   require_client_certificate: true
   session_ticket_keys:
     keys:
-      filename: "{{ test_rundir }}/test/common/ssl/test_data/ticket_key_a"
+      filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ticket_key_a"
 )EOF";
 
   envoy::api::v2::auth::DownstreamTlsContext tls_context1;
@@ -2518,9 +2529,9 @@ TEST_P(SslSocketTest, ClientAuthCrossListenerSessionResumption) {
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_key.pem"
 )EOF";
 
   envoy::api::v2::auth::UpstreamTlsContext tls_context;
@@ -2868,7 +2879,7 @@ TEST_P(SslSocketTest, SslError) {
         filename: "{{ test_tmpdir }}/unittestkey.pem"
     validation_context:
       trusted_ca:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/fake_ca_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/fake_ca_cert.pem"
       verify_certificate_hash: "7B:0C:3F:0D:97:0E:FC:16:70:11:7A:0C:35:75:54:6B:17:AB:CF:20:D8:AA:A0:ED:87:08:0F:FB:60:4C:40:77"
 )EOF";
 
@@ -2934,10 +2945,10 @@ TEST_P(SslSocketTest, ProtocolVersions) {
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->add_tls_certificates();
-  server_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"));
-  server_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"));
+  server_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"));
+  server_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"));
   envoy::api::v2::auth::TlsParameters* server_params =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->mutable_tls_params();
 
@@ -3092,10 +3103,10 @@ TEST_P(SslSocketTest, ALPN) {
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->add_tls_certificates();
-  server_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"));
-  server_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"));
+  server_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"));
+  server_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"));
   envoy::api::v2::auth::CommonTlsContext* server_ctx =
       filter_chain->mutable_tls_context()->mutable_common_tls_context();
 
@@ -3157,10 +3168,10 @@ TEST_P(SslSocketTest, CipherSuites) {
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->add_tls_certificates();
-  server_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"));
-  server_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"));
+  server_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"));
+  server_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"));
   envoy::api::v2::auth::TlsParameters* server_params =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->mutable_tls_params();
 
@@ -3213,10 +3224,10 @@ TEST_P(SslSocketTest, EcdhCurves) {
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->add_tls_certificates();
-  server_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"));
-  server_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"));
+  server_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"));
+  server_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"));
   envoy::api::v2::auth::TlsParameters* server_params =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->mutable_tls_params();
 
@@ -3278,24 +3289,26 @@ TEST_P(SslSocketTest, SignatureAlgorithms) {
       filter_chain->mutable_tls_context()
           ->mutable_common_tls_context()
           ->mutable_validation_context();
-  server_validation_ctx->mutable_trusted_ca()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"));
+  server_validation_ctx->mutable_trusted_ca()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"));
   // Server ECDSA certificate.
   envoy::api::v2::auth::TlsCertificate* server_cert =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->add_tls_certificates();
   server_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
-      "{{ test_rundir }}/test/common/ssl/test_data/selfsigned_ecdsa_p256_cert.pem"));
+      "{{ test_rundir "
+      "}}/test/extensions/transport_sockets/ssl/test_data/selfsigned_ecdsa_p256_cert.pem"));
   server_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
-      "{{ test_rundir }}/test/common/ssl/test_data/selfsigned_ecdsa_p256_key.pem"));
+      "{{ test_rundir "
+      "}}/test/extensions/transport_sockets/ssl/test_data/selfsigned_ecdsa_p256_key.pem"));
 
   envoy::api::v2::auth::UpstreamTlsContext client;
   // Client RSA certificate.
   envoy::api::v2::auth::TlsCertificate* client_cert =
       client.mutable_common_tls_context()->add_tls_certificates();
-  client_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_uri_cert.pem"));
-  client_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_uri_key.pem"));
+  client_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_cert.pem"));
+  client_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_uri_key.pem"));
 
   // Connection using defaults (client & server) succeeds.
   TestUtilOptionsV2 algorithm_test_options(listener, client, true, GetParam());
@@ -3319,9 +3332,9 @@ TEST_P(SslSocketTest, RevokedCertificate) {
         filename: "{{ test_tmpdir }}/unittestkey.pem"
     validation_context:
       trusted_ca:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"
       crl:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/ca_cert.crl"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.crl"
 )EOF";
 
   // This should fail, since the certificate has been revoked.
@@ -3329,9 +3342,9 @@ TEST_P(SslSocketTest, RevokedCertificate) {
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"
 )EOF";
 
   TestUtilOptions revoked_test_options(revoked_client_ctx_yaml, server_ctx_yaml, false, GetParam());
@@ -3342,9 +3355,9 @@ TEST_P(SslSocketTest, RevokedCertificate) {
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_dns2_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns2_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_dns2_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns2_key.pem"
 )EOF";
 
   TestUtilOptions successful_test_options(successful_client_ctx_yaml, server_ctx_yaml, true,
@@ -3363,7 +3376,7 @@ TEST_P(SslSocketTest, RevokedCertificateCRLInTrustedCA) {
         filename: "{{ test_tmpdir }}/unittestkey.pem"
     validation_context:
       trusted_ca:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/ca_cert_with_crl.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert_with_crl.pem"
 )EOF";
 
   // This should fail, since the certificate has been revoked.
@@ -3371,9 +3384,9 @@ TEST_P(SslSocketTest, RevokedCertificateCRLInTrustedCA) {
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"
 )EOF";
 
   TestUtilOptions revoked_test_options(revoked_client_ctx_yaml, server_ctx_yaml, false, GetParam());
@@ -3384,9 +3397,9 @@ TEST_P(SslSocketTest, RevokedCertificateCRLInTrustedCA) {
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_dns2_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns2_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/san_dns2_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns2_key.pem"
 )EOF";
   TestUtilOptions successful_test_options(successful_client_ctx_yaml, server_ctx_yaml, true,
                                           GetParam());
@@ -3398,10 +3411,10 @@ TEST_P(SslSocketTest, GetRequestedServerName) {
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->add_tls_certificates();
-  server_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"));
-  server_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"));
+  server_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"));
+  server_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"));
 
   envoy::api::v2::auth::UpstreamTlsContext client;
   client.set_sni("lyft.com");
@@ -3415,10 +3428,10 @@ TEST_P(SslSocketTest, OverrideRequestedServerName) {
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->add_tls_certificates();
-  server_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"));
-  server_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"));
+  server_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"));
+  server_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"));
 
   envoy::api::v2::auth::UpstreamTlsContext client;
   client.set_sni("lyft.com");
@@ -3436,10 +3449,10 @@ TEST_P(SslSocketTest, OverrideRequestedServerNameWithoutSniInUpstreamTlsContext)
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
       filter_chain->mutable_tls_context()->mutable_common_tls_context()->add_tls_certificates();
-  server_cert->mutable_certificate_chain()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_cert.pem"));
-  server_cert->mutable_private_key()->set_filename(
-      TestEnvironment::substitute("{{ test_rundir }}/test/common/ssl/test_data/san_dns_key.pem"));
+  server_cert->mutable_certificate_chain()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_cert.pem"));
+  server_cert->mutable_private_key()->set_filename(TestEnvironment::substitute(
+      "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/san_dns_key.pem"));
 
   envoy::api::v2::auth::UpstreamTlsContext client;
 
@@ -3709,16 +3722,16 @@ public:
         filename: "{{ test_tmpdir }}/unittestkey.pem"
     validation_context:
       trusted_ca:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/ca_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/ca_cert.pem"
 )EOF";
 
   const std::string client_ctx_yaml_ = R"EOF(
   common_tls_context:
     tls_certificates:
       certificate_chain:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_cert.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_cert.pem"
       private_key:
-        filename: "{{ test_rundir }}/test/common/ssl/test_data/no_san_key.pem"
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/ssl/test_data/no_san_key.pem"
 )EOF";
 
   envoy::api::v2::auth::DownstreamTlsContext downstream_tls_context_;

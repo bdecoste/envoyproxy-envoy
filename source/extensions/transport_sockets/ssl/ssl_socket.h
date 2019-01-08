@@ -10,8 +10,9 @@
 #include "envoy/stats/stats_macros.h"
 
 #include "common/common/logger.h"
-#include "common/ssl/context_impl.h"
-#include "common/ssl/utility.h"
+
+#include "extensions/transport_sockets/ssl/context_impl.h"
+#include "extensions/transport_sockets/ssl/utility.h"
 
 #include "absl/synchronization/mutex.h"
 #include "openssl/ssl.h"

@@ -14,10 +14,11 @@
 #include "common/profiler/profiler.h"
 #include "common/protobuf/protobuf.h"
 #include "common/protobuf/utility.h"
-#include "common/ssl/context_config_impl.h"
 #include "common/stats/thread_local_store.h"
 
 #include "server/http/admin.h"
+
+#include "extensions/transport_sockets/ssl/context_config_impl.h"
 
 #include "test/mocks/runtime/mocks.h"
 #include "test/mocks/server/mocks.h"

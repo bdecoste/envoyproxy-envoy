@@ -5,8 +5,9 @@
 #include "envoy/registry/registry.h"
 
 #include "common/protobuf/utility.h"
-#include "common/ssl/context_config_impl.h"
-#include "common/ssl/ssl_socket.h"
+
+#include "extensions/transport_sockets/ssl/context_config_impl.h"
+#include "extensions/transport_sockets/ssl/ssl_socket.h"
 
 namespace Envoy {
 namespace Extensions {

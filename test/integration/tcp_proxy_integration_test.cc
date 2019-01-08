@@ -7,7 +7,8 @@
 
 #include "common/filesystem/filesystem_impl.h"
 #include "common/network/utility.h"
-#include "common/ssl/context_manager_impl.h"
+
+#include "extensions/transport_sockets/ssl/context_manager_impl.h"
 
 #include "test/integration/ssl_utility.h"
 #include "test/integration/utility.h"

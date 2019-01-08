@@ -13,7 +13,6 @@
 #include "common/router/rds_impl.h"
 #include "common/runtime/runtime_impl.h"
 #include "common/secret/secret_manager_impl.h"
-#include "common/ssl/context_manager_impl.h"
 #include "common/thread_local/thread_local_impl.h"
 
 #include "server/config_validation/admin.h"
@@ -23,6 +22,8 @@
 #include "server/http/admin.h"
 #include "server/listener_manager_impl.h"
 #include "server/server.h"
+
+#include "extensions/transport_sockets/ssl/context_manager_impl.h"
 
 #include "absl/types/optional.h"
 

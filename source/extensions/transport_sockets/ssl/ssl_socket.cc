@@ -1,4 +1,4 @@
-#include "common/ssl/ssl_socket.h"
+#include "extensions/transport_sockets/ssl/ssl_socket.h"
 
 #include "envoy/stats/scope.h"
 
@@ -6,7 +6,8 @@
 #include "common/common/empty_string.h"
 #include "common/common/hex.h"
 #include "common/http/headers.h"
-#include "common/ssl/utility.h"
+
+#include "extensions/transport_sockets/ssl/utility.h"
 
 #include "absl/strings/str_replace.h"
 #include "openssl/err.h"

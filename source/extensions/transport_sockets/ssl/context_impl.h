@@ -10,7 +10,7 @@
 #include "envoy/stats/scope.h"
 #include "envoy/stats/stats_macros.h"
 
-#include "common/ssl/context_manager_impl.h"
+#include "extensions/transport_sockets/ssl/context_manager_impl.h"
 
 #include "absl/synchronization/mutex.h"
 #include "absl/types/optional.h"

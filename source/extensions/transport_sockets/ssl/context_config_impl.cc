@@ -1,4 +1,4 @@
-#include "common/ssl/context_config_impl.h"
+#include "extensions/transport_sockets/ssl/context_config_impl.h"
 
 #include <memory>
 #include <string>

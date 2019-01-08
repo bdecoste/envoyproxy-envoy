@@ -3,9 +3,10 @@
 
 #include "common/api/api_impl.h"
 #include "common/http/context_impl.h"
-#include "common/ssl/context_manager_impl.h"
 
 #include "server/config_validation/cluster_manager.h"
+
+#include "extensions/transport_sockets/ssl/context_manager_impl.h"
 
 #include "test/mocks/access_log/mocks.h"
 #include "test/mocks/event/mocks.h"

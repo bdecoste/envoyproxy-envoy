@@ -1,4 +1,4 @@
-#include "common/ssl/context_impl.h"
+#include "extensions/transport_sockets/ssl/context_impl.h"
 
 #include <algorithm>
 #include <memory>
@@ -14,7 +14,8 @@
 #include "common/common/hex.h"
 #include "common/common/utility.h"
 #include "common/protobuf/utility.h"
-#include "common/ssl/utility.h"
+
+#include "extensions/transport_sockets/ssl/utility.h"
 
 #include "openssl/evp.h"
 #include "openssl/hmac.h"
