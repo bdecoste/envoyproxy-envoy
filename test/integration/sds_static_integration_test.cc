@@ -6,8 +6,9 @@
 #include "common/event/dispatcher_impl.h"
 #include "common/network/connection_impl.h"
 #include "common/network/utility.h"
-#include "common/ssl/context_config_impl.h"
-#include "common/ssl/context_manager_impl.h"
+
+#include "extensions/transport_sockets/tls/context_config_impl.h"
+#include "extensions/transport_sockets/tls/context_manager_impl.h"
 
 #include "test/config/integration/certs/clientcert_hash.h"
 #include "test/integration/http_integration.h"
@@ -90,7 +91,7 @@ public:
   }
 
 private:
-  Ssl::ContextManagerImpl context_manager_{timeSystem()};
+  Envoy::Extensions::TransportSockets::Tls::ContextManagerImpl context_manager_{timeSystem()};
 
   Network::TransportSocketFactoryPtr client_ssl_ctx_;
 };
@@ -152,7 +153,7 @@ public:
   }
 
 private:
-  Ssl::ContextManagerImpl context_manager_{timeSystem()};
+  Envoy::Extensions::TransportSockets::Tls::ContextManagerImpl context_manager_{timeSystem()};
 };
 
 INSTANTIATE_TEST_CASE_P(IpVersions, SdsStaticUpstreamIntegrationTest,
