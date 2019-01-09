@@ -19,7 +19,7 @@
 #include "test/mocks/network/mocks.h"
 #include "test/mocks/router/mocks.h"
 #include "test/mocks/runtime/mocks.h"
-#include "test/mocks/ssl/mocks.h"
+#include "test/mocks/tls/mocks.h"
 #include "test/mocks/upstream/mocks.h"
 #include "test/test_common/environment.h"
 #include "test/test_common/printers.h"
@@ -2308,7 +2308,7 @@ TEST(RouterFilterUtilityTest, SetUpstreamScheme) {
   }
   {
     Upstream::MockClusterInfo cluster;
-    Ssl::MockClientContext context;
+    Envoy::Tls::MockClientContext context;
     Http::TestHeaderMapImpl headers;
     Network::MockTransportSocketFactory transport_socket_factory;
     EXPECT_CALL(cluster, transportSocketFactory()).WillOnce(ReturnRef(transport_socket_factory));

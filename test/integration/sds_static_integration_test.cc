@@ -31,7 +31,7 @@ using testing::NiceMock;
 using testing::Return;
 
 namespace Envoy {
-namespace Ssl {
+namespace Tls {
 
 class SdsStaticDownstreamIntegrationTest
     : public HttpIntegrationTest,
@@ -164,5 +164,5 @@ TEST_P(SdsStaticUpstreamIntegrationTest, RouterRequestAndResponseWithGiantBodyBu
   testRouterRequestAndResponseWithBody(16 * 1024 * 1024, 16 * 1024 * 1024, false, nullptr);
 }
 
-} // namespace Ssl
+} // namespace Tls
 } // namespace Envoy

@@ -4,11 +4,11 @@
 #include <list>
 
 #include "envoy/common/time.h"
-#include "envoy/ssl/context_manager.h"
 #include "envoy/stats/scope.h"
+#include "envoy/tls/context_manager.h"
 
 namespace Envoy {
-namespace Ssl {
+namespace Tls {
 
 /**
  * The SSL context manager has the following threading model:
@@ -22,10 +22,10 @@ public:
   ContextManagerImpl(TimeSource& time_source) : time_source_(time_source) {}
   ~ContextManagerImpl();
 
-  // Ssl::ContextManager
-  Ssl::ClientContextSharedPtr createSslClientContext(Stats::Scope& scope,
-                                                     const ClientContextConfig& config) override;
-  Ssl::ServerContextSharedPtr
+  // Envoy::Tls::ContextManager
+  Envoy::Tls::ClientContextSharedPtr
+  createSslClientContext(Stats::Scope& scope, const ClientContextConfig& config) override;
+  Envoy::Tls::ServerContextSharedPtr
   createSslServerContext(Stats::Scope& scope, const ServerContextConfig& config,
                          const std::vector<std::string>& server_names) override;
   size_t daysUntilFirstCertExpires() const override;
@@ -37,5 +37,5 @@ private:
   std::list<std::weak_ptr<Context>> contexts_;
 };
 
-} // namespace Ssl
+} // namespace Tls
 } // namespace Envoy

@@ -19,7 +19,7 @@
 #include "test/common/upstream/utility.h"
 #include "test/mocks/local_info/mocks.h"
 #include "test/mocks/runtime/mocks.h"
-#include "test/mocks/ssl/mocks.h"
+#include "test/mocks/tls/mocks.h"
 #include "test/mocks/upstream/mocks.h"
 #include "test/test_common/environment.h"
 #include "test/test_common/printers.h"
@@ -126,7 +126,7 @@ protected:
   }
 
   Stats::IsolatedStoreImpl stats_;
-  Ssl::MockContextManager ssl_context_manager_;
+  Envoy::Tls::MockContextManager ssl_context_manager_;
   envoy::api::v2::Cluster sds_cluster_;
   NiceMock<MockClusterManager> cm_;
   Event::MockDispatcher dispatcher_;

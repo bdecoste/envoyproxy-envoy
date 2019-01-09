@@ -103,14 +103,14 @@ private:
 };
 
 /**
- * Lua wrapper for Ssl::Connection.
+ * Lua wrapper for Envoy::Tls::Connection.
  */
 class SslConnectionWrapper : public BaseLuaObject<SslConnectionWrapper> {
 public:
-  SslConnectionWrapper(const Ssl::Connection*) {}
+  SslConnectionWrapper(const Envoy::Tls::Connection*) {}
   static ExportedFunctions exportedFunctions() { return {}; }
 
-  // TODO(dio): Add more Lua APIs around Ssl::Connection.
+  // TODO(dio): Add more Lua APIs around Envoy::Tls::Connection.
 };
 
 /**
@@ -123,7 +123,7 @@ public:
 
 private:
   /**
-   * Get the Ssl::Connection wrapper
+   * Get the Envoy::Tls::Connection wrapper
    * @return object if secured and nil if not.
    */
   DECLARE_LUA_FUNCTION(ConnectionWrapper, luaSsl);
