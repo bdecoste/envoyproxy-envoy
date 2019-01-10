@@ -29,7 +29,8 @@ public:
                     const envoy::api::v2::core::BindConfig& bind_config, Stats::Store& stats,
                     Envoy::Tls::ContextManager& ssl_context_manager, bool added_via_api,
                     ClusterManager& cm, const LocalInfo::LocalInfo& local_info,
-                    Event::Dispatcher& dispatcher, Runtime::RandomGenerator& random) override;
+                    Event::Dispatcher& dispatcher,
+                    Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random) override;
 };
 
 // TODO(lilika): Add HdsClusters to the /clusters endpoint to get detailed stats about each HC host.
@@ -47,7 +48,7 @@ public:
              Envoy::Tls::ContextManager& ssl_context_manager, bool added_via_api,
              ClusterInfoFactory& info_factory, ClusterManager& cm,
              const LocalInfo::LocalInfo& local_info, Event::Dispatcher& dispatcher,
-             Runtime::RandomGenerator& random);
+             Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random);
 
   // From Upstream::Cluster
   InitializePhase initializePhase() const override { return InitializePhase::Primary; }
@@ -62,7 +63,8 @@ public:
 
   // Creates and starts healthcheckers to its endpoints
   void startHealthchecks(AccessLog::AccessLogManager& access_log_manager, Runtime::Loader& runtime,
-                         Runtime::RandomGenerator& random, Event::Dispatcher& dispatcher);
+                         Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+                         Event::Dispatcher& dispatcher);
 
   std::vector<Upstream::HealthCheckerSharedPtr> healthCheckers() { return health_checkers_; };
 
@@ -119,7 +121,8 @@ public:
   HdsDelegate(const envoy::api::v2::core::Node& node, Stats::Scope& scope,
               Grpc::AsyncClientPtr async_client, Event::Dispatcher& dispatcher,
               Runtime::Loader& runtime, Envoy::Stats::Store& stats,
-              Envoy::Tls::ContextManager& ssl_context_manager, Runtime::RandomGenerator& random,
+              Envoy::Tls::ContextManager& ssl_context_manager,
+              Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
               ClusterInfoFactory& info_factory, AccessLog::AccessLogManager& access_log_manager,
               ClusterManager& cm, const LocalInfo::LocalInfo& local_info);
 
@@ -154,7 +157,7 @@ private:
   Runtime::Loader& runtime_;
   Envoy::Stats::Store& store_stats;
   Envoy::Tls::ContextManager& ssl_context_manager_;
-  Runtime::RandomGenerator& random_;
+  Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random_;
   ClusterInfoFactory& info_factory_;
   AccessLog::AccessLogManager& access_log_manager_;
   ClusterManager& cm_;

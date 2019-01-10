@@ -34,7 +34,8 @@ class HttpSubscriptionImpl : public Http::RestApiFetcher,
 public:
   HttpSubscriptionImpl(const LocalInfo::LocalInfo& local_info, Upstream::ClusterManager& cm,
                        const std::string& remote_cluster_name, Event::Dispatcher& dispatcher,
-                       Runtime::RandomGenerator& random, std::chrono::milliseconds refresh_interval,
+                       Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+                       std::chrono::milliseconds refresh_interval,
                        std::chrono::milliseconds request_timeout,
                        const Protobuf::MethodDescriptor& service_method, SubscriptionStats stats)
       : Http::RestApiFetcher(cm, remote_cluster_name, dispatcher, random, refresh_interval,

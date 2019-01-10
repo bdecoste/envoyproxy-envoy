@@ -92,7 +92,8 @@ public:
   Driver(const envoy::config::trace::v2::ZipkinConfig& zipkin_config,
          Upstream::ClusterManager& cluster_manager, Stats::Store& stats,
          ThreadLocal::SlotAllocator& tls, Runtime::Loader& runtime,
-         const LocalInfo::LocalInfo& localinfo, Runtime::RandomGenerator& random_generator,
+         const LocalInfo::LocalInfo& localinfo,
+         Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random_generator,
          TimeSource& time_source);
 
   /**

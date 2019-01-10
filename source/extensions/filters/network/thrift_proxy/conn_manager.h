@@ -59,7 +59,8 @@ class ConnectionManager : public Network::ReadFilter,
                           public DecoderCallbacks,
                           Logger::Loggable<Logger::Id::thrift> {
 public:
-  ConnectionManager(Config& config, Runtime::RandomGenerator& random_generator,
+  ConnectionManager(Config& config,
+                    Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random_generator,
                     Event::TimeSystem& time_system);
   ~ConnectionManager();
 
@@ -264,7 +265,7 @@ private:
   DecoderPtr decoder_;
   std::list<ActiveRpcPtr> rpcs_;
   Buffer::OwnedImpl request_buffer_;
-  Runtime::RandomGenerator& random_generator_;
+  Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random_generator_;
   bool stopped_{false};
   bool half_closed_{false};
   Event::TimeSystem& time_system_;

@@ -1,26 +1,41 @@
 #pragma once
 
-#include <cstdint>
-#include <memory>
-#include <string>
-#include <unordered_map>
+//#include <cstdint>
+//#include <memory>
+//#include <string>
+//#include <unordered_map>
 
-#include "envoy/common/exception.h"
-#include "envoy/runtime/runtime.h"
-#include "envoy/stats/stats_macros.h"
-#include "envoy/stats/store.h"
-#include "envoy/thread_local/thread_local.h"
-#include "envoy/type/percent.pb.validate.h"
+//#include "envoy/common/exception.h"
+//#include "envoy/runtime/runtime.h"
+//#include "envoy/stats/stats_macros.h"
+//#include "envoy/stats/store.h"
+//#include "envoy/thread_local/thread_local.h"
+//#include "envoy/type/percent.pb.validate.h"
 
-#include "common/common/assert.h"
-#include "common/common/empty_string.h"
-#include "common/common/logger.h"
-#include "common/common/thread.h"
+//#include "common/common/assert.h"
+//#include "common/common/empty_string.h"
+//#include "common/common/logger.h"
+//#include "common/common/thread.h"
 
-#include "spdlog/spdlog.h"
+//#include "spdlog/spdlog.h"
 
 namespace Envoy {
-namespace Runtime {
+namespace Extensions {
+namespace TransportSockets {
+namespace Tls {
+
+/**
+ * Implementation of RandomGenerator that uses per-thread RANLUX generators seeded with current
+ * time.
+ */
+class RandomGeneratorImpl : public RandomGenerator {
+public:
+  // Envoy::Extensions::TransportSockets::Tls::RandomGenerator
+  uint64_t random() override;
+  std::string uuid() override;
+
+  static const size_t UUID_LENGTH;
+};
 
 /**
  * All runtime stats. @see stats_macros.h
@@ -194,5 +209,7 @@ private:
   const std::string override_path_;
 };
 
-} // namespace Runtime
+} // namespace Tls
+} // namespace TransportSockets
+} // namespace Extensions
 } // namespace Envoy

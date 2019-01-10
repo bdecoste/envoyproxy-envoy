@@ -27,8 +27,8 @@ public:
                   const envoy::api::v2::core::ConfigSource& cds_config,
                   const absl::optional<envoy::api::v2::core::ConfigSource>& eds_config,
                   ClusterManager& cm, Event::Dispatcher& dispatcher,
-                  Runtime::RandomGenerator& random, const LocalInfo::LocalInfo& local_info,
-                  const Stats::StatsOptions& stats_options);
+                  Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+                  const LocalInfo::LocalInfo& local_info, const Stats::StatsOptions& stats_options);
 
 private:
   // Config::Subscription

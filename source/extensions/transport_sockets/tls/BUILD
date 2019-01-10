@@ -113,3 +113,10 @@ envoy_cc_library(
         "//source/common/common:utility_lib",
     ],
 )
+
+envoy_cc_library(
+    name = "random_lib",
+    srcs = ["random_impl.cc"],
+    hdrs = ["random_impl.h"],
+    external_deps = ["ssl"],
+)

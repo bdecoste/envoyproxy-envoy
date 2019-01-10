@@ -29,6 +29,7 @@ envoy_cc_library(
         ":assert_lib",
         "//include/envoy/common:backoff_strategy_interface",
         "//include/envoy/runtime:runtime_interface",
+        "//source/extensions/transport_sockets/tls:random_lib",
     ],
 )
 

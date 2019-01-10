@@ -12,8 +12,9 @@ namespace Extensions {
 namespace NetworkFilters {
 namespace ThriftProxy {
 
-ConnectionManager::ConnectionManager(Config& config, Runtime::RandomGenerator& random_generator,
-                                     Event::TimeSystem& time_system)
+ConnectionManager::ConnectionManager(
+    Config& config, Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random_generator,
+    Event::TimeSystem& time_system)
     : config_(config), stats_(config_.stats()), transport_(config.createTransport()),
       protocol_(config.createProtocol()),
       decoder_(std::make_unique<Decoder>(*transport_, *protocol_, *this)),

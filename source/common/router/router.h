@@ -96,9 +96,9 @@ class FilterConfig {
 public:
   FilterConfig(const std::string& stat_prefix, const LocalInfo::LocalInfo& local_info,
                Stats::Scope& scope, Upstream::ClusterManager& cm, Runtime::Loader& runtime,
-               Runtime::RandomGenerator& random, ShadowWriterPtr&& shadow_writer,
-               bool emit_dynamic_stats, bool start_child_span, bool suppress_envoy_headers,
-               TimeSource& time_source, Http::Context& http_context)
+               Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+               ShadowWriterPtr&& shadow_writer, bool emit_dynamic_stats, bool start_child_span,
+               bool suppress_envoy_headers, TimeSource& time_source, Http::Context& http_context)
       : scope_(scope), local_info_(local_info), cm_(cm), runtime_(runtime),
         random_(random), stats_{ALL_ROUTER_STATS(POOL_COUNTER_PREFIX(scope, stat_prefix))},
         emit_dynamic_stats_(emit_dynamic_stats), start_child_span_(start_child_span),
@@ -125,7 +125,7 @@ public:
   const LocalInfo::LocalInfo& local_info_;
   Upstream::ClusterManager& cm_;
   Runtime::Loader& runtime_;
-  Runtime::RandomGenerator& random_;
+  Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random_;
   FilterStats stats_;
   const bool emit_dynamic_stats_;
   const bool start_child_span_;
@@ -360,12 +360,11 @@ private:
   void chargeUpstreamCode(Http::Code code, Upstream::HostDescriptionConstSharedPtr upstream_host,
                           bool dropped);
   void cleanup();
-  virtual RetryStatePtr createRetryState(const RetryPolicy& policy,
-                                         Http::HeaderMap& request_headers,
-                                         const Upstream::ClusterInfo& cluster,
-                                         Runtime::Loader& runtime, Runtime::RandomGenerator& random,
-                                         Event::Dispatcher& dispatcher,
-                                         Upstream::ResourcePriority priority) PURE;
+  virtual RetryStatePtr
+  createRetryState(const RetryPolicy& policy, Http::HeaderMap& request_headers,
+                   const Upstream::ClusterInfo& cluster, Runtime::Loader& runtime,
+                   Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+                   Event::Dispatcher& dispatcher, Upstream::ResourcePriority priority) PURE;
   Http::ConnectionPool::Instance* getConnPool();
   void maybeDoShadowing();
   void onRequestComplete();
@@ -424,7 +423,8 @@ private:
   // Filter
   RetryStatePtr createRetryState(const RetryPolicy& policy, Http::HeaderMap& request_headers,
                                  const Upstream::ClusterInfo& cluster, Runtime::Loader& runtime,
-                                 Runtime::RandomGenerator& random, Event::Dispatcher& dispatcher,
+                                 Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+                                 Event::Dispatcher& dispatcher,
                                  Upstream::ResourcePriority priority) override;
 };
 

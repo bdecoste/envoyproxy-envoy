@@ -15,7 +15,7 @@ namespace Upstream {
 
 RingHashLoadBalancer::RingHashLoadBalancer(
     PrioritySet& priority_set, ClusterStats& stats, Runtime::Loader& runtime,
-    Runtime::RandomGenerator& random,
+    Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
     const absl::optional<envoy::api::v2::Cluster::RingHashLbConfig>& config,
     const envoy::api::v2::Cluster::CommonLbConfig& common_config)
     : ThreadAwareLoadBalancerBase(priority_set, stats, runtime, random, common_config),

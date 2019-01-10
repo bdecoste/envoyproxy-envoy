@@ -19,9 +19,9 @@ namespace Server {
 
 LdsApiImpl::LdsApiImpl(const envoy::api::v2::core::ConfigSource& lds_config,
                        Upstream::ClusterManager& cm, Event::Dispatcher& dispatcher,
-                       Runtime::RandomGenerator& random, Init::Manager& init_manager,
-                       const LocalInfo::LocalInfo& local_info, Stats::Scope& scope,
-                       ListenerManager& lm)
+                       Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+                       Init::Manager& init_manager, const LocalInfo::LocalInfo& local_info,
+                       Stats::Scope& scope, ListenerManager& lm)
     : listener_manager_(lm), scope_(scope.createScope("listener_manager.lds.")), cm_(cm) {
   subscription_ =
       Envoy::Config::SubscriptionFactory::subscriptionFromConfigSource<envoy::api::v2::Listener>(

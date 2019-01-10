@@ -143,8 +143,8 @@ public:
                Network::Address::InstanceConstSharedPtr local_address, TestHooks& hooks,
                HotRestart& restarter, Stats::StoreRoot& store,
                Thread::BasicLockable& access_log_lock, ComponentFactory& component_factory,
-               Runtime::RandomGeneratorPtr&& random_generator, ThreadLocal::Instance& tls,
-               Thread::ThreadFactory& thread_factory);
+               Envoy::Extensions::TransportSockets::Tls::RandomGeneratorPtr&& random_generator,
+               ThreadLocal::Instance& tls, Thread::ThreadFactory& thread_factory);
 
   ~InstanceImpl() override;
 
@@ -168,7 +168,9 @@ public:
   Secret::SecretManager& secretManager() override { return *secret_manager_; }
   Envoy::MutexTracer* mutexTracer() override { return mutex_tracer_; }
   OverloadManager& overloadManager() override { return *overload_manager_; }
-  Runtime::RandomGenerator& random() override { return *random_generator_; }
+  Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random() override {
+    return *random_generator_;
+  }
   Runtime::Loader& runtime() override;
   void shutdown() override;
   bool isShutdown() override final { return shutdown_; }
@@ -214,7 +216,7 @@ private:
   std::unique_ptr<AdminImpl> admin_;
   Singleton::ManagerPtr singleton_manager_;
   Network::ConnectionHandlerPtr handler_;
-  Runtime::RandomGeneratorPtr random_generator_;
+  Envoy::Extensions::TransportSockets::Tls::RandomGeneratorPtr random_generator_;
   Runtime::LoaderPtr runtime_loader_;
   std::unique_ptr<Envoy::Extensions::TransportSockets::Tls::ContextManagerImpl>
       ssl_context_manager_;

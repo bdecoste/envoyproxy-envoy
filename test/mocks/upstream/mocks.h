@@ -192,7 +192,8 @@ public:
   MOCK_METHOD8(clusterManagerFromProto,
                ClusterManagerPtr(const envoy::config::bootstrap::v2::Bootstrap& bootstrap,
                                  Stats::Store& stats, ThreadLocal::Instance& tls,
-                                 Runtime::Loader& runtime, Runtime::RandomGenerator& random,
+                                 Runtime::Loader& runtime,
+                                 Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
                                  const LocalInfo::LocalInfo& local_info,
                                  AccessLog::AccessLogManager& log_manager, Server::Admin& admin));
 
@@ -348,7 +349,8 @@ public:
                     const envoy::api::v2::core::BindConfig& bind_config, Stats::Store& stats,
                     Envoy::Tls::ContextManager& ssl_context_manager, bool added_via_api,
                     ClusterManager& cm, const LocalInfo::LocalInfo& local_info,
-                    Event::Dispatcher& dispatcher, Runtime::RandomGenerator& random));
+                    Event::Dispatcher& dispatcher,
+                    Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random));
 };
 
 class MockRetryHostPredicate : public RetryHostPredicate {

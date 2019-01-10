@@ -69,9 +69,10 @@ uint32_t LoadBalancerBase::choosePriority(uint64_t hash,
   NOT_REACHED_GCOVR_EXCL_LINE;
 }
 
-LoadBalancerBase::LoadBalancerBase(const PrioritySet& priority_set, ClusterStats& stats,
-                                   Runtime::Loader& runtime, Runtime::RandomGenerator& random,
-                                   const envoy::api::v2::Cluster::CommonLbConfig& common_config)
+LoadBalancerBase::LoadBalancerBase(
+    const PrioritySet& priority_set, ClusterStats& stats, Runtime::Loader& runtime,
+    Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+    const envoy::api::v2::Cluster::CommonLbConfig& common_config)
     : stats_(stats), runtime_(runtime), random_(random),
       default_healthy_panic_percent_(PROTOBUF_PERCENT_TO_ROUNDED_INTEGER_OR_DEFAULT(
           common_config, healthy_panic_threshold, 100, 50)),
@@ -196,7 +197,7 @@ HostSet& LoadBalancerBase::chooseHostSet(LoadBalancerContext* context) {
 
 ZoneAwareLoadBalancerBase::ZoneAwareLoadBalancerBase(
     const PrioritySet& priority_set, const PrioritySet* local_priority_set, ClusterStats& stats,
-    Runtime::Loader& runtime, Runtime::RandomGenerator& random,
+    Runtime::Loader& runtime, Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
     const envoy::api::v2::Cluster::CommonLbConfig& common_config)
     : LoadBalancerBase(priority_set, stats, runtime, random, common_config),
       local_priority_set_(local_priority_set),
@@ -520,7 +521,7 @@ const HostVector& ZoneAwareLoadBalancerBase::hostSourceToHosts(HostsSource hosts
 
 EdfLoadBalancerBase::EdfLoadBalancerBase(
     const PrioritySet& priority_set, const PrioritySet* local_priority_set, ClusterStats& stats,
-    Runtime::Loader& runtime, Runtime::RandomGenerator& random,
+    Runtime::Loader& runtime, Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
     const envoy::api::v2::Cluster::CommonLbConfig& common_config)
     : ZoneAwareLoadBalancerBase(priority_set, local_priority_set, stats, runtime, random,
                                 common_config),

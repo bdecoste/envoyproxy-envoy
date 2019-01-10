@@ -45,13 +45,13 @@
 namespace Envoy {
 namespace Server {
 
-InstanceImpl::InstanceImpl(Options& options, Event::TimeSystem& time_system,
-                           Network::Address::InstanceConstSharedPtr local_address, TestHooks& hooks,
-                           HotRestart& restarter, Stats::StoreRoot& store,
-                           Thread::BasicLockable& access_log_lock,
-                           ComponentFactory& component_factory,
-                           Runtime::RandomGeneratorPtr&& random_generator,
-                           ThreadLocal::Instance& tls, Thread::ThreadFactory& thread_factory)
+InstanceImpl::InstanceImpl(
+    Options& options, Event::TimeSystem& time_system,
+    Network::Address::InstanceConstSharedPtr local_address, TestHooks& hooks, HotRestart& restarter,
+    Stats::StoreRoot& store, Thread::BasicLockable& access_log_lock,
+    ComponentFactory& component_factory,
+    Envoy::Extensions::TransportSockets::Tls::RandomGeneratorPtr&& random_generator,
+    ThreadLocal::Instance& tls, Thread::ThreadFactory& thread_factory)
     : shutdown_(false), options_(options), time_system_(time_system), restarter_(restarter),
       start_time_(time(nullptr)), original_start_time_(start_time_), stats_store_(store),
       thread_local_(tls),

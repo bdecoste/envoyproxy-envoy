@@ -140,7 +140,7 @@ public:
   /**
    * @return RandomGenerator& the random generator for the server.
    */
-  virtual Runtime::RandomGenerator& random() PURE;
+  virtual Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random() PURE;
 
   /**
    * @return Runtime::Loader& the singleton runtime loader for the server.

@@ -12,8 +12,8 @@ namespace Config {
 GrpcMuxImpl::GrpcMuxImpl(const LocalInfo::LocalInfo& local_info, Grpc::AsyncClientPtr async_client,
                          Event::Dispatcher& dispatcher,
                          const Protobuf::MethodDescriptor& service_method,
-                         Runtime::RandomGenerator& random, Stats::Scope& scope,
-                         const RateLimitSettings& rate_limit_settings)
+                         Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+                         Stats::Scope& scope, const RateLimitSettings& rate_limit_settings)
     : local_info_(local_info), async_client_(std::move(async_client)),
       service_method_(service_method), random_(random), time_source_(dispatcher.timeSystem()),
       control_plane_stats_(generateControlPlaneStats(scope)),

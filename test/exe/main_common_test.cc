@@ -68,7 +68,7 @@ protected:
    * @return uint32_t a unique numeric ID based on the PID and a random number.
    */
   static uint32_t computeBaseId() {
-    Runtime::RandomGeneratorImpl random_generator_;
+    Envoy::Extensions::TransportSockets::Tls::RandomGeneratorImpl random_generator_;
     // Pick a prime number to give more of the 32-bits of entropy to the PID, and the
     // remainder to the random number.
     const uint32_t four_digit_prime = 7919;

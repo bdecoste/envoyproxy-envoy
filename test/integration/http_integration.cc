@@ -1173,7 +1173,7 @@ void HttpIntegrationTest::testEnvoyProxyMultipleMetadata() {
   const int size = 4;
   std::vector<Http::MetadataMapVector> multiple_vecs(size);
   for (int i = 0; i < size; i++) {
-    Runtime::RandomGeneratorImpl random;
+    Envoy::Extensions::TransportSockets::Tls::RandomGeneratorImpl random;
     int value_size = random.random() % Http::METADATA_MAX_PAYLOAD_SIZE + 1;
     Http::MetadataMap metadata_map = {{std::string(i, 'a'), std::string(value_size, 'b')}};
     Http::MetadataMapPtr metadata_map_ptr = std::make_unique<Http::MetadataMap>(metadata_map);

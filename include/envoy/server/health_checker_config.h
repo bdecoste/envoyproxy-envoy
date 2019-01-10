@@ -24,7 +24,7 @@ public:
   /**
    * @return RandomGenerator& the random generator for the server.
    */
-  virtual Envoy::Runtime::RandomGenerator& random() PURE;
+  virtual Envoy::Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random() PURE;
 
   /**
    * @return Event::Dispatcher& the main thread's dispatcher. This dispatcher should be used

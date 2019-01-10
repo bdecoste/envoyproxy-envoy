@@ -19,7 +19,7 @@ namespace Upstream {
 CdsApiPtr CdsApiImpl::create(const envoy::api::v2::core::ConfigSource& cds_config,
                              const absl::optional<envoy::api::v2::core::ConfigSource>& eds_config,
                              ClusterManager& cm, Event::Dispatcher& dispatcher,
-                             Runtime::RandomGenerator& random,
+                             Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
                              const LocalInfo::LocalInfo& local_info, Stats::Scope& scope) {
   return CdsApiPtr{
       new CdsApiImpl(cds_config, eds_config, cm, dispatcher, random, local_info, scope)};
@@ -28,8 +28,8 @@ CdsApiPtr CdsApiImpl::create(const envoy::api::v2::core::ConfigSource& cds_confi
 CdsApiImpl::CdsApiImpl(const envoy::api::v2::core::ConfigSource& cds_config,
                        const absl::optional<envoy::api::v2::core::ConfigSource>& eds_config,
                        ClusterManager& cm, Event::Dispatcher& dispatcher,
-                       Runtime::RandomGenerator& random, const LocalInfo::LocalInfo& local_info,
-                       Stats::Scope& scope)
+                       Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+                       const LocalInfo::LocalInfo& local_info, Stats::Scope& scope)
     : cm_(cm), scope_(scope.createScope("cluster_manager.cds.")) {
   Config::Utility::checkLocalInfo("cds", local_info);
 

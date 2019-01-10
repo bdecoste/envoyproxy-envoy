@@ -56,14 +56,12 @@ ConnectionManagerImpl::generateListenerStats(const std::string& prefix, Stats::S
   return {CONN_MAN_LISTENER_STATS(POOL_COUNTER_PREFIX(scope, prefix))};
 }
 
-ConnectionManagerImpl::ConnectionManagerImpl(ConnectionManagerConfig& config,
-                                             const Network::DrainDecision& drain_close,
-                                             Runtime::RandomGenerator& random_generator,
-                                             Http::Context& http_context, Runtime::Loader& runtime,
-                                             const LocalInfo::LocalInfo& local_info,
-                                             Upstream::ClusterManager& cluster_manager,
-                                             Server::OverloadManager* overload_manager,
-                                             Event::TimeSystem& time_system)
+ConnectionManagerImpl::ConnectionManagerImpl(
+    ConnectionManagerConfig& config, const Network::DrainDecision& drain_close,
+    Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random_generator,
+    Http::Context& http_context, Runtime::Loader& runtime, const LocalInfo::LocalInfo& local_info,
+    Upstream::ClusterManager& cluster_manager, Server::OverloadManager* overload_manager,
+    Event::TimeSystem& time_system)
     : config_(config), stats_(config_.stats()),
       conn_length_(new Stats::Timespan(stats_.named_.downstream_cx_length_ms_, time_system)),
       drain_close_(drain_close), random_generator_(random_generator), http_context_(http_context),

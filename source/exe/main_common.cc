@@ -41,10 +41,11 @@ Runtime::LoaderPtr ProdComponentFactory::createRuntime(Server::Instance& server,
   return Server::InstanceUtil::createRuntime(server, config);
 }
 
-MainCommonBase::MainCommonBase(OptionsImpl& options, Event::TimeSystem& time_system,
-                               TestHooks& test_hooks, Server::ComponentFactory& component_factory,
-                               std::unique_ptr<Runtime::RandomGenerator>&& random_generator,
-                               Thread::ThreadFactory& thread_factory)
+MainCommonBase::MainCommonBase(
+    OptionsImpl& options, Event::TimeSystem& time_system, TestHooks& test_hooks,
+    Server::ComponentFactory& component_factory,
+    std::unique_ptr<Envoy::Extensions::TransportSockets::Tls::RandomGenerator>&& random_generator,
+    Thread::ThreadFactory& thread_factory)
     : options_(options), component_factory_(component_factory), thread_factory_(thread_factory) {
   Thread::ThreadFactorySingleton::set(&thread_factory_);
   ares_library_init(ARES_LIB_INIT_ALL);
@@ -137,7 +138,8 @@ void MainCommonBase::adminRequest(absl::string_view path_and_query, absl::string
 MainCommon::MainCommon(int argc, const char* const* argv)
     : options_(argc, argv, &MainCommon::hotRestartVersion, spdlog::level::info),
       base_(options_, real_time_system_, default_test_hooks_, prod_component_factory_,
-            std::make_unique<Runtime::RandomGeneratorImpl>(), platform_impl_.threadFactory()) {}
+            std::make_unique<Envoy::Extensions::TransportSockets::Tls::RandomGeneratorImpl>(),
+            platform_impl_.threadFactory()) {}
 
 std::string MainCommon::hotRestartVersion(uint64_t max_num_stats, uint64_t max_stat_name_len,
                                           bool hot_restart_enabled) {

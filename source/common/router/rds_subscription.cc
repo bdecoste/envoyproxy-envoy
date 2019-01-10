@@ -15,7 +15,8 @@ namespace Router {
 RdsSubscription::RdsSubscription(
     Envoy::Config::SubscriptionStats stats,
     const envoy::config::filter::network::http_connection_manager::v2::Rds& rds,
-    Upstream::ClusterManager& cm, Event::Dispatcher& dispatcher, Runtime::RandomGenerator& random,
+    Upstream::ClusterManager& cm, Event::Dispatcher& dispatcher,
+    Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
     const LocalInfo::LocalInfo& local_info, const Stats::Scope& scope)
     : RestApiFetcher(cm, rds.config_source().api_config_source(), dispatcher, random),
       local_info_(local_info), stats_(stats), scope_(scope) {

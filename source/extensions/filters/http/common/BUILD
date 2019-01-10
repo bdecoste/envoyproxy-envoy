@@ -42,6 +42,7 @@ envoy_cc_library(
     deps = [
         "//include/envoy/upstream:cluster_manager_interface",
         "//source/common/http:utility_lib",
+        "//source/extensions/transport_sockets/tls:random_lib",
         "@envoy_api//envoy/api/v2/core:http_uri_cc",
     ],
 )

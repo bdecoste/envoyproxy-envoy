@@ -22,7 +22,7 @@ bool UuidUtils::uuidModBy(const std::string& uuid, uint64_t& out, uint64_t mod) 
 }
 
 UuidTraceStatus UuidUtils::isTraceableUuid(const std::string& uuid) {
-  if (uuid.length() != Runtime::RandomGeneratorImpl::UUID_LENGTH) {
+  if (uuid.length() != Envoy::Extensions::TransportSockets::Tls::RandomGeneratorImpl::UUID_LENGTH) {
     return UuidTraceStatus::NoTrace;
   }
 
@@ -39,7 +39,7 @@ UuidTraceStatus UuidUtils::isTraceableUuid(const std::string& uuid) {
 }
 
 bool UuidUtils::setTraceableUuid(std::string& uuid, UuidTraceStatus trace_status) {
-  if (uuid.length() != Runtime::RandomGeneratorImpl::UUID_LENGTH) {
+  if (uuid.length() != Envoy::Extensions::TransportSockets::Tls::RandomGeneratorImpl::UUID_LENGTH) {
     return false;
   }
 

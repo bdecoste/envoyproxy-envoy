@@ -134,11 +134,12 @@ void IntegrationTestServer::threadRoutine(const Network::Address::IpVersion vers
   OptionsImpl options(Server::createTestOptionsImpl(config_path_, "", version));
   Thread::MutexBasicLockable lock;
 
-  Runtime::RandomGeneratorPtr random_generator;
+  Envoy::Extensions::TransportSockets::Tls::RandomGeneratorPtr random_generator;
   if (deterministic) {
     random_generator = std::make_unique<testing::NiceMock<Runtime::MockRandomGenerator>>();
   } else {
-    random_generator = std::make_unique<Runtime::RandomGeneratorImpl>();
+    random_generator =
+        std::make_unique<Envoy::Extensions::TransportSockets::Tls::RandomGeneratorImpl>();
   }
   createAndRunEnvoyServer(options, time_system_, Network::Utility::getLocalAddress(version), *this,
                           lock, *this, std::move(random_generator));
@@ -148,7 +149,7 @@ void IntegrationTestServerImpl::createAndRunEnvoyServer(
     OptionsImpl& options, Event::TimeSystem& time_system,
     Network::Address::InstanceConstSharedPtr local_address, TestHooks& hooks,
     Thread::BasicLockable& access_log_lock, Server::ComponentFactory& component_factory,
-    Runtime::RandomGeneratorPtr&& random_generator) {
+    Envoy::Extensions::TransportSockets::Tls::RandomGeneratorPtr&& random_generator) {
   Server::HotRestartNopImpl restarter;
   ThreadLocal::InstanceImpl tls;
   Stats::HeapStatDataAllocator stats_allocator;

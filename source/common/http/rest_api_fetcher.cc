@@ -14,7 +14,8 @@ namespace Http {
 
 RestApiFetcher::RestApiFetcher(Upstream::ClusterManager& cm,
                                const envoy::api::v2::core::ApiConfigSource& api_config_source,
-                               Event::Dispatcher& dispatcher, Runtime::RandomGenerator& random)
+                               Event::Dispatcher& dispatcher,
+                               Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random)
     : RestApiFetcher(cm, api_config_source.cluster_names()[0], dispatcher, random,
                      Config::Utility::apiConfigSourceRefreshDelay(api_config_source),
                      Config::Utility::apiConfigSourceRequestTimeout(api_config_source)) {
@@ -27,7 +28,8 @@ RestApiFetcher::RestApiFetcher(Upstream::ClusterManager& cm,
 }
 
 RestApiFetcher::RestApiFetcher(Upstream::ClusterManager& cm, const std::string& remote_cluster_name,
-                               Event::Dispatcher& dispatcher, Runtime::RandomGenerator& random,
+                               Event::Dispatcher& dispatcher,
+                               Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
                                std::chrono::milliseconds refresh_interval,
                                std::chrono::milliseconds request_timeout)
     : remote_cluster_name_(remote_cluster_name), cm_(cm), random_(random),

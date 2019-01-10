@@ -28,8 +28,8 @@ class GrpcMuxImpl : public GrpcMux,
 public:
   GrpcMuxImpl(const LocalInfo::LocalInfo& local_info, Grpc::AsyncClientPtr async_client,
               Event::Dispatcher& dispatcher, const Protobuf::MethodDescriptor& service_method,
-              Runtime::RandomGenerator& random, Stats::Scope& scope,
-              const RateLimitSettings& rate_limit_settings);
+              Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+              Stats::Scope& scope, const RateLimitSettings& rate_limit_settings);
   ~GrpcMuxImpl();
 
   void start() override;
@@ -108,7 +108,7 @@ private:
   // Envoy's dependendency ordering.
   std::list<std::string> subscriptions_;
   Event::TimerPtr retry_timer_;
-  Runtime::RandomGenerator& random_;
+  Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random_;
   TimeSource& time_source_;
   BackOffStrategyPtr backoff_strategy_;
   ControlPlaneStats control_plane_stats_;

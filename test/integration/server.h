@@ -253,11 +253,11 @@ protected:
   // functions server(), stat_store(), and admin_address() may be called, but before the server
   // has been started.
   // The subclass is also responsible for tearing down this server in its destructor.
-  virtual void createAndRunEnvoyServer(OptionsImpl& options, Event::TimeSystem& time_system,
-                                       Network::Address::InstanceConstSharedPtr local_address,
-                                       TestHooks& hooks, Thread::BasicLockable& access_log_lock,
-                                       Server::ComponentFactory& component_factory,
-                                       Runtime::RandomGeneratorPtr&& random_generator) PURE;
+  virtual void createAndRunEnvoyServer(
+      OptionsImpl& options, Event::TimeSystem& time_system,
+      Network::Address::InstanceConstSharedPtr local_address, TestHooks& hooks,
+      Thread::BasicLockable& access_log_lock, Server::ComponentFactory& component_factory,
+      Envoy::Extensions::TransportSockets::Tls::RandomGeneratorPtr&& random_generator) PURE;
 
   // Will be called by subclass on server thread when the server is ready to be accessed. The
   // server may not have been run yet, but all server access methods (server(), stat_store(),
@@ -304,11 +304,11 @@ public:
   Network::Address::InstanceConstSharedPtr admin_address() override { return admin_address_; }
 
 private:
-  void createAndRunEnvoyServer(OptionsImpl& options, Event::TimeSystem& time_system,
-                               Network::Address::InstanceConstSharedPtr local_address,
-                               TestHooks& hooks, Thread::BasicLockable& access_log_lock,
-                               Server::ComponentFactory& component_factory,
-                               Runtime::RandomGeneratorPtr&& random_generator) override;
+  void createAndRunEnvoyServer(
+      OptionsImpl& options, Event::TimeSystem& time_system,
+      Network::Address::InstanceConstSharedPtr local_address, TestHooks& hooks,
+      Thread::BasicLockable& access_log_lock, Server::ComponentFactory& component_factory,
+      Envoy::Extensions::TransportSockets::Tls::RandomGeneratorPtr&& random_generator) override;
 
   // Owned by this class. An owning pointer is not used because the actual allocation is done
   // on a stack in a non-main thread.

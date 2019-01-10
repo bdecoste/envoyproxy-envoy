@@ -374,7 +374,7 @@ TEST_F(AccessLogImplTest, healthCheckFalse) {
 }
 
 TEST_F(AccessLogImplTest, requestTracing) {
-  Runtime::RandomGeneratorImpl random;
+  Envoy::Extensions::TransportSockets::Tls::RandomGeneratorImpl random;
   std::string not_traceable_guid = random.uuid();
 
   std::string force_tracing_guid = random.uuid();

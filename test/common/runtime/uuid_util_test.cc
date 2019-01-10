@@ -36,7 +36,7 @@ TEST(UUIDUtilsTest, mod) {
 }
 
 TEST(UUIDUtilsTest, checkDistribution) {
-  Runtime::RandomGeneratorImpl random;
+  Envoy::Extensions::TransportSockets::Tls::RandomGeneratorImpl random;
 
   const int mod = 100;
   const int required_percentage = 11;
@@ -63,7 +63,7 @@ TEST(UUIDUtilsTest, checkDistribution) {
 }
 
 TEST(UUIDUtilsTest, DISABLED_benchmark) {
-  Runtime::RandomGeneratorImpl random;
+  Envoy::Extensions::TransportSockets::Tls::RandomGeneratorImpl random;
 
   for (int i = 0; i < 100000000; ++i) {
     random.uuid();
@@ -71,7 +71,7 @@ TEST(UUIDUtilsTest, DISABLED_benchmark) {
 }
 
 TEST(UUIDUtilsTest, setAndCheckTraceable) {
-  Runtime::RandomGeneratorImpl random;
+  Envoy::Extensions::TransportSockets::Tls::RandomGeneratorImpl random;
 
   std::string uuid = random.uuid();
   EXPECT_EQ(UuidTraceStatus::NoTrace, UuidUtils::isTraceableUuid(uuid));

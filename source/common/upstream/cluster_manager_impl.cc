@@ -170,9 +170,10 @@ void ClusterManagerInitHelper::setInitializedCb(std::function<void()> callback) 
 ClusterManagerImpl::ClusterManagerImpl(
     const envoy::config::bootstrap::v2::Bootstrap& bootstrap, ClusterManagerFactory& factory,
     Stats::Store& stats, ThreadLocal::Instance& tls, Runtime::Loader& runtime,
-    Runtime::RandomGenerator& random, const LocalInfo::LocalInfo& local_info,
-    AccessLog::AccessLogManager& log_manager, Event::Dispatcher& main_thread_dispatcher,
-    Server::Admin& admin, Api::Api& api, Http::Context& http_context)
+    Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+    const LocalInfo::LocalInfo& local_info, AccessLog::AccessLogManager& log_manager,
+    Event::Dispatcher& main_thread_dispatcher, Server::Admin& admin, Api::Api& api,
+    Http::Context& http_context)
     : factory_(factory), runtime_(runtime), stats_(stats), tls_(tls.allocateSlot()),
       random_(random), log_manager_(log_manager),
       bind_config_(bootstrap.cluster_manager().upstream_bind_config()), local_info_(local_info),
@@ -1150,7 +1151,8 @@ ClusterManagerImpl::ThreadLocalClusterManagerImpl::ClusterEntry::tcpConnPool(
 
 ClusterManagerPtr ProdClusterManagerFactory::clusterManagerFromProto(
     const envoy::config::bootstrap::v2::Bootstrap& bootstrap, Stats::Store& stats,
-    ThreadLocal::Instance& tls, Runtime::Loader& runtime, Runtime::RandomGenerator& random,
+    ThreadLocal::Instance& tls, Runtime::Loader& runtime,
+    Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
     const LocalInfo::LocalInfo& local_info, AccessLog::AccessLogManager& log_manager,
     Server::Admin& admin) {
   return ClusterManagerPtr{new ClusterManagerImpl(bootstrap, *this, stats, tls, runtime, random,

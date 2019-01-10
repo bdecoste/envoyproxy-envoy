@@ -36,7 +36,7 @@ namespace Tracing {
 TEST(HttpTracerUtilityTest, IsTracing) {
   NiceMock<StreamInfo::MockStreamInfo> stream_info;
   NiceMock<Stats::MockStore> stats;
-  Runtime::RandomGeneratorImpl random;
+  Envoy::Extensions::TransportSockets::Tls::RandomGeneratorImpl random;
   std::string not_traceable_guid = random.uuid();
 
   std::string forced_guid = random.uuid();

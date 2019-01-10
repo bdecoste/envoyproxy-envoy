@@ -23,7 +23,7 @@ namespace Envoy {
 namespace Runtime {
 
 TEST(Random, DISABLED_benchmarkRandom) {
-  Runtime::RandomGeneratorImpl random;
+  Envoy::Extensions::TransportSockets::Tls::RandomGeneratorImpl random;
 
   for (size_t i = 0; i < 1000000000; ++i) {
     random.random();
@@ -31,7 +31,7 @@ TEST(Random, DISABLED_benchmarkRandom) {
 }
 
 TEST(Random, sanityCheckOfUniquenessRandom) {
-  Runtime::RandomGeneratorImpl random;
+  Envoy::Extensions::TransportSockets::Tls::RandomGeneratorImpl random;
   std::set<uint64_t> results;
   const size_t num_of_results = 1000000;
 

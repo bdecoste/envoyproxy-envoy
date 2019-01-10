@@ -21,7 +21,7 @@ namespace Upstream {
 SdsSubscription::SdsSubscription(ClusterStats& stats,
                                  const envoy::api::v2::core::ConfigSource& eds_config,
                                  ClusterManager& cm, Event::Dispatcher& dispatcher,
-                                 Runtime::RandomGenerator& random)
+                                 Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random)
     : RestApiFetcher(cm, eds_config.api_config_source(), dispatcher, random), stats_(stats) {}
 
 void SdsSubscription::parseResponse(const Http::Message& response) {

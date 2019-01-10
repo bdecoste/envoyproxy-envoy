@@ -21,7 +21,7 @@ namespace Http {
 Network::Address::InstanceConstSharedPtr ConnectionManagerUtility::mutateRequestHeaders(
     Http::HeaderMap& request_headers, Network::Connection& connection,
     ConnectionManagerConfig& config, const Router::Config& route_config,
-    Runtime::RandomGenerator& random, Runtime::Loader& runtime,
+    Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random, Runtime::Loader& runtime,
     const LocalInfo::LocalInfo& local_info) {
   // If this is a Upgrade request, do not remove the Connection and Upgrade headers,
   // as we forward them verbatim to the upstream hosts.

@@ -30,7 +30,7 @@ class SdsApi : public Init::Target,
                public Config::SubscriptionCallbacks<envoy::api::v2::auth::Secret> {
 public:
   SdsApi(const LocalInfo::LocalInfo& local_info, Event::Dispatcher& dispatcher,
-         Runtime::RandomGenerator& random, Stats::Store& stats,
+         Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random, Stats::Store& stats,
          Upstream::ClusterManager& cluster_manager, Init::Manager& init_manager,
          const envoy::api::v2::core::ConfigSource& sds_config, const std::string& sds_config_name,
          std::function<void()> destructor_cb);
@@ -56,7 +56,7 @@ private:
 
   const LocalInfo::LocalInfo& local_info_;
   Event::Dispatcher& dispatcher_;
-  Runtime::RandomGenerator& random_;
+  Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random_;
   Stats::Store& stats_;
   Upstream::ClusterManager& cluster_manager_;
 
@@ -92,8 +92,9 @@ public:
   }
 
   TlsCertificateSdsApi(const LocalInfo::LocalInfo& local_info, Event::Dispatcher& dispatcher,
-                       Runtime::RandomGenerator& random, Stats::Store& stats,
-                       Upstream::ClusterManager& cluster_manager, Init::Manager& init_manager,
+                       Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+                       Stats::Store& stats, Upstream::ClusterManager& cluster_manager,
+                       Init::Manager& init_manager,
                        const envoy::api::v2::core::ConfigSource& sds_config,
                        const std::string& sds_config_name, std::function<void()> destructor_cb)
       : SdsApi(local_info, dispatcher, random, stats, cluster_manager, init_manager, sds_config,
@@ -135,14 +136,12 @@ public:
         secret_provider_context.clusterManager(), *secret_provider_context.initManager(),
         sds_config, sds_config_name, destructor_cb);
   }
-  CertificateValidationContextSdsApi(const LocalInfo::LocalInfo& local_info,
-                                     Event::Dispatcher& dispatcher,
-                                     Runtime::RandomGenerator& random, Stats::Store& stats,
-                                     Upstream::ClusterManager& cluster_manager,
-                                     Init::Manager& init_manager,
-                                     const envoy::api::v2::core::ConfigSource& sds_config,
-                                     std::string sds_config_name,
-                                     std::function<void()> destructor_cb)
+  CertificateValidationContextSdsApi(
+      const LocalInfo::LocalInfo& local_info, Event::Dispatcher& dispatcher,
+      Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random, Stats::Store& stats,
+      Upstream::ClusterManager& cluster_manager, Init::Manager& init_manager,
+      const envoy::api::v2::core::ConfigSource& sds_config, std::string sds_config_name,
+      std::function<void()> destructor_cb)
       : SdsApi(local_info, dispatcher, random, stats, cluster_manager, init_manager, sds_config,
                sds_config_name, destructor_cb) {}
 

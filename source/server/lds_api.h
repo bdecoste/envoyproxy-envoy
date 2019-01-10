@@ -22,7 +22,8 @@ class LdsApiImpl : public LdsApi,
                    Logger::Loggable<Logger::Id::upstream> {
 public:
   LdsApiImpl(const envoy::api::v2::core::ConfigSource& lds_config, Upstream::ClusterManager& cm,
-             Event::Dispatcher& dispatcher, Runtime::RandomGenerator& random,
+             Event::Dispatcher& dispatcher,
+             Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
              Init::Manager& init_manager, const LocalInfo::LocalInfo& local_info,
              Stats::Scope& scope, ListenerManager& lm);
 

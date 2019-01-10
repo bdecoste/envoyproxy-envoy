@@ -70,14 +70,16 @@ class FaultFilterConfig {
 public:
   FaultFilterConfig(const envoy::config::filter::http::fault::v2::HTTPFault& fault,
                     Runtime::Loader& runtime, const std::string& stats_prefix, Stats::Scope& scope,
-                    Runtime::RandomGenerator& generator);
+                    Envoy::Extensions::TransportSockets::Tls::RandomGenerator& generator);
 
   Runtime::Loader& runtime() { return runtime_; }
   FaultFilterStats& stats() { return stats_; }
   const std::string& statsPrefix() { return stats_prefix_; }
   Stats::Scope& scope() { return scope_; }
   const FaultSettings* settings() { return &settings_; }
-  Runtime::RandomGenerator& randomGenerator() { return generator_; }
+  Envoy::Extensions::TransportSockets::Tls::RandomGenerator& randomGenerator() {
+    return generator_;
+  }
 
 private:
   static FaultFilterStats generateStats(const std::string& prefix, Stats::Scope& scope);
@@ -87,7 +89,7 @@ private:
   FaultFilterStats stats_;
   const std::string stats_prefix_;
   Stats::Scope& scope_;
-  Runtime::RandomGenerator& generator_;
+  Envoy::Extensions::TransportSockets::Tls::RandomGenerator& generator_;
 };
 
 typedef std::shared_ptr<FaultFilterConfig> FaultFilterConfigSharedPtr;

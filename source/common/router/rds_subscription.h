@@ -24,8 +24,8 @@ public:
   RdsSubscription(Envoy::Config::SubscriptionStats stats,
                   const envoy::config::filter::network::http_connection_manager::v2::Rds& rds,
                   Upstream::ClusterManager& cm, Event::Dispatcher& dispatcher,
-                  Runtime::RandomGenerator& random, const LocalInfo::LocalInfo& local_info,
-                  const Stats::Scope& scope);
+                  Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+                  const LocalInfo::LocalInfo& local_info, const Stats::Scope& scope);
 
 private:
   // Config::Subscription

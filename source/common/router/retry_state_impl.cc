@@ -27,12 +27,11 @@ const uint32_t RetryPolicy::RETRY_ON_GRPC_DEADLINE_EXCEEDED;
 const uint32_t RetryPolicy::RETRY_ON_GRPC_RESOURCE_EXHAUSTED;
 const uint32_t RetryPolicy::RETRY_ON_GRPC_UNAVAILABLE;
 
-RetryStatePtr RetryStateImpl::create(const RetryPolicy& route_policy,
-                                     Http::HeaderMap& request_headers,
-                                     const Upstream::ClusterInfo& cluster, Runtime::Loader& runtime,
-                                     Runtime::RandomGenerator& random,
-                                     Event::Dispatcher& dispatcher,
-                                     Upstream::ResourcePriority priority) {
+RetryStatePtr
+RetryStateImpl::create(const RetryPolicy& route_policy, Http::HeaderMap& request_headers,
+                       const Upstream::ClusterInfo& cluster, Runtime::Loader& runtime,
+                       Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+                       Event::Dispatcher& dispatcher, Upstream::ResourcePriority priority) {
   RetryStatePtr ret;
 
   // We short circuit here and do not both with an allocation if there is no chance we will retry.
@@ -50,8 +49,8 @@ RetryStatePtr RetryStateImpl::create(const RetryPolicy& route_policy,
 
 RetryStateImpl::RetryStateImpl(const RetryPolicy& route_policy, Http::HeaderMap& request_headers,
                                const Upstream::ClusterInfo& cluster, Runtime::Loader& runtime,
-                               Runtime::RandomGenerator& random, Event::Dispatcher& dispatcher,
-                               Upstream::ResourcePriority priority)
+                               Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+                               Event::Dispatcher& dispatcher, Upstream::ResourcePriority priority)
     : cluster_(cluster), runtime_(runtime), random_(random), dispatcher_(dispatcher),
       priority_(priority), retry_host_predicates_(route_policy.retryHostPredicates()),
       retry_priority_(route_policy.retryPriority()),

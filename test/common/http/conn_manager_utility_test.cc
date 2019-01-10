@@ -430,7 +430,7 @@ TEST_F(ConnectionManagerUtilityTest, RequestIdGeneratedWhenItsNotPresent) {
   }
 
   {
-    Runtime::RandomGeneratorImpl rand;
+    Envoy::Extensions::TransportSockets::Tls::RandomGeneratorImpl rand;
     TestHeaderMapImpl headers{{"x-client-trace-id", "trace-id"}};
     const std::string uuid = rand.uuid();
     EXPECT_CALL(random_, uuid()).WillOnce(Return(uuid));

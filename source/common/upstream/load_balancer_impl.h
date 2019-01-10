@@ -56,7 +56,7 @@ protected:
   bool isGlobalPanic(const HostSet& host_set);
 
   LoadBalancerBase(const PrioritySet& priority_set, ClusterStats& stats, Runtime::Loader& runtime,
-                   Runtime::RandomGenerator& random,
+                   Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
                    const envoy::api::v2::Cluster::CommonLbConfig& common_config);
 
   // Choose host set randomly, based on the per_priority_load_;
@@ -67,7 +67,7 @@ protected:
 
   ClusterStats& stats_;
   Runtime::Loader& runtime_;
-  Runtime::RandomGenerator& random_;
+  Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random_;
   const uint32_t default_healthy_panic_percent_;
   // The priority-ordered set of hosts to use for load balancing.
   const PrioritySet& priority_set_;
@@ -128,7 +128,7 @@ protected:
   // Both priority_set and local_priority_set if non-null must have at least one host set.
   ZoneAwareLoadBalancerBase(const PrioritySet& priority_set, const PrioritySet* local_priority_set,
                             ClusterStats& stats, Runtime::Loader& runtime,
-                            Runtime::RandomGenerator& random,
+                            Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
                             const envoy::api::v2::Cluster::CommonLbConfig& common_config);
   ~ZoneAwareLoadBalancerBase();
 
@@ -278,7 +278,7 @@ class EdfLoadBalancerBase : public ZoneAwareLoadBalancerBase {
 public:
   EdfLoadBalancerBase(const PrioritySet& priority_set, const PrioritySet* local_priority_set,
                       ClusterStats& stats, Runtime::Loader& runtime,
-                      Runtime::RandomGenerator& random,
+                      Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
                       const envoy::api::v2::Cluster::CommonLbConfig& common_config);
 
   // Upstream::LoadBalancerBase
@@ -318,7 +318,7 @@ class RoundRobinLoadBalancer : public EdfLoadBalancerBase {
 public:
   RoundRobinLoadBalancer(const PrioritySet& priority_set, const PrioritySet* local_priority_set,
                          ClusterStats& stats, Runtime::Loader& runtime,
-                         Runtime::RandomGenerator& random,
+                         Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
                          const envoy::api::v2::Cluster::CommonLbConfig& common_config)
       : EdfLoadBalancerBase(priority_set, local_priority_set, stats, runtime, random,
                             common_config) {
@@ -366,7 +366,7 @@ class LeastRequestLoadBalancer : public EdfLoadBalancerBase {
 public:
   LeastRequestLoadBalancer(
       const PrioritySet& priority_set, const PrioritySet* local_priority_set, ClusterStats& stats,
-      Runtime::Loader& runtime, Runtime::RandomGenerator& random,
+      Runtime::Loader& runtime, Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
       const envoy::api::v2::Cluster::CommonLbConfig& common_config,
       const absl::optional<envoy::api::v2::Cluster::LeastRequestLbConfig> least_request_config)
       : EdfLoadBalancerBase(priority_set, local_priority_set, stats, runtime, random,
@@ -405,7 +405,7 @@ class RandomLoadBalancer : public ZoneAwareLoadBalancerBase {
 public:
   RandomLoadBalancer(const PrioritySet& priority_set, const PrioritySet* local_priority_set,
                      ClusterStats& stats, Runtime::Loader& runtime,
-                     Runtime::RandomGenerator& random,
+                     Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
                      const envoy::api::v2::Cluster::CommonLbConfig& common_config)
       : ZoneAwareLoadBalancerBase(priority_set, local_priority_set, stats, runtime, random,
                                   common_config) {}

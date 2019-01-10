@@ -96,7 +96,8 @@ public:
   ClusterManagerPtr
   clusterManagerFromProto(const envoy::config::bootstrap::v2::Bootstrap& bootstrap,
                           Stats::Store& stats, ThreadLocal::Instance& tls, Runtime::Loader& runtime,
-                          Runtime::RandomGenerator& random, const LocalInfo::LocalInfo& local_info,
+                          Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+                          const LocalInfo::LocalInfo& local_info,
                           AccessLog::AccessLogManager& log_manager, Server::Admin& admin) override {
     return ClusterManagerPtr{clusterManagerFromProto_(bootstrap, stats, tls, runtime, random,
                                                       local_info, log_manager, admin)};
@@ -107,7 +108,8 @@ public:
   MOCK_METHOD8(clusterManagerFromProto_,
                ClusterManager*(const envoy::config::bootstrap::v2::Bootstrap& bootstrap,
                                Stats::Store& stats, ThreadLocal::Instance& tls,
-                               Runtime::Loader& runtime, Runtime::RandomGenerator& random,
+                               Runtime::Loader& runtime,
+                               Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
                                const LocalInfo::LocalInfo& local_info,
                                AccessLog::AccessLogManager& log_manager, Server::Admin& admin));
   MOCK_METHOD1(allocateConnPool_, Http::ConnectionPool::Instance*(HostConstSharedPtr host));
@@ -145,7 +147,8 @@ public:
   TestClusterManagerImpl(const envoy::config::bootstrap::v2::Bootstrap& bootstrap,
                          ClusterManagerFactory& factory, Stats::Store& stats,
                          ThreadLocal::Instance& tls, Runtime::Loader& runtime,
-                         Runtime::RandomGenerator& random, const LocalInfo::LocalInfo& local_info,
+                         Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+                         const LocalInfo::LocalInfo& local_info,
                          AccessLog::AccessLogManager& log_manager,
                          Event::Dispatcher& main_thread_dispatcher, Server::Admin& admin,
                          Api::Api& api, MockLocalClusterUpdate& local_cluster_update)

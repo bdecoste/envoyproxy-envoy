@@ -25,8 +25,8 @@ class RetryStateImpl : public RetryState {
 public:
   static RetryStatePtr create(const RetryPolicy& route_policy, Http::HeaderMap& request_headers,
                               const Upstream::ClusterInfo& cluster, Runtime::Loader& runtime,
-                              Runtime::RandomGenerator& random, Event::Dispatcher& dispatcher,
-                              Upstream::ResourcePriority priority);
+                              Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+                              Event::Dispatcher& dispatcher, Upstream::ResourcePriority priority);
   ~RetryStateImpl();
 
   static uint32_t parseRetryOn(absl::string_view config);
@@ -68,8 +68,8 @@ public:
 private:
   RetryStateImpl(const RetryPolicy& route_policy, Http::HeaderMap& request_headers,
                  const Upstream::ClusterInfo& cluster, Runtime::Loader& runtime,
-                 Runtime::RandomGenerator& random, Event::Dispatcher& dispatcher,
-                 Upstream::ResourcePriority priority);
+                 Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+                 Event::Dispatcher& dispatcher, Upstream::ResourcePriority priority);
 
   void enableBackoffTimer();
   void resetRetry();
@@ -80,7 +80,7 @@ private:
 
   const Upstream::ClusterInfo& cluster_;
   Runtime::Loader& runtime_;
-  Runtime::RandomGenerator& random_;
+  Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random_;
   Event::Dispatcher& dispatcher_;
   uint32_t retry_on_{};
   uint32_t retries_remaining_{1};

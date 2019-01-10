@@ -1078,8 +1078,8 @@ void Filter::UpstreamRequest::onPoolReady(Http::StreamEncoder& request_encoder,
 RetryStatePtr
 ProdFilter::createRetryState(const RetryPolicy& policy, Http::HeaderMap& request_headers,
                              const Upstream::ClusterInfo& cluster, Runtime::Loader& runtime,
-                             Runtime::RandomGenerator& random, Event::Dispatcher& dispatcher,
-                             Upstream::ResourcePriority priority) {
+                             Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+                             Event::Dispatcher& dispatcher, Upstream::ResourcePriority priority) {
   return RetryStateImpl::create(policy, request_headers, cluster, runtime, random, dispatcher,
                                 priority);
 }

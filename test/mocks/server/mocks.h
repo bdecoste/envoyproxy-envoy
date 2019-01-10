@@ -330,7 +330,7 @@ public:
   MOCK_METHOD0(mutexTracer, Envoy::MutexTracer*());
   MOCK_METHOD0(options, Options&());
   MOCK_METHOD0(overloadManager, OverloadManager&());
-  MOCK_METHOD0(random, Runtime::RandomGenerator&());
+  MOCK_METHOD0(random, Envoy::Extensions::TransportSockets::Tls::RandomGenerator&());
   MOCK_METHOD0(runtime, Runtime::Loader&());
   MOCK_METHOD0(shutdown, void());
   MOCK_METHOD0(isShutdown, bool());
@@ -407,7 +407,7 @@ public:
   MOCK_METHOD0(healthCheckFailed, bool());
   MOCK_METHOD0(httpTracer, Tracing::HttpTracer&());
   MOCK_METHOD0(initManager, Init::Manager&());
-  MOCK_METHOD0(random, Envoy::Runtime::RandomGenerator&());
+  MOCK_METHOD0(random, Envoy::Envoy::Extensions::TransportSockets::Tls::RandomGenerator&());
   MOCK_METHOD0(runtime, Envoy::Runtime::Loader&());
   MOCK_METHOD0(scope, Stats::Scope&());
   MOCK_METHOD0(singletonManager, Singleton::Manager&());
@@ -453,7 +453,7 @@ public:
   MOCK_METHOD0(clusterManager, Upstream::ClusterManager&());
   MOCK_METHOD0(localInfo, const LocalInfo::LocalInfo&());
   MOCK_METHOD0(dispatcher, Event::Dispatcher&());
-  MOCK_METHOD0(random, Envoy::Runtime::RandomGenerator&());
+  MOCK_METHOD0(random, Envoy::Envoy::Extensions::TransportSockets::Tls::RandomGenerator&());
   MOCK_METHOD0(stats, Stats::Store&());
   MOCK_METHOD1(setInitManager, void(Init::Manager&));
   MOCK_METHOD0(initManager, Init::Manager*());
@@ -487,7 +487,7 @@ public:
 
   MOCK_METHOD0(cluster, Upstream::Cluster&());
   MOCK_METHOD0(dispatcher, Event::Dispatcher&());
-  MOCK_METHOD0(random, Envoy::Runtime::RandomGenerator&());
+  MOCK_METHOD0(random, Envoy::Envoy::Extensions::TransportSockets::Tls::RandomGenerator&());
   MOCK_METHOD0(runtime, Envoy::Runtime::Loader&());
   MOCK_METHOD0(eventLogger_, Upstream::HealthCheckEventLogger*());
   Upstream::HealthCheckEventLoggerPtr eventLogger() override {

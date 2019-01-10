@@ -23,7 +23,7 @@ class SdsSubscription : public Http::RestApiFetcher,
 public:
   SdsSubscription(ClusterStats& stats, const envoy::api::v2::core::ConfigSource& eds_config,
                   ClusterManager& cm, Event::Dispatcher& dispatcher,
-                  Runtime::RandomGenerator& random);
+                  Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random);
 
 private:
   // Config::Subscription

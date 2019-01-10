@@ -53,7 +53,8 @@ bool ComparisonFilter::compareAgainstValue(uint64_t lhs) {
 
 FilterPtr
 FilterFactory::fromProto(const envoy::config::filter::accesslog::v2::AccessLogFilter& config,
-                         Runtime::Loader& runtime, Runtime::RandomGenerator& random) {
+                         Runtime::Loader& runtime,
+                         Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random) {
   switch (config.filter_specifier_case()) {
   case envoy::config::filter::accesslog::v2::AccessLogFilter::kStatusCodeFilter:
     return FilterPtr{new StatusCodeFilter(config.status_code_filter(), runtime)};
@@ -103,7 +104,8 @@ bool DurationFilter::evaluate(const StreamInfo::StreamInfo& info, const Http::He
 }
 
 RuntimeFilter::RuntimeFilter(const envoy::config::filter::accesslog::v2::RuntimeFilter& config,
-                             Runtime::Loader& runtime, Runtime::RandomGenerator& random)
+                             Runtime::Loader& runtime,
+                             Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random)
     : runtime_(runtime), random_(random), runtime_key_(config.runtime_key()),
       percent_(config.percent_sampled()),
       use_independent_randomness_(config.use_independent_randomness()) {}
@@ -123,20 +125,23 @@ bool RuntimeFilter::evaluate(const StreamInfo::StreamInfo&, const Http::HeaderMa
       ProtobufPercentHelper::fractionalPercentDenominatorToInt(percent_.denominator()));
 }
 
-OperatorFilter::OperatorFilter(const Protobuf::RepeatedPtrField<
-                                   envoy::config::filter::accesslog::v2::AccessLogFilter>& configs,
-                               Runtime::Loader& runtime, Runtime::RandomGenerator& random) {
+OperatorFilter::OperatorFilter(
+    const Protobuf::RepeatedPtrField<envoy::config::filter::accesslog::v2::AccessLogFilter>&
+        configs,
+    Runtime::Loader& runtime, Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random) {
   for (const auto& config : configs) {
     filters_.emplace_back(FilterFactory::fromProto(config, runtime, random));
   }
 }
 
 OrFilter::OrFilter(const envoy::config::filter::accesslog::v2::OrFilter& config,
-                   Runtime::Loader& runtime, Runtime::RandomGenerator& random)
+                   Runtime::Loader& runtime,
+                   Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random)
     : OperatorFilter(config.filters(), runtime, random) {}
 
 AndFilter::AndFilter(const envoy::config::filter::accesslog::v2::AndFilter& config,
-                     Runtime::Loader& runtime, Runtime::RandomGenerator& random)
+                     Runtime::Loader& runtime,
+                     Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random)
     : OperatorFilter(config.filters(), runtime, random) {}
 
 bool OrFilter::evaluate(const StreamInfo::StreamInfo& info,

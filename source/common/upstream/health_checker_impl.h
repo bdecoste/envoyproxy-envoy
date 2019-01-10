@@ -31,11 +31,11 @@ public:
    * @param event_logger supplies the event_logger.
    * @return a health checker.
    */
-  static HealthCheckerSharedPtr create(const envoy::api::v2::core::HealthCheck& hc_config,
-                                       Upstream::Cluster& cluster, Runtime::Loader& runtime,
-                                       Runtime::RandomGenerator& random,
-                                       Event::Dispatcher& dispatcher,
-                                       AccessLog::AccessLogManager& log_manager);
+  static HealthCheckerSharedPtr
+  create(const envoy::api::v2::core::HealthCheck& hc_config, Upstream::Cluster& cluster,
+         Runtime::Loader& runtime,
+         Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+         Event::Dispatcher& dispatcher, AccessLog::AccessLogManager& log_manager);
 };
 
 /**
@@ -45,7 +45,8 @@ class HttpHealthCheckerImpl : public HealthCheckerImplBase {
 public:
   HttpHealthCheckerImpl(const Cluster& cluster, const envoy::api::v2::core::HealthCheck& config,
                         Event::Dispatcher& dispatcher, Runtime::Loader& runtime,
-                        Runtime::RandomGenerator& random, HealthCheckEventLoggerPtr&& event_logger);
+                        Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+                        HealthCheckEventLoggerPtr&& event_logger);
 
 private:
   struct HttpActiveHealthCheckSession : public ActiveHealthCheckSession,
@@ -196,7 +197,8 @@ class TcpHealthCheckerImpl : public HealthCheckerImplBase {
 public:
   TcpHealthCheckerImpl(const Cluster& cluster, const envoy::api::v2::core::HealthCheck& config,
                        Event::Dispatcher& dispatcher, Runtime::Loader& runtime,
-                       Runtime::RandomGenerator& random, HealthCheckEventLoggerPtr&& event_logger);
+                       Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+                       HealthCheckEventLoggerPtr&& event_logger);
 
 private:
   struct TcpActiveHealthCheckSession;
@@ -257,7 +259,8 @@ class GrpcHealthCheckerImpl : public HealthCheckerImplBase {
 public:
   GrpcHealthCheckerImpl(const Cluster& cluster, const envoy::api::v2::core::HealthCheck& config,
                         Event::Dispatcher& dispatcher, Runtime::Loader& runtime,
-                        Runtime::RandomGenerator& random, HealthCheckEventLoggerPtr&& event_logger);
+                        Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+                        HealthCheckEventLoggerPtr&& event_logger);
 
 private:
   struct GrpcActiveHealthCheckSession : public ActiveHealthCheckSession,

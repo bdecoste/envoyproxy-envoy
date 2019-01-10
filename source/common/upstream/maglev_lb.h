@@ -50,7 +50,7 @@ private:
 class MaglevLoadBalancer : public ThreadAwareLoadBalancerBase {
 public:
   MaglevLoadBalancer(const PrioritySet& priority_set, ClusterStats& stats, Runtime::Loader& runtime,
-                     Runtime::RandomGenerator& random,
+                     Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
                      const envoy::api::v2::Cluster::CommonLbConfig& common_config,
                      uint64_t table_size = MaglevTable::DefaultTableSize)
       : ThreadAwareLoadBalancerBase(priority_set, stats, runtime, random, common_config),

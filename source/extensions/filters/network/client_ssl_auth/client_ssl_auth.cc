@@ -23,7 +23,7 @@ namespace ClientSslAuth {
 ClientSslAuthConfig::ClientSslAuthConfig(
     const envoy::config::filter::network::client_ssl_auth::v2::ClientSSLAuth& config,
     ThreadLocal::SlotAllocator& tls, Upstream::ClusterManager& cm, Event::Dispatcher& dispatcher,
-    Stats::Scope& scope, Runtime::RandomGenerator& random)
+    Stats::Scope& scope, Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random)
     : RestApiFetcher(
           cm, config.auth_api_cluster(), dispatcher, random,
           std::chrono::milliseconds(PROTOBUF_GET_MS_OR_DEFAULT(config, refresh_delay, 60000)),
@@ -44,7 +44,7 @@ ClientSslAuthConfig::ClientSslAuthConfig(
 ClientSslAuthConfigSharedPtr ClientSslAuthConfig::create(
     const envoy::config::filter::network::client_ssl_auth::v2::ClientSSLAuth& config,
     ThreadLocal::SlotAllocator& tls, Upstream::ClusterManager& cm, Event::Dispatcher& dispatcher,
-    Stats::Scope& scope, Runtime::RandomGenerator& random) {
+    Stats::Scope& scope, Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random) {
   ClientSslAuthConfigSharedPtr new_config(
       new ClientSslAuthConfig(config, tls, cm, dispatcher, scope, random));
   new_config->initialize();

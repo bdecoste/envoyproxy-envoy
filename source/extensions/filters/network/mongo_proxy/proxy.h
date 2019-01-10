@@ -127,7 +127,8 @@ class ProxyFilter : public Network::Filter,
 public:
   ProxyFilter(const std::string& stat_prefix, Stats::Scope& scope, Runtime::Loader& runtime,
               AccessLogSharedPtr access_log, const FaultConfigSharedPtr& fault_config,
-              const Network::DrainDecision& drain_decision, Runtime::RandomGenerator& generator,
+              const Network::DrainDecision& drain_decision,
+              Envoy::Extensions::TransportSockets::Tls::RandomGenerator& generator,
               Event::TimeSystem& time_system, bool emit_dynamic_metadata);
   ~ProxyFilter();
 
@@ -198,7 +199,7 @@ private:
   MongoProxyStats stats_;
   Runtime::Loader& runtime_;
   const Network::DrainDecision& drain_decision_;
-  Runtime::RandomGenerator& generator_;
+  Envoy::Extensions::TransportSockets::Tls::RandomGenerator& generator_;
   Buffer::OwnedImpl read_buffer_;
   Buffer::OwnedImpl write_buffer_;
   bool sniffing_{true};

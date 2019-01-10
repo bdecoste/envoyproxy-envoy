@@ -9,12 +9,11 @@
 namespace Envoy {
 namespace Upstream {
 
-HealthCheckerImplBase::HealthCheckerImplBase(const Cluster& cluster,
-                                             const envoy::api::v2::core::HealthCheck& config,
-                                             Event::Dispatcher& dispatcher,
-                                             Runtime::Loader& runtime,
-                                             Runtime::RandomGenerator& random,
-                                             HealthCheckEventLoggerPtr&& event_logger)
+HealthCheckerImplBase::HealthCheckerImplBase(
+    const Cluster& cluster, const envoy::api::v2::core::HealthCheck& config,
+    Event::Dispatcher& dispatcher, Runtime::Loader& runtime,
+    Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+    HealthCheckEventLoggerPtr&& event_logger)
     : always_log_health_check_failures_(config.always_log_health_check_failures()),
       cluster_(cluster), dispatcher_(dispatcher),
       timeout_(PROTOBUF_GET_MS_REQUIRED(config, timeout)),

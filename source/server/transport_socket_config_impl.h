@@ -12,11 +12,11 @@ namespace Configuration {
  */
 class TransportSocketFactoryContextImpl : public TransportSocketFactoryContext {
 public:
-  TransportSocketFactoryContextImpl(Envoy::Tls::ContextManager& context_manager,
-                                    Stats::Scope& stats_scope, Upstream::ClusterManager& cm,
-                                    const LocalInfo::LocalInfo& local_info,
-                                    Event::Dispatcher& dispatcher,
-                                    Envoy::Runtime::RandomGenerator& random, Stats::Store& stats)
+  TransportSocketFactoryContextImpl(
+      Envoy::Tls::ContextManager& context_manager, Stats::Scope& stats_scope,
+      Upstream::ClusterManager& cm, const LocalInfo::LocalInfo& local_info,
+      Event::Dispatcher& dispatcher,
+      Envoy::Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random, Stats::Store& stats)
       : context_manager_(context_manager), stats_scope_(stats_scope), cluster_manager_(cm),
         local_info_(local_info), dispatcher_(dispatcher), random_(random), stats_(stats) {}
 
@@ -34,7 +34,9 @@ public:
 
   Event::Dispatcher& dispatcher() override { return dispatcher_; }
 
-  Envoy::Runtime::RandomGenerator& random() override { return random_; }
+  Envoy::Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random() override {
+    return random_;
+  }
 
   Stats::Store& stats() override { return stats_; }
 
@@ -48,7 +50,7 @@ private:
   Upstream::ClusterManager& cluster_manager_;
   const LocalInfo::LocalInfo& local_info_;
   Event::Dispatcher& dispatcher_;
-  Envoy::Runtime::RandomGenerator& random_;
+  Envoy::Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random_;
   Stats::Store& stats_;
   Init::Manager* init_manager_{};
 };

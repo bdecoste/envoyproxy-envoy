@@ -494,13 +494,15 @@ Network::TransportSocketFactoryPtr createTransportSocketFactory(
   return config_factory.createTransportSocketFactory(*message, factory_context);
 }
 
-ClusterSharedPtr ClusterImplBase::create(
-    const envoy::api::v2::Cluster& cluster, ClusterManager& cm, Stats::Store& stats,
-    ThreadLocal::Instance& tls, Network::DnsResolverSharedPtr dns_resolver,
-    Envoy::Tls::ContextManager& ssl_context_manager, Runtime::Loader& runtime,
-    Runtime::RandomGenerator& random, Event::Dispatcher& dispatcher,
-    AccessLog::AccessLogManager& log_manager, const LocalInfo::LocalInfo& local_info,
-    Outlier::EventLoggerSharedPtr outlier_event_logger, bool added_via_api) {
+ClusterSharedPtr
+ClusterImplBase::create(const envoy::api::v2::Cluster& cluster, ClusterManager& cm,
+                        Stats::Store& stats, ThreadLocal::Instance& tls,
+                        Network::DnsResolverSharedPtr dns_resolver,
+                        Envoy::Tls::ContextManager& ssl_context_manager, Runtime::Loader& runtime,
+                        Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+                        Event::Dispatcher& dispatcher, AccessLog::AccessLogManager& log_manager,
+                        const LocalInfo::LocalInfo& local_info,
+                        Outlier::EventLoggerSharedPtr outlier_event_logger, bool added_via_api) {
   std::unique_ptr<ClusterImplBase> new_cluster;
 
   // We make this a shared pointer to deal with the distinct ownership

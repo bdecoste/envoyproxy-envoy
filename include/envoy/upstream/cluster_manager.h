@@ -25,6 +25,8 @@
 #include "envoy/upstream/thread_local_cluster.h"
 #include "envoy/upstream/upstream.h"
 
+#include "extensions/transport_sockets/tls/random_impl.h"
+
 namespace Envoy {
 namespace Upstream {
 
@@ -254,7 +256,8 @@ public:
   virtual ClusterManagerPtr
   clusterManagerFromProto(const envoy::config::bootstrap::v2::Bootstrap& bootstrap,
                           Stats::Store& stats, ThreadLocal::Instance& tls, Runtime::Loader& runtime,
-                          Runtime::RandomGenerator& random, const LocalInfo::LocalInfo& local_info,
+                          Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+                          const LocalInfo::LocalInfo& local_info,
                           AccessLog::AccessLogManager& log_manager, Server::Admin& admin) PURE;
 
   /**
@@ -322,7 +325,8 @@ public:
                     const envoy::api::v2::core::BindConfig& bind_config, Stats::Store& stats,
                     Envoy::Tls::ContextManager& ssl_context_manager, bool added_via_api,
                     ClusterManager& cm, const LocalInfo::LocalInfo& local_info,
-                    Event::Dispatcher& dispatcher, Runtime::RandomGenerator& random) PURE;
+                    Event::Dispatcher& dispatcher,
+                    Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random) PURE;
 };
 
 } // namespace Upstream

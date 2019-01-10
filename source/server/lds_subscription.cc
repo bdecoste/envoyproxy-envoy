@@ -15,7 +15,7 @@ namespace Server {
 LdsSubscription::LdsSubscription(Config::SubscriptionStats stats,
                                  const envoy::api::v2::core::ConfigSource& lds_config,
                                  Upstream::ClusterManager& cm, Event::Dispatcher& dispatcher,
-                                 Runtime::RandomGenerator& random,
+                                 Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
                                  const LocalInfo::LocalInfo& local_info,
                                  const Stats::StatsOptions& stats_options)
     : RestApiFetcher(cm, lds_config.api_config_source(), dispatcher, random),

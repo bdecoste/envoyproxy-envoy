@@ -23,7 +23,8 @@ class SubsetLoadBalancer : public LoadBalancer, Logger::Loggable<Logger::Id::ups
 public:
   SubsetLoadBalancer(
       LoadBalancerType lb_type, PrioritySet& priority_set, const PrioritySet* local_priority_set,
-      ClusterStats& stats, Runtime::Loader& runtime, Runtime::RandomGenerator& random,
+      ClusterStats& stats, Runtime::Loader& runtime,
+      Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
       const LoadBalancerSubsetInfo& subsets,
       const absl::optional<envoy::api::v2::Cluster::RingHashLbConfig>& lb_ring_hash_config,
       const absl::optional<envoy::api::v2::Cluster::LeastRequestLbConfig>& least_request_config,
@@ -154,7 +155,7 @@ private:
   const envoy::api::v2::Cluster::CommonLbConfig common_config_;
   ClusterStats& stats_;
   Runtime::Loader& runtime_;
-  Runtime::RandomGenerator& random_;
+  Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random_;
 
   const envoy::api::v2::Cluster::LbSubsetConfig::LbSubsetFallbackPolicy fallback_policy_;
   const SubsetMetadata default_subset_metadata_;

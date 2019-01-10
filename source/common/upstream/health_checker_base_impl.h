@@ -78,7 +78,8 @@ protected:
 
   HealthCheckerImplBase(const Cluster& cluster, const envoy::api::v2::core::HealthCheck& config,
                         Event::Dispatcher& dispatcher, Runtime::Loader& runtime,
-                        Runtime::RandomGenerator& random, HealthCheckEventLoggerPtr&& event_logger);
+                        Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+                        HealthCheckEventLoggerPtr&& event_logger);
 
   virtual ActiveHealthCheckSessionPtr makeSession(HostSharedPtr host) PURE;
   virtual envoy::data::core::v2alpha::HealthCheckerType healthCheckerType() const PURE;
@@ -91,7 +92,7 @@ protected:
   const uint32_t healthy_threshold_;
   HealthCheckerStats stats_;
   Runtime::Loader& runtime_;
-  Runtime::RandomGenerator& random_;
+  Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random_;
   const bool reuse_connection_;
   HealthCheckEventLoggerPtr event_logger_;
 

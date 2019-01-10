@@ -43,8 +43,8 @@ public:
   AsyncClientImpl(Upstream::ClusterInfoConstSharedPtr cluster, Stats::Store& stats_store,
                   Event::Dispatcher& dispatcher, const LocalInfo::LocalInfo& local_info,
                   Upstream::ClusterManager& cm, Runtime::Loader& runtime,
-                  Runtime::RandomGenerator& random, Router::ShadowWriterPtr&& shadow_writer,
-                  Http::Context& http_context);
+                  Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+                  Router::ShadowWriterPtr&& shadow_writer, Http::Context& http_context);
   ~AsyncClientImpl() override;
 
   // Http::AsyncClient

@@ -77,7 +77,9 @@ public:
   Init::Manager& initManager() override { return init_manager_; }
   ListenerManager& listenerManager() override { return *listener_manager_; }
   Secret::SecretManager& secretManager() override { return *secret_manager_; }
-  Runtime::RandomGenerator& random() override { return random_generator_; }
+  Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random() override {
+    return random_generator_;
+  }
   Runtime::Loader& runtime() override { return *runtime_loader_; }
   void shutdown() override;
   bool isShutdown() override { return false; }
@@ -147,7 +149,7 @@ private:
   Server::ValidationAdmin admin_;
   Singleton::ManagerPtr singleton_manager_;
   Runtime::LoaderPtr runtime_loader_;
-  Runtime::RandomGeneratorImpl random_generator_;
+  Envoy::Extensions::TransportSockets::Tls::RandomGeneratorImpl random_generator_;
   std::unique_ptr<Envoy::Extensions::TransportSockets::Tls::ContextManagerImpl>
       ssl_context_manager_;
   Configuration::MainImpl config_;

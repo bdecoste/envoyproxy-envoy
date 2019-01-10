@@ -78,7 +78,8 @@ public:
   static ClientSslAuthConfigSharedPtr
   create(const envoy::config::filter::network::client_ssl_auth::v2::ClientSSLAuth& config,
          ThreadLocal::SlotAllocator& tls, Upstream::ClusterManager& cm,
-         Event::Dispatcher& dispatcher, Stats::Scope& scope, Runtime::RandomGenerator& random);
+         Event::Dispatcher& dispatcher, Stats::Scope& scope,
+         Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random);
 
   const AllowedPrincipals& allowedPrincipals();
   const Network::Address::IpList& ipWhiteList() { return ip_white_list_; }
@@ -88,7 +89,7 @@ private:
   ClientSslAuthConfig(
       const envoy::config::filter::network::client_ssl_auth::v2::ClientSSLAuth& config,
       ThreadLocal::SlotAllocator& tls, Upstream::ClusterManager& cm, Event::Dispatcher& dispatcher,
-      Stats::Scope& scope, Runtime::RandomGenerator& random);
+      Stats::Scope& scope, Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random);
 
   static GlobalStats generateStats(Stats::Scope& scope, const std::string& prefix);
 

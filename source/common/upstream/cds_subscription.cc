@@ -15,7 +15,8 @@ namespace Upstream {
 CdsSubscription::CdsSubscription(
     Config::SubscriptionStats stats, const envoy::api::v2::core::ConfigSource& cds_config,
     const absl::optional<envoy::api::v2::core::ConfigSource>& eds_config, ClusterManager& cm,
-    Event::Dispatcher& dispatcher, Runtime::RandomGenerator& random,
+    Event::Dispatcher& dispatcher,
+    Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
     const LocalInfo::LocalInfo& local_info, const Stats::StatsOptions& stats_options)
     : RestApiFetcher(cm, cds_config.api_config_source(), dispatcher, random),
       local_info_(local_info), stats_(stats), eds_config_(eds_config),

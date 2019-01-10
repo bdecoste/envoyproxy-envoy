@@ -2,8 +2,9 @@
 
 namespace Envoy {
 
-JitteredBackOffStrategy::JitteredBackOffStrategy(uint64_t base_interval, uint64_t max_interval,
-                                                 Runtime::RandomGenerator& random)
+JitteredBackOffStrategy::JitteredBackOffStrategy(
+    uint64_t base_interval, uint64_t max_interval,
+    Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random)
     : base_interval_(base_interval), max_interval_(max_interval), random_(random) {
   ASSERT(base_interval_ > 0);
   ASSERT(base_interval_ <= max_interval_);

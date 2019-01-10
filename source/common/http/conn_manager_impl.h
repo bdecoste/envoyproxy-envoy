@@ -48,8 +48,9 @@ class ConnectionManagerImpl : Logger::Loggable<Logger::Id::http>,
                               public Network::ConnectionCallbacks {
 public:
   ConnectionManagerImpl(ConnectionManagerConfig& config, const Network::DrainDecision& drain_close,
-                        Runtime::RandomGenerator& random_generator, Http::Context& http_context,
-                        Runtime::Loader& runtime, const LocalInfo::LocalInfo& local_info,
+                        Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random_generator,
+                        Http::Context& http_context, Runtime::Loader& runtime,
+                        const LocalInfo::LocalInfo& local_info,
                         Upstream::ClusterManager& cluster_manager,
                         Server::OverloadManager* overload_manager, Event::TimeSystem& time_system);
   ~ConnectionManagerImpl();
@@ -471,7 +472,7 @@ private:
   // stream_idle_timer_.
   Event::TimerPtr connection_idle_timer_;
   Event::TimerPtr drain_timer_;
-  Runtime::RandomGenerator& random_generator_;
+  Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random_generator_;
   Http::Context& http_context_;
   Runtime::Loader& runtime_;
   const LocalInfo::LocalInfo& local_info_;

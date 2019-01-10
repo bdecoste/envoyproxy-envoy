@@ -101,7 +101,7 @@ public:
   NiceMock<Server::MockWorkerFactory> worker_factory_;
   Server::ListenerManagerImpl listener_manager_{server_, component_factory_, worker_factory_,
                                                 server_.timeSystem()};
-  Runtime::RandomGeneratorImpl random_;
+  Envoy::Extensions::TransportSockets::Tls::RandomGeneratorImpl random_;
   NiceMock<Api::MockOsSysCalls> os_sys_calls_;
   TestThreadsafeSingletonInjector<Api::OsSysCallsImpl> os_calls{&os_sys_calls_};
 };

@@ -24,7 +24,8 @@ public:
    * Read a filter definition from proto and instantiate a concrete filter class.
    */
   static FilterPtr fromProto(const envoy::config::filter::accesslog::v2::AccessLogFilter& config,
-                             Runtime::Loader& runtime, Runtime::RandomGenerator& random);
+                             Runtime::Loader& runtime,
+                             Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random);
 };
 
 /**
@@ -74,9 +75,10 @@ public:
  */
 class OperatorFilter : public Filter {
 public:
-  OperatorFilter(const Protobuf::RepeatedPtrField<
-                     envoy::config::filter::accesslog::v2::AccessLogFilter>& configs,
-                 Runtime::Loader& runtime, Runtime::RandomGenerator& random);
+  OperatorFilter(
+      const Protobuf::RepeatedPtrField<envoy::config::filter::accesslog::v2::AccessLogFilter>&
+          configs,
+      Runtime::Loader& runtime, Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random);
 
 protected:
   std::vector<FilterPtr> filters_;
@@ -88,7 +90,7 @@ protected:
 class AndFilter : public OperatorFilter {
 public:
   AndFilter(const envoy::config::filter::accesslog::v2::AndFilter& config, Runtime::Loader& runtime,
-            Runtime::RandomGenerator& random);
+            Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random);
 
   // AccessLog::Filter
   bool evaluate(const StreamInfo::StreamInfo& info,
@@ -101,7 +103,7 @@ public:
 class OrFilter : public OperatorFilter {
 public:
   OrFilter(const envoy::config::filter::accesslog::v2::OrFilter& config, Runtime::Loader& runtime,
-           Runtime::RandomGenerator& random);
+           Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random);
 
   // AccessLog::Filter
   bool evaluate(const StreamInfo::StreamInfo& info,
@@ -136,7 +138,8 @@ public:
 class RuntimeFilter : public Filter {
 public:
   RuntimeFilter(const envoy::config::filter::accesslog::v2::RuntimeFilter& config,
-                Runtime::Loader& runtime, Runtime::RandomGenerator& random);
+                Runtime::Loader& runtime,
+                Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random);
 
   // AccessLog::Filter
   bool evaluate(const StreamInfo::StreamInfo& info,
@@ -144,7 +147,7 @@ public:
 
 private:
   Runtime::Loader& runtime_;
-  Runtime::RandomGenerator& random_;
+  Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random_;
   const std::string runtime_key_;
   const envoy::type::FractionalPercent percent_;
   const bool use_independent_randomness_;

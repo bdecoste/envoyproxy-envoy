@@ -150,7 +150,7 @@ private:
   ThreadLocal::SlotPtr upstream_drain_manager_slot_;
   SharedConfigSharedPtr shared_config_;
   std::unique_ptr<const Router::MetadataMatchCriteria> cluster_metadata_match_criteria_;
-  Runtime::RandomGenerator& random_generator_;
+  Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random_generator_;
 };
 
 typedef std::shared_ptr<Config> ConfigSharedPtr;

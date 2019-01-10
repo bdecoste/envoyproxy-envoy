@@ -8,6 +8,8 @@
 
 #include "common/common/assert.h"
 
+#include "extensions/transport_sockets/tls/random_impl.h"
+
 namespace Envoy {
 
 /**
@@ -24,7 +26,7 @@ public:
    * @param random the random generator
    */
   JitteredBackOffStrategy(uint64_t base_interval, uint64_t max_interval,
-                          Runtime::RandomGenerator& random);
+                          Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random);
 
   // BackOffStrategy methods
   uint64_t nextBackOffMs() override;
@@ -34,6 +36,6 @@ private:
   const uint64_t base_interval_;
   const uint64_t max_interval_{};
   uint64_t current_retry_{1};
-  Runtime::RandomGenerator& random_;
+  Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random_;
 };
 } // namespace Envoy

@@ -24,31 +24,32 @@ namespace Upstream {
 
 class HealthCheckerFactoryContextImpl : public Server::Configuration::HealthCheckerFactoryContext {
 public:
-  HealthCheckerFactoryContextImpl(Upstream::Cluster& cluster, Envoy::Runtime::Loader& runtime,
-                                  Envoy::Runtime::RandomGenerator& random,
-                                  Event::Dispatcher& dispatcher,
-                                  HealthCheckEventLoggerPtr&& event_logger)
+  HealthCheckerFactoryContextImpl(
+      Upstream::Cluster& cluster, Envoy::Runtime::Loader& runtime,
+      Envoy::Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+      Event::Dispatcher& dispatcher, HealthCheckEventLoggerPtr&& event_logger)
       : cluster_(cluster), runtime_(runtime), random_(random), dispatcher_(dispatcher),
         event_logger_(std::move(event_logger)) {}
   Upstream::Cluster& cluster() override { return cluster_; }
   Envoy::Runtime::Loader& runtime() override { return runtime_; }
-  Envoy::Runtime::RandomGenerator& random() override { return random_; }
+  Envoy::Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random() override {
+    return random_;
+  }
   Event::Dispatcher& dispatcher() override { return dispatcher_; }
   HealthCheckEventLoggerPtr eventLogger() override { return std::move(event_logger_); }
 
 private:
   Upstream::Cluster& cluster_;
   Envoy::Runtime::Loader& runtime_;
-  Envoy::Runtime::RandomGenerator& random_;
+  Envoy::Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random_;
   Event::Dispatcher& dispatcher_;
   HealthCheckEventLoggerPtr event_logger_;
 };
 
-HealthCheckerSharedPtr
-HealthCheckerFactory::create(const envoy::api::v2::core::HealthCheck& hc_config,
-                             Upstream::Cluster& cluster, Runtime::Loader& runtime,
-                             Runtime::RandomGenerator& random, Event::Dispatcher& dispatcher,
-                             AccessLog::AccessLogManager& log_manager) {
+HealthCheckerSharedPtr HealthCheckerFactory::create(
+    const envoy::api::v2::core::HealthCheck& hc_config, Upstream::Cluster& cluster,
+    Runtime::Loader& runtime, Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+    Event::Dispatcher& dispatcher, AccessLog::AccessLogManager& log_manager) {
   HealthCheckEventLoggerPtr event_logger;
   if (!hc_config.event_log_path().empty()) {
     event_logger = std::make_unique<HealthCheckEventLoggerImpl>(
@@ -83,12 +84,11 @@ HealthCheckerFactory::create(const envoy::api::v2::core::HealthCheck& hc_config,
   }
 }
 
-HttpHealthCheckerImpl::HttpHealthCheckerImpl(const Cluster& cluster,
-                                             const envoy::api::v2::core::HealthCheck& config,
-                                             Event::Dispatcher& dispatcher,
-                                             Runtime::Loader& runtime,
-                                             Runtime::RandomGenerator& random,
-                                             HealthCheckEventLoggerPtr&& event_logger)
+HttpHealthCheckerImpl::HttpHealthCheckerImpl(
+    const Cluster& cluster, const envoy::api::v2::core::HealthCheck& config,
+    Event::Dispatcher& dispatcher, Runtime::Loader& runtime,
+    Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+    HealthCheckEventLoggerPtr&& event_logger)
     : HealthCheckerImplBase(cluster, config, dispatcher, runtime, random, std::move(event_logger)),
       path_(config.http_health_check().path()), host_value_(config.http_health_check().host()),
       request_headers_parser_(
@@ -285,11 +285,11 @@ bool TcpHealthCheckMatcher::match(const MatchSegments& expected, const Buffer::I
   return true;
 }
 
-TcpHealthCheckerImpl::TcpHealthCheckerImpl(const Cluster& cluster,
-                                           const envoy::api::v2::core::HealthCheck& config,
-                                           Event::Dispatcher& dispatcher, Runtime::Loader& runtime,
-                                           Runtime::RandomGenerator& random,
-                                           HealthCheckEventLoggerPtr&& event_logger)
+TcpHealthCheckerImpl::TcpHealthCheckerImpl(
+    const Cluster& cluster, const envoy::api::v2::core::HealthCheck& config,
+    Event::Dispatcher& dispatcher, Runtime::Loader& runtime,
+    Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+    HealthCheckEventLoggerPtr&& event_logger)
     : HealthCheckerImplBase(cluster, config, dispatcher, runtime, random, std::move(event_logger)),
       send_bytes_([&config] {
         Protobuf::RepeatedPtrField<envoy::api::v2::core::HealthCheck::Payload> send_repeated;
@@ -377,12 +377,11 @@ void TcpHealthCheckerImpl::TcpActiveHealthCheckSession::onTimeout() {
   client_->close(Network::ConnectionCloseType::NoFlush);
 }
 
-GrpcHealthCheckerImpl::GrpcHealthCheckerImpl(const Cluster& cluster,
-                                             const envoy::api::v2::core::HealthCheck& config,
-                                             Event::Dispatcher& dispatcher,
-                                             Runtime::Loader& runtime,
-                                             Runtime::RandomGenerator& random,
-                                             HealthCheckEventLoggerPtr&& event_logger)
+GrpcHealthCheckerImpl::GrpcHealthCheckerImpl(
+    const Cluster& cluster, const envoy::api::v2::core::HealthCheck& config,
+    Event::Dispatcher& dispatcher, Runtime::Loader& runtime,
+    Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+    HealthCheckEventLoggerPtr&& event_logger)
     : HealthCheckerImplBase(cluster, config, dispatcher, runtime, random, std::move(event_logger)),
       service_method_(*Protobuf::DescriptorPool::generated_pool()->FindMethodByName(
           "grpc.health.v1.Health.Check")) {

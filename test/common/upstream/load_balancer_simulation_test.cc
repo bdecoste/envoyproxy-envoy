@@ -61,7 +61,7 @@ TEST(DISABLED_LeastRequestLoadBalancerWeightTest, Weight) {
   ClusterStats stats{ClusterInfoImpl::generateStats(stats_store)};
   stats.max_host_weight_.set(weight);
   NiceMock<Runtime::MockLoader> runtime;
-  Runtime::RandomGeneratorImpl random;
+  Envoy::Extensions::TransportSockets::Tls::RandomGeneratorImpl random;
   envoy::api::v2::Cluster::LeastRequestLbConfig least_request_lb_config;
   envoy::api::v2::Cluster::CommonLbConfig common_config;
   LeastRequestLoadBalancer lb_{
@@ -225,7 +225,7 @@ public:
   MockHostSet& host_set_ = *priority_set_.getMockHostSet(0);
   std::shared_ptr<MockClusterInfo> info_{new NiceMock<MockClusterInfo>()};
   NiceMock<Runtime::MockLoader> runtime_;
-  Runtime::RandomGeneratorImpl random_;
+  Envoy::Extensions::TransportSockets::Tls::RandomGeneratorImpl random_;
   Stats::IsolatedStoreImpl stats_store_;
   ClusterStats stats_;
   envoy::api::v2::Cluster::CommonLbConfig common_config_;

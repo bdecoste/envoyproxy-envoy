@@ -18,9 +18,11 @@ class RestApiFetcher : public Http::AsyncClient::Callbacks {
 protected:
   RestApiFetcher(Upstream::ClusterManager& cm,
                  const envoy::api::v2::core::ApiConfigSource& api_config_source,
-                 Event::Dispatcher& dispatcher, Runtime::RandomGenerator& random);
+                 Event::Dispatcher& dispatcher,
+                 Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random);
   RestApiFetcher(Upstream::ClusterManager& cm, const std::string& remote_cluster_name,
-                 Event::Dispatcher& dispatcher, Runtime::RandomGenerator& random,
+                 Event::Dispatcher& dispatcher,
+                 Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
                  std::chrono::milliseconds refresh_interval,
                  std::chrono::milliseconds request_timeout);
   ~RestApiFetcher();
@@ -65,7 +67,7 @@ private:
   void onSuccess(Http::MessagePtr&& response) override;
   void onFailure(Http::AsyncClient::FailureReason reason) override;
 
-  Runtime::RandomGenerator& random_;
+  Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random_;
   const std::chrono::milliseconds refresh_interval_;
   const std::chrono::milliseconds request_timeout_;
   Event::TimerPtr refresh_timer_;

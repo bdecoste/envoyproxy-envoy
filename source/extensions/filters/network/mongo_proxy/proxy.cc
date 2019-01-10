@@ -58,8 +58,8 @@ ProxyFilter::ProxyFilter(const std::string& stat_prefix, Stats::Scope& scope,
                          Runtime::Loader& runtime, AccessLogSharedPtr access_log,
                          const FaultConfigSharedPtr& fault_config,
                          const Network::DrainDecision& drain_decision,
-                         Runtime::RandomGenerator& generator, Event::TimeSystem& time_system,
-                         bool emit_dynamic_metadata)
+                         Envoy::Extensions::TransportSockets::Tls::RandomGenerator& generator,
+                         Event::TimeSystem& time_system, bool emit_dynamic_metadata)
     : stat_prefix_(stat_prefix), scope_(scope), stats_(generateStats(stat_prefix, scope)),
       runtime_(runtime), drain_decision_(drain_decision), generator_(generator),
       access_log_(access_log), fault_config_(fault_config), time_system_(time_system),

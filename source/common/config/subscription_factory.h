@@ -38,8 +38,9 @@ public:
   template <class ResourceType>
   static std::unique_ptr<Subscription<ResourceType>> subscriptionFromConfigSource(
       const envoy::api::v2::core::ConfigSource& config, const LocalInfo::LocalInfo& local_info,
-      Event::Dispatcher& dispatcher, Upstream::ClusterManager& cm, Runtime::RandomGenerator& random,
-      Stats::Scope& scope, std::function<Subscription<ResourceType>*()> rest_legacy_constructor,
+      Event::Dispatcher& dispatcher, Upstream::ClusterManager& cm,
+      Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random, Stats::Scope& scope,
+      std::function<Subscription<ResourceType>*()> rest_legacy_constructor,
       const std::string& rest_method, const std::string& grpc_method) {
     std::unique_ptr<Subscription<ResourceType>> result;
     SubscriptionStats stats = Utility::generateStats(scope);

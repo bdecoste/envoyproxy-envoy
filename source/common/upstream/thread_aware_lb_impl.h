@@ -35,7 +35,8 @@ public:
 
 protected:
   ThreadAwareLoadBalancerBase(const PrioritySet& priority_set, ClusterStats& stats,
-                              Runtime::Loader& runtime, Runtime::RandomGenerator& random,
+                              Runtime::Loader& runtime,
+                              Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
                               const envoy::api::v2::Cluster::CommonLbConfig& common_config)
       : LoadBalancerBase(priority_set, stats, runtime, random, common_config),
         factory_(new LoadBalancerFactoryImpl(stats, random)) {}
@@ -48,27 +49,29 @@ private:
   typedef std::unique_ptr<PerPriorityState> PerPriorityStatePtr;
 
   struct LoadBalancerImpl : public LoadBalancer {
-    LoadBalancerImpl(ClusterStats& stats, Runtime::RandomGenerator& random)
+    LoadBalancerImpl(ClusterStats& stats,
+                     Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random)
         : stats_(stats), random_(random) {}
 
     // Upstream::LoadBalancer
     HostConstSharedPtr chooseHost(LoadBalancerContext* context) override;
 
     ClusterStats& stats_;
-    Runtime::RandomGenerator& random_;
+    Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random_;
     std::shared_ptr<std::vector<PerPriorityStatePtr>> per_priority_state_;
     std::shared_ptr<std::vector<uint32_t>> per_priority_load_;
   };
 
   struct LoadBalancerFactoryImpl : public LoadBalancerFactory {
-    LoadBalancerFactoryImpl(ClusterStats& stats, Runtime::RandomGenerator& random)
+    LoadBalancerFactoryImpl(ClusterStats& stats,
+                            Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random)
         : stats_(stats), random_(random) {}
 
     // Upstream::LoadBalancerFactory
     LoadBalancerPtr create() override;
 
     ClusterStats& stats_;
-    Runtime::RandomGenerator& random_;
+    Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random_;
     absl::Mutex mutex_;
     std::shared_ptr<std::vector<PerPriorityStatePtr>> per_priority_state_ GUARDED_BY(mutex_);
     // This is split out of PerPriorityState so LoadBalancerBase::ChoosePriorirty can be reused.

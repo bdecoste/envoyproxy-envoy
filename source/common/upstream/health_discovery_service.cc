@@ -11,7 +11,8 @@ HdsDelegate::HdsDelegate(const envoy::api::v2::core::Node& node, Stats::Scope& s
                          Grpc::AsyncClientPtr async_client, Event::Dispatcher& dispatcher,
                          Runtime::Loader& runtime, Envoy::Stats::Store& stats,
                          Envoy::Tls::ContextManager& ssl_context_manager,
-                         Runtime::RandomGenerator& random, ClusterInfoFactory& info_factory,
+                         Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+                         ClusterInfoFactory& info_factory,
                          AccessLog::AccessLogManager& access_log_manager, ClusterManager& cm,
                          const LocalInfo::LocalInfo& local_info)
     : stats_{ALL_HDS_STATS(POOL_COUNTER_PREFIX(scope, "hds_delegate."))},
@@ -187,7 +188,7 @@ HdsCluster::HdsCluster(Runtime::Loader& runtime, const envoy::api::v2::Cluster& 
                        Envoy::Tls::ContextManager& ssl_context_manager, bool added_via_api,
                        ClusterInfoFactory& info_factory, ClusterManager& cm,
                        const LocalInfo::LocalInfo& local_info, Event::Dispatcher& dispatcher,
-                       Runtime::RandomGenerator& random)
+                       Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random)
     : runtime_(runtime), cluster_(cluster), bind_config_(bind_config), stats_(stats),
       ssl_context_manager_(ssl_context_manager), added_via_api_(added_via_api),
       initial_hosts_(new HostVector()) {
@@ -215,7 +216,7 @@ ClusterInfoConstSharedPtr ProdClusterInfoFactory::createClusterInfo(
     const envoy::api::v2::core::BindConfig& bind_config, Stats::Store& stats,
     Envoy::Tls::ContextManager& ssl_context_manager, bool added_via_api, ClusterManager& cm,
     const LocalInfo::LocalInfo& local_info, Event::Dispatcher& dispatcher,
-    Runtime::RandomGenerator& random) {
+    Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random) {
 
   Envoy::Stats::ScopePtr scope = stats.createScope(fmt::format("cluster.{}.", cluster.name()));
 
@@ -230,9 +231,10 @@ ClusterInfoConstSharedPtr ProdClusterInfoFactory::createClusterInfo(
                                            std::move(scope), added_via_api);
 }
 
-void HdsCluster::startHealthchecks(AccessLog::AccessLogManager& access_log_manager,
-                                   Runtime::Loader& runtime, Runtime::RandomGenerator& random,
-                                   Event::Dispatcher& dispatcher) {
+void HdsCluster::startHealthchecks(
+    AccessLog::AccessLogManager& access_log_manager, Runtime::Loader& runtime,
+    Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
+    Event::Dispatcher& dispatcher) {
 
   for (auto& health_check : cluster_.health_checks()) {
     health_checkers_.push_back(Upstream::HealthCheckerFactory::create(

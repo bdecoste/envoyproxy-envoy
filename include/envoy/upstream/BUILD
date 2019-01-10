@@ -26,6 +26,7 @@ envoy_cc_library(
         "//include/envoy/secret:secret_manager_interface",
         "//include/envoy/server:admin_interface",
         "//include/envoy/tcp:conn_pool_interface",
+        "//source/extensions/transport_sockets/tls:random_lib",
         "@envoy_api//envoy/api/v2:cds_cc",
         "@envoy_api//envoy/config/bootstrap/v2:bootstrap_cc",
     ],

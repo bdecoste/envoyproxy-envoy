@@ -53,7 +53,7 @@ public:
   Stats::IsolatedStoreImpl stats_store_;
   ClusterStats stats_{ClusterInfoImpl::generateStats(stats_store_)};
   NiceMock<Runtime::MockLoader> runtime_;
-  Runtime::RandomGeneratorImpl random_;
+  Envoy::Extensions::TransportSockets::Tls::RandomGeneratorImpl random_;
   absl::optional<envoy::api::v2::Cluster::RingHashLbConfig> config_;
   std::unique_ptr<RingHashLoadBalancer> ring_hash_lb_;
   envoy::api::v2::Cluster::CommonLbConfig common_config_;

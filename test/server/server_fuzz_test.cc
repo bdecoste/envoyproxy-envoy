@@ -78,7 +78,8 @@ DEFINE_PROTO_FUZZER(const envoy::config::bootstrap::v2::Bootstrap& input) {
     server = std::make_unique<InstanceImpl>(
         options, test_time.timeSystem(),
         std::make_shared<Network::Address::Ipv4Instance>("127.0.0.1"), hooks, restart, stats_store,
-        fakelock, component_factory, std::make_unique<Runtime::RandomGeneratorImpl>(),
+        fakelock, component_factory,
+        std::make_unique<Envoy::Extensions::TransportSockets::Tls::RandomGeneratorImpl>(),
         thread_local_instance, Thread::threadFactoryForTest());
   } catch (const EnvoyException& ex) {
     ENVOY_LOG_MISC(debug, "Controlled EnvoyException exit: {}", ex.what());

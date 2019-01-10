@@ -33,7 +33,7 @@ EdsClusterImpl::EdsClusterImpl(
 
   const auto& eds_config = cluster.eds_cluster_config().eds_config();
   Event::Dispatcher& dispatcher = factory_context.dispatcher();
-  Runtime::RandomGenerator& random = factory_context.random();
+  Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random = factory_context.random();
   Upstream::ClusterManager& cm = factory_context.clusterManager();
   subscription_ = Config::SubscriptionFactory::subscriptionFromConfigSource<
       envoy::api::v2::ClusterLoadAssignment>(

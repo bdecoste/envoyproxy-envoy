@@ -23,7 +23,7 @@ class RingHashLoadBalancer : public ThreadAwareLoadBalancerBase,
                              Logger::Loggable<Logger::Id::upstream> {
 public:
   RingHashLoadBalancer(PrioritySet& priority_set, ClusterStats& stats, Runtime::Loader& runtime,
-                       Runtime::RandomGenerator& random,
+                       Envoy::Extensions::TransportSockets::Tls::RandomGenerator& random,
                        const absl::optional<envoy::api::v2::Cluster::RingHashLbConfig>& config,
                        const envoy::api::v2::Cluster::CommonLbConfig& common_config);
 
