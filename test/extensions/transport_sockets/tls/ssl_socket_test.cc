@@ -16,6 +16,7 @@
 #include "extensions/filters/listener/tls_inspector/tls_inspector.h"
 #include "extensions/transport_sockets/tls/context_config_impl.h"
 #include "extensions/transport_sockets/tls/context_impl.h"
+#include "extensions/transport_sockets/tls/openssl_impl.h"
 #include "extensions/transport_sockets/tls/ssl_socket.h"
 
 #include "test/extensions/transport_sockets/tls/ssl_certs_test.h"
@@ -423,8 +424,8 @@ const std::string testUtilV2(const TestUtilOptionsV2& options) {
     SSL* client_ssl_socket = ssl_socket->rawSslForTest();
     SSL_CTX* client_ssl_context = SSL_get_SSL_CTX(client_ssl_socket);
     SSL_SESSION* client_ssl_session =
-        SSL_SESSION_from_bytes(reinterpret_cast<const uint8_t*>(options.clientSession().data()),
-                               options.clientSession().size(), client_ssl_context);
+        Envoy::Extensions::TransportSockets::Tls::ssl_session_from_bytes(
+            client_ssl_socket, client_ssl_context, options.clientSession());
     int rc = SSL_set_session(client_ssl_socket, client_ssl_session);
     ASSERT(rc == 1);
     SSL_SESSION_free(client_ssl_session);
@@ -489,10 +490,12 @@ const std::string testUtilV2(const TestUtilOptionsV2& options) {
       }
 
       SSL_SESSION* client_ssl_session = SSL_get_session(client_ssl_socket);
-      EXPECT_TRUE(SSL_SESSION_is_resumable(client_ssl_session));
+      EXPECT_TRUE(
+          Envoy::Extensions::TransportSockets::Tls::ssl_session_is_resumable(client_ssl_session));
       uint8_t* session_data;
       size_t session_len;
-      int rc = SSL_SESSION_to_bytes(client_ssl_session, &session_data, &session_len);
+      int rc = Envoy::Extensions::TransportSockets::Tls::ssl_session_to_bytes(
+          client_ssl_session, &session_data, &session_len);
       ASSERT(rc == 1);
       new_session = std::string(reinterpret_cast<char*>(session_data), session_len);
       OPENSSL_free(session_data);

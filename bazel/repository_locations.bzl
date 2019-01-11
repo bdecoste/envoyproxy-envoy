@@ -1,19 +1,13 @@
 REPOSITORY_LOCATIONS = dict(
+    # EXTERNAL OPENSSL
+    bssl_wrapper = dict(
+        sha256 = "265ae86648d29c29a6066aa1d464d828785bfc264bb3f0587f33216e94ebf94b",
+        strip_prefix = "bssl_wrapper-31706514083664e39cbdcaadae2e4fff2b18f96d",
+        urls = ["https://github.com/bdecoste/bssl_wrapper/archive/31706514083664e39cbdcaadae2e4fff2b18f96d.tar.gz"],
+    ),
     bazel_gazelle = dict(
         sha256 = "7949fc6cc17b5b191103e97481cf8889217263acf52e00b560683413af204fcb",
         urls = ["https://github.com/bazelbuild/bazel-gazelle/releases/download/0.16.0/bazel-gazelle-0.16.0.tar.gz"],
-    ),
-    boringssl = dict(
-        # Use commits from branch "chromium-stable-with-bazel"
-        sha256 = "a4a71d97b90825f509c472cc9ad2404d4100f6cce042fc159388956bc5c616fb",
-        strip_prefix = "boringssl-77e47de9e16ec8865d1bc6d614dd918141f094d2",
-        # chromium-71.0.3578.80
-        urls = ["https://github.com/google/boringssl/archive/77e47de9e16ec8865d1bc6d614dd918141f094d2.tar.gz"],
-    ),
-    boringssl_fips = dict(
-        sha256 = "b12ad676ee533824f698741bd127f6fbc82c46344398a6d78d25e62c6c418c73",
-        # fips-20180730
-        urls = ["https://commondatastorage.googleapis.com/chromium-boringssl-docs/fips/boringssl-66005f41fbc3529ffe8d007708756720529da20d.tar.xz"],
     ),
     com_google_absl = dict(
         sha256 = "e35082e88b9da04f4d68094c05ba112502a5063712f3021adfa465306d238c76",
@@ -104,11 +98,17 @@ REPOSITORY_LOCATIONS = dict(
         strip_prefix = "msgpack-c-cpp-3.1.1",
         urls = ["https://github.com/msgpack/msgpack-c/archive/cpp-3.1.1.tar.gz"],
     ),
+    #    com_github_google_jwt_verify = dict(
+    #        sha256 = "700be26170c1917e83d1319b88a2112dccd1179cd78c5672940483e7c45ca6ae",
+    #        strip_prefix = "jwt_verify_lib-85cf0edf1f1bc507ff7d96a8d6a9bc20307b0fcf",
+    #        # 2018-12-01
+    #        urls = ["https://github.com/google/jwt_verify_lib/archive/85cf0edf1f1bc507ff7d96a8d6a9bc20307b0fcf.tar.gz"],
+    #    ),
+    # EXTERNAL OPENSSL
     com_github_google_jwt_verify = dict(
-        sha256 = "700be26170c1917e83d1319b88a2112dccd1179cd78c5672940483e7c45ca6ae",
-        strip_prefix = "jwt_verify_lib-85cf0edf1f1bc507ff7d96a8d6a9bc20307b0fcf",
-        # 2018-12-01
-        urls = ["https://github.com/google/jwt_verify_lib/archive/85cf0edf1f1bc507ff7d96a8d6a9bc20307b0fcf.tar.gz"],
+        sha256 = "bc7c176625b81eaa04b08e0e843b961970c3cb912b596dea40e24bfff091532b",
+        strip_prefix = "jwt_verify_lib-89c042a33edd22d357d01bfbb422234f3f4f132e",
+        urls = ["https://github.com/bdecoste/jwt_verify_lib/archive/89c042a33edd22d357d01bfbb422234f3f4f132e.tar.gz"],
     ),
     com_github_nodejs_http_parser = dict(
         sha256 = "ef26268c54c8084d17654ba2ed5140bffeffd2a040a895ffb22a6cca3f6c613f",

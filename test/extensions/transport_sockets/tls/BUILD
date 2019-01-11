@@ -35,6 +35,7 @@ envoy_cc_test(
         "//source/extensions/filters/listener/tls_inspector:tls_inspector_lib",
         "//source/extensions/transport_sockets/tls:context_config_lib",
         "//source/extensions/transport_sockets/tls:context_lib",
+        "//source/extensions/transport_sockets/tls:openssl_impl_lib",
         "//source/extensions/transport_sockets/tls:ssl_socket_lib",
         "//source/extensions/transport_sockets/tls:utility_lib",
         "//test/extensions/transport_sockets/tls/test_data:cert_infos",
@@ -85,7 +86,10 @@ envoy_cc_test(
         "gen_unittest_certs.sh",
         "//test/extensions/transport_sockets/tls/test_data:certs",
     ],
-    external_deps = ["ssl"],
+    external_deps = [
+        "ssl",
+        "bssl_wrapper_lib",
+    ],
     deps = [
         ":ssl_test_utils",
         "//source/extensions/transport_sockets/tls:utility_lib",

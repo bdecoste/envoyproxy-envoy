@@ -73,7 +73,8 @@ public:
 
 static void BM_TlsInspector(benchmark::State& state) {
   NiceMock<FastMockOsSysCalls> os_sys_calls(
-      Tls::Test::generateClientHello("example.com", "\x02h2\x08http/1.1"));
+      Envoy::Extensions::ListenerFilters::TlsInspector::generateClientHello("example.com",
+                                                                            "\x02h2\x08http/1.1"));
   TestThreadsafeSingletonInjector<Api::OsSysCallsImpl> os_calls{&os_sys_calls};
   NiceMock<Stats::MockStore> store;
   ConfigSharedPtr cfg(std::make_shared<Config>(store));

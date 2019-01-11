@@ -2,14 +2,19 @@
 
 #include "common/common/assert.h"
 
+#include "extensions/filters/listener/tls_inspector/openssl_impl.h"
+
+#include "bssl_wrapper/bssl_wrapper.h"
 #include "openssl/ssl.h"
 
 namespace Envoy {
-namespace Tls {
-namespace Test {
+namespace Extensions {
+namespace ListenerFilters {
+namespace TlsInspector {
 
 std::vector<uint8_t> generateClientHello(const std::string& sni_name, const std::string& alpn) {
-  bssl::UniquePtr<SSL_CTX> ctx(SSL_CTX_new(TLS_with_buffers_method()));
+  bssl::UniquePtr<SSL_CTX> ctx(
+      SSL_CTX_new(Envoy::Extensions::ListenerFilters::TlsInspector::TLS_with_buffers_method()));
 
   const long flags = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_COMPRESSION;
   SSL_CTX_set_options(ctx.get(), flags);
@@ -39,6 +44,7 @@ std::vector<uint8_t> generateClientHello(const std::string& sni_name, const std:
   return buf;
 }
 
-} // namespace Test
-} // namespace Tls
+} // namespace TlsInspector
+} // namespace ListenerFilters
+} // namespace Extensions
 } // namespace Envoy

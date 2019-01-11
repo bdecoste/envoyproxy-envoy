@@ -4,8 +4,9 @@
 #include <vector>
 
 namespace Envoy {
-namespace Tls {
-namespace Test {
+namespace Extensions {
+namespace ListenerFilters {
+namespace TlsInspector {
 
 /**
  * Generate a TLS ClientHello in wire-format.
@@ -16,6 +17,7 @@ namespace Test {
  */
 std::vector<uint8_t> generateClientHello(const std::string& sni_name, const std::string& alpn);
 
-} // namespace Test
-} // namespace Tls
+} // namespace TlsInspector
+} // namespace ListenerFilters
+} // namespace Extensions
 } // namespace Envoy

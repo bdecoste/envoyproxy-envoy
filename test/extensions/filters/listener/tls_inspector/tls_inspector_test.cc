@@ -84,7 +84,8 @@ TEST_F(TlsInspectorTest, ReadError) {
 TEST_F(TlsInspectorTest, SniRegistered) {
   init();
   const std::string servername("example.com");
-  std::vector<uint8_t> client_hello = Tls::Test::generateClientHello(servername, "");
+  std::vector<uint8_t> client_hello =
+      Envoy::Extensions::ListenerFilters::TlsInspector::generateClientHello(servername, "");
   EXPECT_CALL(os_sys_calls_, recv(42, _, _, MSG_PEEK))
       .WillOnce(
           Invoke([&client_hello](int, void* buffer, size_t length, int) -> Api::SysCallSizeResult {
@@ -107,7 +108,9 @@ TEST_F(TlsInspectorTest, AlpnRegistered) {
   init();
   const std::vector<absl::string_view> alpn_protos = {absl::string_view("h2"),
                                                       absl::string_view("http/1.1")};
-  std::vector<uint8_t> client_hello = Tls::Test::generateClientHello("", "\x02h2\x08http/1.1");
+  std::vector<uint8_t> client_hello =
+      Envoy::Extensions::ListenerFilters::TlsInspector::generateClientHello("",
+                                                                            "\x02h2\x08http/1.1");
   EXPECT_CALL(os_sys_calls_, recv(42, _, _, MSG_PEEK))
       .WillOnce(
           Invoke([&client_hello](int, void* buffer, size_t length, int) -> Api::SysCallSizeResult {
@@ -130,7 +133,8 @@ TEST_F(TlsInspectorTest, MultipleReads) {
   init();
   const std::vector<absl::string_view> alpn_protos = {absl::string_view("h2")};
   const std::string servername("example.com");
-  std::vector<uint8_t> client_hello = Tls::Test::generateClientHello(servername, "\x02h2");
+  std::vector<uint8_t> client_hello =
+      Envoy::Extensions::ListenerFilters::TlsInspector::generateClientHello(servername, "\x02h2");
   {
     InSequence s;
     EXPECT_CALL(os_sys_calls_, recv(42, _, _, MSG_PEEK))
@@ -166,7 +170,8 @@ TEST_F(TlsInspectorTest, MultipleReads) {
 // Test that the filter correctly handles a ClientHello with no extensions present.
 TEST_F(TlsInspectorTest, NoExtensions) {
   init();
-  std::vector<uint8_t> client_hello = Tls::Test::generateClientHello("", "");
+  std::vector<uint8_t> client_hello =
+      Envoy::Extensions::ListenerFilters::TlsInspector::generateClientHello("", "");
   EXPECT_CALL(os_sys_calls_, recv(42, _, _, MSG_PEEK))
       .WillOnce(
           Invoke([&client_hello](int, void* buffer, size_t length, int) -> Api::SysCallSizeResult {
@@ -189,7 +194,8 @@ TEST_F(TlsInspectorTest, NoExtensions) {
 TEST_F(TlsInspectorTest, ClientHelloTooBig) {
   const size_t max_size = 50;
   cfg_ = std::make_shared<Config>(store_, max_size);
-  std::vector<uint8_t> client_hello = Tls::Test::generateClientHello("example.com", "");
+  std::vector<uint8_t> client_hello =
+      Envoy::Extensions::ListenerFilters::TlsInspector::generateClientHello("example.com", "");
   ASSERT(client_hello.size() > max_size);
   init();
   EXPECT_CALL(os_sys_calls_, recv(42, _, _, MSG_PEEK))

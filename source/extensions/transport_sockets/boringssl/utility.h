@@ -5,9 +5,6 @@
 
 #include "common/common/utility.h"
 
-#include "extensions/transport_sockets/tls/openssl_impl.h"
-
-#include "bssl_wrapper/bssl_wrapper.h"
 #include "openssl/ssl.h"
 
 namespace Envoy {

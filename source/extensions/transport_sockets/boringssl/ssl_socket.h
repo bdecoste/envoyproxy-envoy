@@ -15,7 +15,6 @@
 #include "extensions/transport_sockets/tls/utility.h"
 
 #include "absl/synchronization/mutex.h"
-#include "bssl_wrapper/bssl_wrapper.h"
 #include "openssl/ssl.h"
 
 namespace Envoy {
