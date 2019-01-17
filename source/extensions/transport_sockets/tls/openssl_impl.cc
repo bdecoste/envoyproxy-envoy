@@ -140,6 +140,11 @@ void ssl_ctx_add_client_CA(SSL_CTX* ctx, X509* x) { SSL_CTX_add_client_CA(ctx, x
 
 int should_be_single_use(const SSL_SESSION* session) { return 1; }
 
+// void ssl_ctx_set_client_CA_list(SSL_CTX *ctx, bssl::UniquePtr<STACK_OF(X509_NAME)> list) {
+//	if (sk_X509_NAME_num(list.get()) > 0)
+//	  SSL_CTX_set_client_CA_list(ctx, list.release());
+//}
+
 } // namespace Tls
 } // namespace TransportSockets
 } // namespace Extensions

@@ -194,6 +194,8 @@ private:
   int sessionTicketProcess(SSL* ssl, uint8_t* key_name, uint8_t* iv, EVP_CIPHER_CTX* ctx,
                            HMAC_CTX* hmac_ctx, int encrypt);
 
+  // bool isClientEcdsaCapable(const SSL_CLIENT_HELLO* ssl_client_hello);
+
   void generateHashForSessionContexId(const std::vector<std::string>& server_names,
                                       uint8_t* session_context_buf, unsigned& session_context_len);
 

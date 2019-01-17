@@ -1,5 +1,10 @@
 REPOSITORY_LOCATIONS = dict(
     # EXTERNAL OPENSSL
+    #    bssl_wrapper = dict(
+    #        sha256 = "b00762c8dd08e1bf1ffb37ed8b4d8797a4aa6b08c0a99b5807a397abea13f3bd",
+    #        strip_prefix = "bssl_wrapper-a571adead7950928b78223d077ebe2e88784e098",
+    #        urls = ["https://github.com/bdecoste/bssl_wrapper/archive/a571adead7950928b78223d077ebe2e88784e098.tar.gz"],
+    #    ),
     bssl_wrapper = dict(
         sha256 = "265ae86648d29c29a6066aa1d464d828785bfc264bb3f0587f33216e94ebf94b",
         strip_prefix = "bssl_wrapper-31706514083664e39cbdcaadae2e4fff2b18f96d",

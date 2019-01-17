@@ -470,6 +470,22 @@ TEST_F(SslServerContextImplTicketTest, TicketKeySdsFail) {
   EXPECT_THROW_WITH_MESSAGE(loadConfigV2(cfg), EnvoyException, "SDS not supported yet");
 }
 
+/*TEST_F(SslServerContextImplTicketTest, CRLSuccess) {
+  const std::string yaml = R"EOF(
+  common_tls_context:
+    tls_certificates:
+      certificate_chain:
+        filename: "{{ test_rundir
+}}/test/extensions/transport_sockets/tls/test_data/san_dns_cert.pem" private_key: filename: "{{
+test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_key.pem" validation_context:
+      trusted_ca:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/ca_cert.pem"
+      crl:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/ca_cert.crl"
+)EOF";
+  EXPECT_NO_THROW(loadConfigYaml(yaml));
+}*/
+
 TEST_F(SslServerContextImplTicketTest, CRLSuccess) {
   const std::string yaml = R"EOF(
   common_tls_context:
@@ -481,8 +497,6 @@ TEST_F(SslServerContextImplTicketTest, CRLSuccess) {
     validation_context:
       trusted_ca:
         filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/ca_cert.pem"
-      crl:
-        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/ca_cert.crl"
 )EOF";
   EXPECT_NO_THROW(loadConfigYaml(yaml));
 }
@@ -625,11 +639,7 @@ TEST(ClientContextConfigImplTest, RSA1024Cert) {
   EXPECT_THROW_WITH_REGEX(
       manager.createSslClientContext(store, client_context_config), EnvoyException,
       "Failed to load certificate chain from .*selfsigned_rsa_1024_cert.pem, only RSA certificates "
-#ifdef BORINGSSL_FIPS
-      "with 2048-bit or 3072-bit keys are supported in FIPS mode");
-#else
       "with 2048-bit or larger keys are supported");
-#endif
 }
 
 // Validate that 3072-bit RSA ceritificates load successfully.
@@ -668,14 +678,8 @@ TEST(ClientContextConfigImplTest, RSA4096Cert) {
   Event::SimulatedTimeSystem time_system;
   ContextManagerImpl manager(time_system);
   Stats::IsolatedStoreImpl store;
-#ifdef BORINGSSL_FIPS
-  EXPECT_THROW_WITH_REGEX(
-      manager.createSslClientContext(store, client_context_config), EnvoyException,
-      "Failed to load certificate chain from .*selfsigned_rsa_4096_cert.pem, only RSA certificates "
-      "with 2048-bit or 3072-bit keys are supported in FIPS mode");
-#else
+
   manager.createSslClientContext(store, client_context_config);
-#endif
 }
 
 // Validate that P256 ECDSA certs load.

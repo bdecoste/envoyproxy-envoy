@@ -970,7 +970,10 @@ void ServerContextImpl::TlsContext::addClientValidationContext(
     throw EnvoyException(
         fmt::format("Failed to load trusted client CA certificates from {}", config.caCertPath()));
   }
-  SSL_CTX_set_client_CA_list(ssl_ctx_.get(), list.release());
+
+  // Envoy::Extensions::TransportSockets::Tls::ssl_ctx_set_client_CA_list(ssl_ctx_.get(), list);
+  if (sk_X509_NAME_num(list.get()) > 0)
+    SSL_CTX_set_client_CA_list(ssl_ctx_.get(), list.release());
 
   // SSL_VERIFY_PEER or stronger mode was already set in ContextImpl::ContextImpl().
   if (require_client_cert) {

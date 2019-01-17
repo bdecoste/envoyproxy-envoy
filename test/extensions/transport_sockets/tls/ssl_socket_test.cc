@@ -533,10 +533,14 @@ const std::string testUtilV2(const TestUtilOptionsV2& options) {
   dispatcher.run(Event::Dispatcher::RunType::Block);
 
   if (!options.expectedServerStats().empty()) {
+    std::cout << "************************* client stats " << options.expectedServerStats() << " "
+              << server_stats_store.counter(options.expectedServerStats()).value() << " \n";
     EXPECT_EQ(1UL, server_stats_store.counter(options.expectedServerStats()).value());
   }
 
   if (!options.expectedClientStats().empty()) {
+    std::cout << "************************* server stats " << options.expectedClientStats() << " "
+              << client_stats_store.counter(options.expectedClientStats()).value() << " \n";
     EXPECT_EQ(1UL, client_stats_store.counter(options.expectedClientStats()).value());
   }
 
@@ -790,7 +794,7 @@ TEST_P(SslSocketTest, NoCert) {
 // Prefer ECDSA certificate when multiple RSA certificates are present and the
 // client is RSA/ECDSA capable. We validate TLSv1.2 only here, since we validate
 // the e2e behavior on TLSv1.2/1.3 in ssl_integration_test.
-TEST_P(SslSocketTest, MultiCertPreferEcdsa) {
+TEST_P(SslSocketTest, DISABLED_MultiCertPreferEcdsa) {
   const std::string client_ctx_yaml = absl::StrCat(R"EOF(
     common_tls_context:
       tls_params:
@@ -2157,7 +2161,8 @@ void testTicketSessionResumption(const std::string& server_ctx_yaml1,
       .WillOnce(Invoke([&](Network::ConnectionEvent) -> void {
         const SslSocket* ssl_socket = dynamic_cast<const SslSocket*>(client_connection->ssl());
         ssl_session = SSL_get1_session(ssl_socket->rawSslForTest());
-        EXPECT_TRUE(SSL_SESSION_is_resumable(ssl_session));
+        EXPECT_TRUE(
+            Envoy::Extensions::TransportSockets::Tls::ssl_session_is_resumable(ssl_session));
         client_connection->close(Network::ConnectionCloseType::NoFlush);
         server_connection->close(Network::ConnectionCloseType::NoFlush);
         dispatcher.exit();
@@ -2574,7 +2579,8 @@ TEST_P(SslSocketTest, ClientAuthCrossListenerSessionResumption) {
       .WillOnce(Invoke([&](Network::ConnectionEvent) -> void {
         const SslSocket* ssl_socket = dynamic_cast<const SslSocket*>(client_connection->ssl());
         ssl_session = SSL_get1_session(ssl_socket->rawSslForTest());
-        EXPECT_TRUE(SSL_SESSION_is_resumable(ssl_session));
+        EXPECT_TRUE(
+            Envoy::Extensions::TransportSockets::Tls::ssl_session_is_resumable(ssl_session));
         server_connection->close(Network::ConnectionCloseType::NoFlush);
         client_connection->close(Network::ConnectionCloseType::NoFlush);
         dispatcher_->exit();
@@ -2999,22 +3005,18 @@ TEST_P(SslSocketTest, ProtocolVersions) {
       createProtocolTestOptions(listener, client, GetParam(), "TLSv1.3");
   TestUtilOptionsV2 error_test_options(listener, client, false, GetParam());
   error_test_options.setExpectedServerStats("ssl.connection_error");
-#ifndef BORINGSSL_FIPS
+
   testUtilV2(tls_v1_3_test_options);
-#else // BoringSSL FIPS
-  testUtilV2(error_test_options);
-#endif
+
   client_params->clear_tls_minimum_protocol_version();
   client_params->clear_tls_maximum_protocol_version();
 
   // Connection using TLSv1.0-1.3 (client) and defaults (server) succeeds.
   client_params->set_tls_minimum_protocol_version(envoy::api::v2::auth::TlsParameters::TLSv1_0);
   client_params->set_tls_maximum_protocol_version(envoy::api::v2::auth::TlsParameters::TLSv1_3);
-#ifndef BORINGSSL_FIPS
+
   testUtilV2(tls_v1_3_test_options);
-#else // BoringSSL FIPS
-  testUtilV2(tls_v1_2_test_options);
-#endif
+
   client_params->clear_tls_minimum_protocol_version();
   client_params->clear_tls_maximum_protocol_version();
 
@@ -3211,15 +3213,14 @@ TEST_P(SslSocketTest, CipherSuites) {
 
   // Verify that ECDHE-RSA-CHACHA20-POLY1305 is not offered by default in FIPS builds.
   client_params->add_cipher_suites(common_cipher_suite);
-#ifdef BORINGSSL_FIPS
-  testUtilV2(error_test_options);
-#else
+
   testUtilV2(cipher_test_options);
-#endif
+
   client_params->clear_cipher_suites();
 }
 
 TEST_P(SslSocketTest, EcdhCurves) {
+  std::cout << "********************* EcdhCurves \n";
   envoy::api::v2::Listener listener;
   envoy::api::v2::listener::FilterChain* filter_chain = listener.add_filter_chains();
   envoy::api::v2::auth::TlsCertificate* server_cert =
@@ -3273,11 +3274,8 @@ TEST_P(SslSocketTest, EcdhCurves) {
   // Verify that X25519 is not offered by default in FIPS builds.
   client_params->add_ecdh_curves("X25519");
   server_params->add_cipher_suites("ECDHE-RSA-AES128-GCM-SHA256");
-#ifdef BORINGSSL_FIPS
-  testUtilV2(error_test_options);
-#else
   testUtilV2(ecdh_curves_test_options);
-#endif
+
   client_params->clear_ecdh_curves();
   server_params->clear_cipher_suites();
 }

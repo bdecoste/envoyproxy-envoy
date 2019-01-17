@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include <algorithm>
+#include <iostream>
 #include <string>
 
 #include "envoy/stats/stats.h"
@@ -57,7 +58,10 @@ public:
   IsolatedStoreImpl();
 
   // Stats::Scope
-  Counter& counter(const std::string& name) override { return counters_.get(name); }
+  Counter& counter(const std::string& name) override {
+    // std::cout << "!!!!!!!!!!!!!!!!!!!! counter " << name << " \n";
+    return counters_.get(name);
+  }
   ScopePtr createScope(const std::string& name) override;
   void deliverHistogramToSinks(const Histogram&, uint64_t) override {}
   Gauge& gauge(const std::string& name) override { return gauges_.get(name); }

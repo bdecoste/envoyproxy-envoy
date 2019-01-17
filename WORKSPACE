@@ -20,5 +20,5 @@ go_register_toolchains(go_version = GO_VERSION)
 new_local_repository(
     name = "openssl",
     build_file = "openssl.BUILD",
-    path = "/usr/local/lib64",
+    path = "/usr/local/lib64/openssl",
 )

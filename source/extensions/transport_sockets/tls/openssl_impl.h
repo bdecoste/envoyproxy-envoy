@@ -42,6 +42,8 @@ void ssl_ctx_add_client_CA(SSL_CTX* ctx, X509* x);
 
 int should_be_single_use(const SSL_SESSION* session);
 
+// void ssl_ctx_set_client_CA_list(SSL_CTX *ctx, bssl::UniquePtr<STACK_OF(X509_NAME)> list);
+
 } // namespace Tls
 } // namespace TransportSockets
 } // namespace Extensions
