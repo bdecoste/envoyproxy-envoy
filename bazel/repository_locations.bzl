@@ -1,14 +1,14 @@
 REPOSITORY_LOCATIONS = dict(
     # EXTERNAL OPENSSL
-    #    bssl_wrapper = dict(
-    #        sha256 = "b00762c8dd08e1bf1ffb37ed8b4d8797a4aa6b08c0a99b5807a397abea13f3bd",
-    #        strip_prefix = "bssl_wrapper-a571adead7950928b78223d077ebe2e88784e098",
-    #        urls = ["https://github.com/bdecoste/bssl_wrapper/archive/a571adead7950928b78223d077ebe2e88784e098.tar.gz"],
-    #    ),
     bssl_wrapper = dict(
-        sha256 = "265ae86648d29c29a6066aa1d464d828785bfc264bb3f0587f33216e94ebf94b",
-        strip_prefix = "bssl_wrapper-31706514083664e39cbdcaadae2e4fff2b18f96d",
-        urls = ["https://github.com/bdecoste/bssl_wrapper/archive/31706514083664e39cbdcaadae2e4fff2b18f96d.tar.gz"],
+        sha256 = "d9e500e1a8849c81e690966422baf66016a7ff85d044c210ad85644f62827158",
+        strip_prefix = "bssl_wrapper-34df33add45e1a02927fcf79b0bdd5899b7e2e36",
+        urls = ["https://github.com/bdecoste/bssl_wrapper/archive/34df33add45e1a02927fcf79b0bdd5899b7e2e36.tar.gz"],
+    ),
+    openssl_cbs = dict(
+        sha256 = "44453d398994a8d8fa540b2ffb5bbbb0a414c030236197e224ee6298adb53bdb",
+        strip_prefix = "openssl-cbs-563fe95a2d5690934f903d9ebb3d9bbae40fc93f",
+        urls = ["https://github.com/bdecoste/openssl-cbs/archive/563fe95a2d5690934f903d9ebb3d9bbae40fc93f.tar.gz"],
     ),
     bazel_gazelle = dict(
         sha256 = "7949fc6cc17b5b191103e97481cf8889217263acf52e00b560683413af204fcb",
@@ -111,9 +111,9 @@ REPOSITORY_LOCATIONS = dict(
     #    ),
     # EXTERNAL OPENSSL
     com_github_google_jwt_verify = dict(
-        sha256 = "bc7c176625b81eaa04b08e0e843b961970c3cb912b596dea40e24bfff091532b",
-        strip_prefix = "jwt_verify_lib-89c042a33edd22d357d01bfbb422234f3f4f132e",
-        urls = ["https://github.com/bdecoste/jwt_verify_lib/archive/89c042a33edd22d357d01bfbb422234f3f4f132e.tar.gz"],
+        sha256 = "40808d3a1cacdfc9827cc7d380386a69585c6b24bed82daa54918b176a2fde41",
+        strip_prefix = "jwt_verify_lib-c3c4cbd5762b5da01ffc059262be38413311d070",
+        urls = ["https://github.com/bdecoste/jwt_verify_lib/archive/c3c4cbd5762b5da01ffc059262be38413311d070.tar.gz"],
     ),
     com_github_nodejs_http_parser = dict(
         sha256 = "ef26268c54c8084d17654ba2ed5140bffeffd2a040a895ffb22a6cca3f6c613f",

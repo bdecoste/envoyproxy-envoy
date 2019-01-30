@@ -210,7 +210,10 @@ HttpIntegrationTest::makeRawHttpConnection(Network::ClientConnectionPtr&& conn) 
 IntegrationCodecClientPtr
 HttpIntegrationTest::makeHttpConnection(Network::ClientConnectionPtr&& conn) {
   auto codec = makeRawHttpConnection(std::move(conn));
+  std::cerr << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! makeHttpConnection \n";
+  EXPECT_TRUE(codec != nullptr);
   EXPECT_TRUE(codec->connected());
+  std::cerr << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! return makeHttpConnection \n";
   return codec;
 }
 

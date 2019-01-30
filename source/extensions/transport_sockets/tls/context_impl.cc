@@ -37,6 +37,7 @@ ContextImpl::ContextImpl(Stats::Scope& scope, const Envoy::Tls::ContextConfig& c
   tls_contexts_.resize(std::max(1UL, tls_certificates.size()));
 
   for (auto& ctx : tls_contexts_) {
+std::cerr << "!!!!!!!!!!!!!!!!!!!!! ContextImpl ctx " << tls_contexts_.size() << " \n";
     ctx.ssl_ctx_.reset(SSL_CTX_new(TLS_method()));
 
     int rc = SSL_CTX_set_app_data(ctx.ssl_ctx_.get(), this);
@@ -251,6 +252,7 @@ ContextImpl::ContextImpl(Stats::Scope& scope, const Envoy::Tls::ContextConfig& c
                                        ctx.cert_chain_file_path_));
     }
     ctx.is_ecdsa_ = pkey_id == EVP_PKEY_EC;
+    std::cerr << "!!!!!!!!!!!!!!!!!! pkey_id " << pkey_id << "\n";
     switch (pkey_id) {
     case EVP_PKEY_EC: {
       // We only support P-256 ECDSA today.
@@ -401,6 +403,8 @@ int ContextImpl::verifyCertificate(X509* cert) {
 }
 
 void ContextImpl::logHandshake(SSL* ssl) const {
+	  std::cerr << "!!!!!!!!!!!!!!!!! logHandshake " << ssl << " \n";
+
   stats_.handshake_.inc();
 
   if (SSL_session_reused(ssl)) {
@@ -409,6 +413,42 @@ void ContextImpl::logHandshake(SSL* ssl) const {
 
   const char* cipher = SSL_get_cipher_name(ssl);
   scope_.counter(fmt::format("ssl.ciphers.{}", std::string{cipher})).inc();
+
+  const char* version = SSL_get_version(ssl);
+  scope_.counter(fmt::format("ssl.versions.{}", std::string{version})).inc();
+
+  int group = SSL_get_shared_group(ssl, NULL);
+
+  std::cerr << "!!!!!!!!!!!!!!!!! num_curves " << group  << " \n";
+
+  if (group > 0 ) {
+	  switch (group) {
+	  case NID_X25519: {
+	    scope_.counter(fmt::format("ssl.curves.{}", "X25519")).inc();
+	  } break;
+	  case NID_X9_62_prime256v1: {
+	  	scope_.counter(fmt::format("ssl.curves.{}", "P-256")).inc();
+	  } break;
+	  //case NID_secp384r1: {
+	  //	scope_.counter(fmt::format("ssl.curves.{}", "P-384")).inc();
+	  //} break;
+	  }
+
+  }
+
+  //int EC_GROUP_get_curve_name(const EC_GROUP *group);
+
+//  uint16_t curve_id = SSL_get_curve_id(ssl);
+//  if (curve_id) {
+//    const char* curve = SSL_get_curve_name(curve_id);
+//    scope_.counter(fmt::format("ssl.curves.{}", std::string{curve})).inc();
+//  }
+
+ // uint16_t sigalg_id = SSL_get_peer_signature_algorithm(ssl);
+ // if (sigalg_id) {
+ //   const char* sigalg = SSL_get_signature_algorithm_name(sigalg_id, 1 /* include curve */);
+ //   scope_.counter(fmt::format("ssl.sigalgs.{}", std::string{sigalg})).inc();
+ // }
 
   bssl::UniquePtr<X509> cert(SSL_get_peer_certificate(ssl));
   if (!cert.get()) {
@@ -570,6 +610,7 @@ ClientContextImpl::ClientContextImpl(Stats::Scope& scope,
       server_name_indication_(config.serverNameIndication()),
       allow_renegotiation_(config.allowRenegotiation()),
       max_session_keys_(config.maxSessionKeys()) {
+	std::cerr << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ClientContextImpl " <<  tls_contexts_[0].ssl_ctx_.get() << " \n";
   // This should be guaranteed during configuration ingestion for client contexts.
   ASSERT(tls_contexts_.size() == 1);
   if (!parsed_alpn_protocols_.empty()) {
@@ -591,6 +632,30 @@ ClientContextImpl::ClientContextImpl(Stats::Scope& scope,
           return client_context_impl->newSessionKey(session);
         });
   }
+
+  auto cert_cb = +[](SSL* ssl, void *param) -> int {
+  	std::vector<TlsContext> *tls_contexts = (std::vector<TlsContext>*)param;
+
+  	std::vector<TlsContext>& contexts = *tls_contexts;
+
+  	std::cerr << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!! client cert_cb " << contexts[0].ssl_ctx_.get() << " \n";
+
+  	std::cerr << "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!! num contexts " << tls_contexts->size() << " \n";
+
+  	int group = SSL_get_shared_group(ssl, NULL);
+
+  	for (const auto& ctx : contexts) {
+  		std::cerr << "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!! ctx.is_ecdsa_ " << ctx.is_ecdsa_ << " " << group << " \n";
+  	}
+
+  	SSL_set_SSL_CTX(ssl, contexts[0].ssl_ctx_.get());
+
+    return 1;
+  };
+  //This one gets called
+  std::cerr << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!! client SSL_CTX_set_cert_cb \n";
+  SSL_CTX_set_cert_cb(tls_contexts_[0].ssl_ctx_.get(), cert_cb, &tls_contexts_);
+
 }
 
 bssl::UniquePtr<SSL> ClientContextImpl::newSsl(absl::optional<std::string> override_server_name) {
@@ -654,17 +719,159 @@ int ClientContextImpl::newSessionKey(SSL_SESSION* session) {
   return 1; // Tell BoringSSL that we took ownership of the session.
 }
 
+static bool isClientEcdsaCapable(SSL *ssl) {
+
+  X509 *x509 = SSL_get_peer_certificate(ssl);
+  std::cerr << "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!! x509 " << x509 << " \n";
+
+  STACK_OF(X509_NAME) *x509_name_stack = SSL_get_client_CA_list(ssl);
+  std::cerr << "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!! x509_name_stack " << x509_name_stack << " \n";
+
+  for (int i = 0; i < sk_X509_NAME_num(x509_name_stack); i++) {
+    const X509_NAME *x509_name = sk_X509_NAME_value(x509_name_stack, i);
+    std::cerr << "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!! x509_name " << x509_name << " \n";
+  }
+
+  int pnid;
+  int nidresult = SSL_get_peer_signature_type_nid(ssl, &pnid);
+  std::cerr << "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!! SSL_get_peer_signature_type_nid " << nidresult << " " << pnid << " \n";
+
+  STACK_OF(SSL_CIPHER) *cipher_stack = SSL_get_client_ciphers(ssl);
+  std::cerr << "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!! cipher_stack " << cipher_stack << " \n";
+
+  for (int i = 0; i < sk_SSL_CIPHER_num(cipher_stack); i++) {
+    const SSL_CIPHER *cipher = sk_SSL_CIPHER_value(cipher_stack, i);
+    int nid = SSL_CIPHER_get_cipher_nid(cipher);
+    std::cerr << "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!! cipher " << cipher << " " << nid << " \n";
+  }
+
+  STACK_OF(X509) *x509_stack = SSL_get_peer_cert_chain(ssl);
+  std::cerr << "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!! x509_stack " << x509_stack << " \n";
+
+  for (int i = 0; i < sk_X509_num(x509_stack); i++) {
+    const X509 *x509 = sk_X509_value(x509_stack, i);
+    std::cerr << "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!! x509 " << x509 << " \n";
+  }
+
+  int version_num = SSL_client_version(ssl);
+  const char *version = SSL_get_version(ssl);
+  std::cerr << "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!! version " << version_num << " " << version << " \n";
+
+  SSL_SESSION *session = SSL_get_session(ssl);
+  x509 = SSL_SESSION_get0_peer(session);
+  std::cerr << "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!! x509 " << x509 << " \n";
+
+  return false;
+}
+
 ServerContextImpl::ServerContextImpl(Stats::Scope& scope,
                                      const Envoy::Tls::ServerContextConfig& config,
                                      const std::vector<std::string>& server_names,
                                      TimeSource& time_source)
     : ContextImpl(scope, config, time_source), session_ticket_keys_(config.sessionTicketKeys()) {
+	std::cerr << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ServerContextImpl " <<  tls_contexts_[0].ssl_ctx_.get() << " \n";
+
   if (config.tlsCertificates().empty()) {
     throw EnvoyException("Server TlsCertificates must have a certificate specified");
   }
 
-  Envoy::Extensions::TransportSockets::Tls::set_select_certificate_cb(
-      tls_contexts_[0].ssl_ctx_.get());
+  auto cert_cb = +[](SSL* ssl, void *param) -> int {
+	std::vector<TlsContext> *tls_contexts = (std::vector<TlsContext>*)param;
+
+	std::vector<TlsContext>& contexts = *tls_contexts;
+
+	std::cerr << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!! server cert_cb " << contexts[0].ssl_ctx_.get() << " \n";
+
+	std::cerr << "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!! num contexts " << tls_contexts->size() << " \n";
+
+	int group = SSL_get_shared_group(ssl, NULL);
+
+	//const unsigned char *cipher_suites;
+	const SSL_CIPHER *cipher;
+	size_t len;
+	const uint8_t *cipher_suites;
+
+	len = SSL_client_hello_get0_ciphers(ssl, &cipher_suites);
+	std::cerr << "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!! cipher len " << len << " \n";
+
+	if (len % 2 == 0) {
+	  for (; len != 0; len -= 2, cipher_suites += 2) {
+		cipher = SSL_CIPHER_find(ssl, cipher_suites);
+		int nid = SSL_CIPHER_get_cipher_nid(cipher);
+		std::cerr << "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!! cipher " << cipher << " " << nid << " \n";
+
+	  }
+	}
+
+	const bool client_ecdsa_capable = isClientEcdsaCapable(ssl);
+
+		std::cerr << "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!! client_ecdsa_capable " << client_ecdsa_capable << " \n";
+
+	for (const auto& ctx : contexts) {
+      std::cerr << "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!! ctx.is_ecdsa_ " << ctx.is_ecdsa_ << " " << group << " \n";
+	  if (ctx.is_ecdsa_ && !client_ecdsa_capable) {
+	    return 0;
+	  }
+	}
+
+	SSL_set_SSL_CTX(ssl, contexts[0].ssl_ctx_.get());
+
+    return 1;
+  };
+  //std::cerr << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!! server SSL_CTX_set_cert_cb \n";
+  //SSL_CTX_set_cert_cb(tls_contexts_[0].ssl_ctx_.get(), cert_cb, &tls_contexts_);
+
+  auto client_hello_cb = +[](SSL *ssl, int *al, void *arg) -> int {
+    std::cerr << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!! server client_hello_cb \n";
+
+    int *extout;
+    size_t extoutlen;
+
+    int present = SSL_client_hello_get1_extensions_present(ssl, &extout, &extoutlen);
+    std::cerr << "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!! SSL_client_hello_get1_extensions_present " << present << " " << extoutlen << " \n";
+
+    const unsigned char *sessionout;
+    size_t sessionresult = SSL_client_hello_get0_session_id(ssl, &sessionout);
+    std::cerr << "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!! SSL_client_hello_get0_session_id " << sessionresult << " " << sessionout << " \n";
+
+    X509 *x509 = SSL_get_peer_certificate(ssl);
+    std::cerr << "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!! x509 " << x509 << " \n";
+
+    int pnid;
+    int nidresult = SSL_get_peer_signature_type_nid(ssl, &pnid);
+    std::cerr << "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!! SSL_get_peer_signature_type_nid " << nidresult << " " << pnid << " \n";
+
+    //const unsigned char *cipher_suites;
+    const SSL_CIPHER *cipher;
+    size_t len;
+    const uint8_t *cipher_suites;
+
+    len = SSL_client_hello_get0_ciphers(ssl, &cipher_suites);
+    std::cerr << "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!! cipher len " << len << " \n";
+
+    if (len % 2 == 0) {
+      for (; len != 0; len -= 2, cipher_suites += 2) {
+        cipher = SSL_CIPHER_find(ssl, cipher_suites);
+        int nid = SSL_CIPHER_get_cipher_nid(cipher);
+        std::cerr << "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!! cipher " << cipher << " " << nid << " \n";
+
+      }
+    }
+
+    STACK_OF(X509) *x509_stack = SSL_get_peer_cert_chain(ssl);
+    std::cerr << "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!! x509_stack " << x509_stack << " \n";
+
+    for (int i = 0; i < sk_X509_num(x509_stack); i++) {
+      const X509 *x509 = sk_X509_value(x509_stack, i);
+      std::cerr << "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!! x509 " << x509 << " \n";
+    }
+
+    return 1;
+  };
+  //std::cerr << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!! server SSL_CTX_set_client_cert_cb \n";
+  //SSL_CTX_set_client_hello_cb(tls_contexts_[0].ssl_ctx_.get(), client_hello_cb, &tls_contexts_);
+
+  //Envoy::Extensions::TransportSockets::Tls::set_select_certificate_cb();
 
   // Compute the session context ID hash. We use all the certificate identities,
   // since we should have a common ID for session resumption no matter what cert
@@ -823,7 +1030,6 @@ int ServerContextImpl::sessionTicketProcess(SSL*, uint8_t* key_name, uint8_t* iv
 
     int rc = RAND_bytes(iv, EVP_CIPHER_iv_length(cipher));
     ASSERT(rc);
-
     // This RELEASE_ASSERT is logically a static_assert, but we can't actually get
     // EVP_CIPHER_key_length(cipher) at compile-time
     RELEASE_ASSERT(key.aes_key_.size() == EVP_CIPHER_key_length(cipher), "");
@@ -862,76 +1068,6 @@ int ServerContextImpl::sessionTicketProcess(SSL*, uint8_t* key_name, uint8_t* iv
     return 0; // decryption failed
   }
 }
-
-/*bool ServerContextImpl::isClientEcdsaCapable(const SSL_CLIENT_HELLO* ssl_client_hello) {
-  CBS client_hello;
-  CBS_init(&client_hello, ssl_client_hello->client_hello, ssl_client_hello->client_hello_len);
-
-  // This is the TLSv1.3 case (TLSv1.2 on the wire and the supported_versions extensions present).
-  // We just need to loook at signature algorithms.
-  const uint16_t client_version = ssl_client_hello->version;
-  if (client_version == TLS1_2_VERSION && tls_max_version_ == TLS1_3_VERSION) {
-    // If the supported_versions extension is found then we assume that the client is competent
-    // enough that just checking the signature_algorithms is sufficient.
-    const uint8_t* supported_versions_data;
-    size_t supported_versions_len;
-    if (SSL_early_callback_ctx_extension_get(ssl_client_hello, TLSEXT_TYPE_supported_versions,
-                                             &supported_versions_data, &supported_versions_len)) {
-      const uint8_t* signature_algorithms_data;
-      size_t signature_algorithms_len;
-      if (SSL_early_callback_ctx_extension_get(ssl_client_hello, TLSEXT_TYPE_signature_algorithms,
-                                               &signature_algorithms_data,
-                                               &signature_algorithms_len)) {
-        CBS signature_algorithms_ext, signature_algorithms;
-        CBS_init(&signature_algorithms_ext, signature_algorithms_data, signature_algorithms_len);
-        if (!CBS_get_u16_length_prefixed(&signature_algorithms_ext, &signature_algorithms) ||
-            CBS_len(&signature_algorithms_ext) != 0) {
-          return false;
-        }
-        if (cbsContainsU16(signature_algorithms, SSL_SIGN_ECDSA_SECP256R1_SHA256)) {
-          return true;
-        }
-      }
-
-      return false;
-    }
-  }
-
-  // Otherwise we are < TLSv1.3 and need to look at both the curves in the supported_groups for
-  // ECDSA and also for a compatible cipher suite. https://tools.ietf.org/html/rfc4492#section-5.1.1
-  const uint8_t* curvelist_data;
-  size_t curvelist_len;
-  if (!SSL_early_callback_ctx_extension_get(ssl_client_hello, TLSEXT_TYPE_supported_groups,
-                                            &curvelist_data, &curvelist_len)) {
-    return false;
-  }
-
-  CBS curvelist;
-  CBS_init(&curvelist, curvelist_data, curvelist_len);
-
-  // We only support P256 ECDSA curves today.
-  if (!cbsContainsU16(curvelist, SSL_CURVE_SECP256R1)) {
-    return false;
-  }
-
-  // The client must have offered an ECDSA ciphersuite that we like.
-  CBS cipher_suites;
-  CBS_init(&cipher_suites, ssl_client_hello->cipher_suites, ssl_client_hello->cipher_suites_len);
-
-  while (CBS_len(&cipher_suites) > 0) {
-    uint16_t cipher_id;
-    if (!CBS_get_u16(&cipher_suites, &cipher_id)) {
-      return false;
-    }
-    // All tls_context_ share the same set of enabled ciphers, so we can just look at the base
-    // context.
-    if (tls_contexts_[0].isCipherEnabled(cipher_id, client_version)) {
-      return true;
-    }
-  }
-
-  return false;
-}*/
 
 void ServerContextImpl::TlsContext::addClientValidationContext(
     const Envoy::Tls::CertificateValidationContextConfig& config, bool require_client_cert) {
