@@ -3098,7 +3098,6 @@ TEST_P(SslSocketTest, ProtocolVersions) {
   client_params->clear_tls_maximum_protocol_version();
   server_params->clear_tls_minimum_protocol_version();
   server_params->clear_tls_maximum_protocol_version();
-
 }
 
 TEST_P(SslSocketTest, ALPN) {

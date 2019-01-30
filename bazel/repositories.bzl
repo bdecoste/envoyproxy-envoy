@@ -313,7 +313,7 @@ def _bssl_wrapper():
         name = "bssl_wrapper_lib",
         actual = "@bssl_wrapper//:bssl_wrapper_lib",
     )
-    
+
 def _openssl_cbs():
     _repository_impl("openssl_cbs")
     native.bind(

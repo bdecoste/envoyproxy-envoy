@@ -348,7 +348,7 @@ void ConnectionImpl::addBytesSentCallback(BytesSentCb cb) {
 }
 
 void ConnectionImpl::write(Buffer::Instance& data, bool end_stream) {
-	std::cerr << "!!!!!!!!!!!!!!! write \n";
+  std::cerr << "!!!!!!!!!!!!!!! write \n";
   ASSERT(!end_stream || enable_half_close_);
 
   if (write_end_stream_) {
@@ -359,7 +359,7 @@ void ConnectionImpl::write(Buffer::Instance& data, bool end_stream) {
 
     return;
   }
-	std::cerr << "!!!!!!!!!!!!!!! write 1\n";
+  std::cerr << "!!!!!!!!!!!!!!! write 1\n";
 
   // NOTE: This is kind of a hack, but currently we don't support restart/continue on the write
   //       path, so we just pass around the buffer passed to us in this function. If we ever support
@@ -368,16 +368,16 @@ void ConnectionImpl::write(Buffer::Instance& data, bool end_stream) {
   current_write_end_stream_ = end_stream;
   FilterStatus status = filter_manager_.onWrite();
   current_write_buffer_ = nullptr;
-	std::cerr << "!!!!!!!!!!!!!!! write 2\n";
+  std::cerr << "!!!!!!!!!!!!!!! write 2\n";
 
   if (FilterStatus::StopIteration == status) {
     return;
   }
-	std::cerr << "!!!!!!!!!!!!!!! write 3\n";
+  std::cerr << "!!!!!!!!!!!!!!! write 3\n";
 
   write_end_stream_ = end_stream;
   if (data.length() > 0 || end_stream) {
-		std::cerr << "!!!!!!!!!!!!!!! write 4\n";
+    std::cerr << "!!!!!!!!!!!!!!! write 4\n";
 
     ENVOY_CONN_LOG(trace, "writing {} bytes, end_stream {}", *this, data.length(), end_stream);
     // TODO(mattklein123): All data currently gets moved from the source buffer to the write buffer.
@@ -387,7 +387,7 @@ void ConnectionImpl::write(Buffer::Instance& data, bool end_stream) {
     // we never change existing write_buffer_ chain elements between calls to SSL_write(). That code
     // might need to change if we ever copy here.
     write_buffer_->move(data);
-	std::cerr << "!!!!!!!!!!!!!!! write 5 " << connecting_ << " \n";
+    std::cerr << "!!!!!!!!!!!!!!! write 5 " << connecting_ << " \n";
 
     // Activating a write event before the socket is connected has the side-effect of tricking
     // doWriteReady into thinking the socket is connected. On macOS, the underlying write may fail
@@ -396,12 +396,10 @@ void ConnectionImpl::write(Buffer::Instance& data, bool end_stream) {
       ASSERT(file_event_ != nullptr);
       file_event_->activate(Event::FileReadyType::Write);
     }
-	std::cerr << "!!!!!!!!!!!!!!! write 6n";
-
+    std::cerr << "!!!!!!!!!!!!!!! write 6n";
   }
 
-	std::cerr << "!!!!!!!!!!!!!!! done write \n";
-
+  std::cerr << "!!!!!!!!!!!!!!! done write \n";
 }
 
 void ConnectionImpl::setBufferLimits(uint32_t limit) {

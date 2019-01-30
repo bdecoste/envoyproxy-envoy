@@ -62,7 +62,7 @@ void SslSocket::setTransportSocketCallbacks(Network::TransportSocketCallbacks& c
 
 Network::IoResult SslSocket::doRead(Buffer::Instance& read_buffer) {
   if (!handshake_complete_) {
-	  std::cerr << "!!!!!!!!!!!!!!!! doRead \n";
+    std::cerr << "!!!!!!!!!!!!!!!! doRead \n";
 
     PostIoAction action = doHandshake();
     if (action == PostIoAction::Close || !handshake_complete_) {
@@ -123,14 +123,14 @@ Network::IoResult SslSocket::doRead(Buffer::Instance& read_buffer) {
 }
 
 PostIoAction SslSocket::doHandshake() {
-std::cerr << "!!!!!!!!!!!!! doHandshake \n";
+  std::cerr << "!!!!!!!!!!!!! doHandshake \n";
   ASSERT(!handshake_complete_);
   int rc = SSL_do_handshake(ssl_.get());
   if (rc == 1) {
     ENVOY_CONN_LOG(debug, "handshake complete", callbacks_->connection());
     handshake_complete_ = true;
     ctx_->logHandshake(ssl_.get());
-std::cerr << "!!!!!!!!!!!!! raiseEvent \n";
+    std::cerr << "!!!!!!!!!!!!! raiseEvent \n";
     callbacks_->raiseEvent(Network::ConnectionEvent::Connected);
     std::cerr << "!!!!!!!!!!!!! return \n";
 
@@ -153,7 +153,7 @@ std::cerr << "!!!!!!!!!!!!! raiseEvent \n";
 }
 
 void SslSocket::drainErrorQueue() {
-std::cerr << "!!!!!!!!!!!!!!!!!!!!! drainErrorQueue \n";
+  std::cerr << "!!!!!!!!!!!!!!!!!!!!! drainErrorQueue \n";
   bool saw_error = false;
   bool saw_counted_error = false;
   while (uint64_t err = ERR_get_error()) {
@@ -175,13 +175,12 @@ std::cerr << "!!!!!!!!!!!!!!!!!!!!! drainErrorQueue \n";
     ctx_->stats().connection_error_.inc();
   }
   std::cerr << "done !!!!!!!!!!!!!!!!!!!!! drainErrorQueue \n";
-
 }
 
 Network::IoResult SslSocket::doWrite(Buffer::Instance& write_buffer, bool end_stream) {
   ASSERT(!shutdown_sent_ || write_buffer.length() == 0);
   if (!handshake_complete_) {
-	  std::cerr << "!!!!!!!!!!!!!!!! doWrite \n";
+    std::cerr << "!!!!!!!!!!!!!!!! doWrite \n";
     PostIoAction action = doHandshake();
     if (action == PostIoAction::Close || !handshake_complete_) {
       return {action, 0, false};
@@ -200,7 +199,7 @@ Network::IoResult SslSocket::doWrite(Buffer::Instance& write_buffer, bool end_st
 
   uint64_t total_bytes_written = 0;
   while (bytes_to_write > 0) {
-	  std::cerr << "  !!!!!!!!!!!!!!!! bytes_to_write\n";
+    std::cerr << "  !!!!!!!!!!!!!!!! bytes_to_write\n";
 
     // TODO(mattklein123): As it relates to our fairness efforts, we might want to limit the number
     // of iterations of this loop, either by pure iterations, bytes written, etc.
@@ -234,8 +233,8 @@ Network::IoResult SslSocket::doWrite(Buffer::Instance& write_buffer, bool end_st
       break;
     }
   }
-  std::cerr << "  !!!!!!!!!!!!!!!! doWrite 3 " << write_buffer.length() << " " << end_stream << " \n";
-
+  std::cerr << "  !!!!!!!!!!!!!!!! doWrite 3 " << write_buffer.length() << " " << end_stream
+            << " \n";
 
   if (write_buffer.length() == 0 && end_stream) {
     shutdownSsl();
@@ -248,7 +247,7 @@ Network::IoResult SslSocket::doWrite(Buffer::Instance& write_buffer, bool end_st
 void SslSocket::onConnected() { ASSERT(!handshake_complete_); }
 
 void SslSocket::shutdownSsl() {
-	std::cerr << "!!!!!!!!!!!!!!! shutdownSsl \n";
+  std::cerr << "!!!!!!!!!!!!!!! shutdownSsl \n";
   ASSERT(handshake_complete_);
   if (!shutdown_sent_ && callbacks_->connection().state() != Network::Connection::State::Closed) {
     int rc = SSL_shutdown(ssl_.get());

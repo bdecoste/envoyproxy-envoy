@@ -108,7 +108,7 @@ public:
         provider_name_(absl::make_optional<std::string>(provider_name)) {}
 
   void verify(ContextSharedPtr context) const override {
-std::cerr << "!!!!!!!!!!!!!!!!!!!!!! provider verify \n";
+    std::cerr << "!!!!!!!!!!!!!!!!!!!!!! provider verify \n";
     auto& ctximpl = static_cast<ContextImpl&>(*context);
     auto auth = auth_factory_.create(getAudienceChecker(), provider_name_, false);
     extractor_->sanitizePayloadHeaders(ctximpl.headers());
@@ -141,7 +141,9 @@ public:
                                   const JwtProvider& provider, const BaseVerifierImpl* parent,
                                   const std::vector<std::string>& config_audiences)
       : ProviderVerifierImpl(provider_name, factory, provider, parent),
-        check_audience_(std::make_unique<CheckAudience>(config_audiences)) {std::cerr << "!!!!!!!!!!!!!!!!!!!!!! provider and audience \n";}
+        check_audience_(std::make_unique<CheckAudience>(config_audiences)) {
+    std::cerr << "!!!!!!!!!!!!!!!!!!!!!! provider and audience \n";
+  }
 
 private:
   const CheckAudience* getAudienceChecker() const override { check_audience_.get(); }
@@ -158,7 +160,7 @@ public:
       : BaseVerifierImpl(parent), auth_factory_(factory), extractor_(extractor) {}
 
   void verify(ContextSharedPtr context) const override {
-std::cerr << "!!!!!!!!!!!!!!!!!!!!!! allow failed verify \n";
+    std::cerr << "!!!!!!!!!!!!!!!!!!!!!! allow failed verify \n";
 
     auto& ctximpl = static_cast<ContextImpl&>(*context);
     auto auth = auth_factory_.create(nullptr, absl::nullopt, true);
@@ -193,7 +195,7 @@ public:
   BaseGroupVerifierImpl(const BaseVerifierImpl* parent) : BaseVerifierImpl(parent) {}
 
   void verify(ContextSharedPtr context) const override {
-std::cerr << "!!!!!!!!!!!!!!!!!!!!!! base group verify \n";
+    std::cerr << "!!!!!!!!!!!!!!!!!!!!!! base group verify \n";
 
     auto& ctximpl = static_cast<ContextImpl&>(*context);
     for (const auto& it : verifiers_) {
@@ -265,7 +267,7 @@ public:
   AllowAllVerifierImpl(const BaseVerifierImpl* parent) : BaseVerifierImpl(parent) {}
 
   void verify(ContextSharedPtr context) const override {
-	  std::cerr << "!!!!!!!!!!!!!!!!!!!!!! allow all verify \n";
+    std::cerr << "!!!!!!!!!!!!!!!!!!!!!! allow all verify \n";
 
     completeWithStatus(Status::Ok, static_cast<ContextImpl&>(*context));
   }

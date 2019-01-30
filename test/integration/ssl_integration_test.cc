@@ -222,33 +222,27 @@ public:
   const envoy::api::v2::auth::TlsParameters_TlsProtocol tls_version_{std::get<1>(GetParam())};
 };
 
-class Tlsv1_2CertficateIntegrationTest
-    : public SslCertficateIntegrationTest {
+class Tlsv1_2CertficateIntegrationTest : public SslCertficateIntegrationTest {};
 
-};
-
-class Tlsv1_3CertficateIntegrationTest
-    : public SslCertficateIntegrationTest {
-
-};
+class Tlsv1_3CertficateIntegrationTest : public SslCertficateIntegrationTest {};
 
 INSTANTIATE_TEST_CASE_P(
     IpVersionsClientVersions, SslCertficateIntegrationTest,
     testing::Combine(testing::ValuesIn(TestEnvironment::getIpVersionsForTest()),
-					 testing::Values(envoy::api::v2::auth::TlsParameters::TLSv1_2,
-									 envoy::api::v2::auth::TlsParameters::TLSv1_3)),
+                     testing::Values(envoy::api::v2::auth::TlsParameters::TLSv1_2,
+                                     envoy::api::v2::auth::TlsParameters::TLSv1_3)),
     SslCertficateIntegrationTest::ipClientVersionTestParamsToString);
 
 INSTANTIATE_TEST_CASE_P(
     IpVersionsClientVersions, Tlsv1_2CertficateIntegrationTest,
     testing::Combine(testing::ValuesIn(TestEnvironment::getIpVersionsForTest()),
-					 testing::Values(envoy::api::v2::auth::TlsParameters::TLSv1_2)),
-	Tlsv1_2CertficateIntegrationTest::ipClientVersionTestParamsToString);
+                     testing::Values(envoy::api::v2::auth::TlsParameters::TLSv1_2)),
+    Tlsv1_2CertficateIntegrationTest::ipClientVersionTestParamsToString);
 
 INSTANTIATE_TEST_CASE_P(
     IpVersionsClientVersions, Tlsv1_3CertficateIntegrationTest,
     testing::Combine(testing::ValuesIn(TestEnvironment::getIpVersionsForTest()),
-					 testing::Values(envoy::api::v2::auth::TlsParameters::TLSv1_3)),
+                     testing::Values(envoy::api::v2::auth::TlsParameters::TLSv1_3)),
     Tlsv1_3CertficateIntegrationTest::ipClientVersionTestParamsToString);
 
 // Server with an RSA certificate and a client with RSA/ECDSA cipher suites works.
@@ -304,12 +298,14 @@ TEST_P(Tlsv1_2CertficateIntegrationTest, ServerEcdsaClientRsaOnly) {
 }
 
 TEST_P(Tlsv1_3CertficateIntegrationTest, ServerEcdsaClientRsaOnly) {
-  EXPECT_DEATH({
-    server_rsa_cert_ = false;
-    server_ecdsa_cert_ = true;
-    initialize();
-    auto codec_client = makeRawHttpConnection(makeSslClientConnection(rsaOnlyClientOptions()));
-  }, "ConnectionImpl was unexpectedly torn down without being closed");
+  EXPECT_DEATH(
+      {
+        server_rsa_cert_ = false;
+        server_ecdsa_cert_ = true;
+        initialize();
+        auto codec_client = makeRawHttpConnection(makeSslClientConnection(rsaOnlyClientOptions()));
+      },
+      "ConnectionImpl was unexpectedly torn down without being closed");
 }
 
 // Server with RSA/ECDSA certificates and a client with only RSA cipher suites works.
@@ -338,18 +334,20 @@ TEST_P(Tlsv1_2CertficateIntegrationTest, ServerRsaClientEcdsaOnly) {
 }
 
 TEST_P(Tlsv1_3CertficateIntegrationTest, ServerRsaClientEcdsaOnly) {
-  EXPECT_DEATH({
-    server_rsa_cert_ = true;
-    server_ecdsa_cert_ = false;
-    client_ecdsa_cert_ = true;
-    initialize();
-    EXPECT_FALSE(
-        makeRawHttpConnection(makeSslClientConnection(ecdsaOnlyClientOptions()))->connected());
-    Stats::CounterSharedPtr counter =
-        test_server_->counter(listenerStatPrefix("ssl.connection_error"));
-    EXPECT_EQ(1U, counter->value());
-    counter->reset();
-  }, "ConnectionImpl was unexpectedly torn down without being closed");
+  EXPECT_DEATH(
+      {
+        server_rsa_cert_ = true;
+        server_ecdsa_cert_ = false;
+        client_ecdsa_cert_ = true;
+        initialize();
+        EXPECT_FALSE(
+            makeRawHttpConnection(makeSslClientConnection(ecdsaOnlyClientOptions()))->connected());
+        Stats::CounterSharedPtr counter =
+            test_server_->counter(listenerStatPrefix("ssl.connection_error"));
+        EXPECT_EQ(1U, counter->value());
+        counter->reset();
+      },
+      "ConnectionImpl was unexpectedly torn down without being closed");
 }
 
 // Server has only an ECDSA certificate, client is only ECDSA capable works.
