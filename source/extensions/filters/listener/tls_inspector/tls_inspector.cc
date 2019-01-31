@@ -71,6 +71,7 @@ Filter::Filter(const ConfigSharedPtr config) : config_(config), ssl_(config_->ne
 }
 
 Network::FilterStatus Filter::onAccept(Network::ListenerFilterCallbacks& cb) {
+	std::cerr << "!!!!!!!!!!!!!!!! tls_inspector onAccept \n";
   ENVOY_LOG(debug, "tls inspector: new connection accepted");
   Network::ConnectionSocket& socket = cb.socket();
   ASSERT(file_event_ == nullptr);
@@ -88,6 +89,8 @@ Network::FilterStatus Filter::onAccept(Network::ListenerFilterCallbacks& cb) {
         onRead();
       },
       Event::FileTriggerType::Edge, Event::FileReadyType::Read | Event::FileReadyType::Closed);
+
+  ASSERT(file_event_ != nullptr);
 
   // TODO(PiotrSikora): make this configurable.
   timer_ = cb.dispatcher().createTimer([this]() -> void { onTimeout(); });

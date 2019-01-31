@@ -655,8 +655,8 @@ ClientContextImpl::ClientContextImpl(Stats::Scope& scope,
     return 1;
   };
   // This one gets called
-  std::cerr << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!! client SSL_CTX_set_cert_cb \n";
-  SSL_CTX_set_cert_cb(tls_contexts_[0].ssl_ctx_.get(), cert_cb, &tls_contexts_);
+  //std::cerr << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!! client SSL_CTX_set_cert_cb \n";
+  //SSL_CTX_set_cert_cb(tls_contexts_[0].ssl_ctx_.get(), cert_cb, &tls_contexts_);
 }
 
 bssl::UniquePtr<SSL> ClientContextImpl::newSsl(absl::optional<std::string> override_server_name) {
