@@ -363,7 +363,22 @@ TEST_P(SslCertficateIntegrationTest, ServerEcdsaClientEcdsaOnly) {
 }
 
 // Server has RSA/ECDSA certificates, client is only ECDSA capable works.
-TEST_P(SslCertficateIntegrationTest, ServerRsaEcdsaClientEcdsaOnly) {
+TEST_P(Tlsv1_2CertficateIntegrationTest, ServerRsaEcdsaClientEcdsaOnly) {
+  EXPECT_DEATH(
+      {
+        server_rsa_cert_ = true;
+        server_ecdsa_cert_ = true;
+        client_ecdsa_cert_ = true;
+        ConnectionCreationFunction creator = [&]() -> Network::ClientConnectionPtr {
+          return makeSslClientConnection(ecdsaOnlyClientOptions());
+        };
+        testRouterRequestAndResponseWithBody(1024, 512, false, &creator);
+        checkStats();
+      },
+      "ConnectionImpl file event was unexpectedly null");
+}
+
+TEST_P(Tlsv1_3CertficateIntegrationTest, ServerRsaEcdsaClientEcdsaOnly) {
   server_rsa_cert_ = true;
   server_ecdsa_cert_ = true;
   client_ecdsa_cert_ = true;

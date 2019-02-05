@@ -30,7 +30,7 @@ namespace ProxyProtocol {
 Config::Config(Stats::Scope& scope) : stats_{ALL_PROXY_PROTOCOL_STATS(POOL_COUNTER(scope))} {}
 
 Network::FilterStatus Filter::onAccept(Network::ListenerFilterCallbacks& cb) {
-	std::cerr << "!!!!!!!!!!!!!!!!!! proxy_protocol onAccept \n";
+  std::cerr << "!!!!!!!!!!!!!!!!!! proxy_protocol onAccept \n";
   ENVOY_LOG(debug, "proxy_protocol: New connection accepted");
   Network::ConnectionSocket& socket = cb.socket();
   ASSERT(file_event_.get() == nullptr);

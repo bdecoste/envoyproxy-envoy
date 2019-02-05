@@ -71,7 +71,7 @@ Filter::Filter(const ConfigSharedPtr config) : config_(config), ssl_(config_->ne
 }
 
 Network::FilterStatus Filter::onAccept(Network::ListenerFilterCallbacks& cb) {
-	std::cerr << "!!!!!!!!!!!!!!!! tls_inspector onAccept \n";
+  std::cerr << "!!!!!!!!!!!!!!!! tls_inspector onAccept \n";
   ENVOY_LOG(debug, "tls inspector: new connection accepted");
   Network::ConnectionSocket& socket = cb.socket();
   ASSERT(file_event_ == nullptr);
