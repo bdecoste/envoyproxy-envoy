@@ -30,6 +30,7 @@ envoy_cc_library(
     external_deps = [
         "abseil_synchronization",
         "ssl",
+        "bssl_wrapper_lib",
     ],
     deps = [
         ":context_config_lib",
@@ -84,14 +85,16 @@ envoy_cc_library(
     external_deps = [
         "abseil_synchronization",
         "ssl",
+        "bssl_wrapper_lib",
     ],
     deps = [
+        ":openssl_impl_lib",
         ":utility_lib",
+        "//include/envoy/stats:stats_interface",
+        "//include/envoy/stats:stats_macros",
         "//include/envoy/ssl:context_config_interface",
         "//include/envoy/ssl:context_interface",
         "//include/envoy/ssl:context_manager_interface",
-        "//include/envoy/stats:stats_interface",
-        "//include/envoy/stats:stats_macros",
         "//source/common/common:assert_lib",
         "//source/common/common:base64_lib",
         "//source/common/common:hex_lib",
@@ -107,9 +110,25 @@ envoy_cc_library(
     hdrs = ["utility.h"],
     external_deps = [
         "ssl",
+        "bssl_wrapper_lib",
     ],
     deps = [
+        ":openssl_impl_lib",
         "//source/common/common:assert_lib",
         "//source/common/common:utility_lib",
+    ],
+)
+
+envoy_cc_library(
+    name = "openssl_impl_lib",
+    srcs = [
+        "openssl_impl.cc",
+    ],
+    hdrs = [
+        "openssl_impl.h",
+    ],
+    external_deps = [
+        "ssl",
+        "bssl_wrapper_lib",
     ],
 )

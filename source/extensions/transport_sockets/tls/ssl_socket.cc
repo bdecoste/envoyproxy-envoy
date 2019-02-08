@@ -34,7 +34,7 @@ public:
     return {PostIoAction::Close, 0, false};
   }
   void onConnected() override {}
-  const Ssl::Connection* ssl() const override { return nullptr; }
+  const Envoy::Ssl::Connection* ssl() const override { return nullptr; }
 };
 } // namespace
 
@@ -56,12 +56,13 @@ void SslSocket::setTransportSocketCallbacks(Network::TransportSocketCallbacks& c
   ASSERT(!callbacks_);
   callbacks_ = &callbacks;
 
-  BIO* bio = BIO_new_socket(callbacks_->fd(), 0);
+  BIO* bio = BIO_new_socket(callbacks_->ioHandle().fd(), 0);
   SSL_set_bio(ssl_.get(), bio, bio);
 }
 
 Network::IoResult SslSocket::doRead(Buffer::Instance& read_buffer) {
   if (!handshake_complete_) {
+
     PostIoAction action = doHandshake();
     if (action == PostIoAction::Close || !handshake_complete_) {
       // end_stream is false because either a hard error occurred (action == Close) or
@@ -189,6 +190,7 @@ Network::IoResult SslSocket::doWrite(Buffer::Instance& write_buffer, bool end_st
 
   uint64_t total_bytes_written = 0;
   while (bytes_to_write > 0) {
+
     // TODO(mattklein123): As it relates to our fairness efforts, we might want to limit the number
     // of iterations of this loop, either by pure iterations, bytes written, etc.
 
@@ -198,6 +200,7 @@ Network::IoResult SslSocket::doWrite(Buffer::Instance& write_buffer, bool end_st
     ASSERT(bytes_to_write <= write_buffer.length());
     int rc = SSL_write(ssl_.get(), write_buffer.linearize(bytes_to_write), bytes_to_write);
     ENVOY_CONN_LOG(trace, "ssl write returns: {}", callbacks_->connection(), rc);
+
     if (rc > 0) {
       ASSERT(rc == static_cast<int>(bytes_to_write));
       total_bytes_written += rc;

@@ -15,6 +15,7 @@
 #include "extensions/transport_sockets/tls/utility.h"
 
 #include "absl/synchronization/mutex.h"
+#include "bssl_wrapper/bssl_wrapper.h"
 #include "openssl/ssl.h"
 
 namespace Envoy {
@@ -45,7 +46,7 @@ public:
   SslSocket(Envoy::Ssl::ContextSharedPtr ctx, InitialState state,
             Network::TransportSocketOptionsSharedPtr transport_socket_options);
 
-  // Ssl::Connection
+  // Envoy::Ssl::Connection
   bool peerCertificatePresented() const override;
   std::string uriSanLocalCertificate() const override;
   const std::string& sha256PeerCertificateDigest() const override;
@@ -65,7 +66,7 @@ public:
   Network::IoResult doRead(Buffer::Instance& read_buffer) override;
   Network::IoResult doWrite(Buffer::Instance& write_buffer, bool end_stream) override;
   void onConnected() override;
-  const Ssl::Connection* ssl() const override { return this; }
+  const Envoy::Ssl::Connection* ssl() const override { return this; }
 
   SSL* rawSslForTest() const { return ssl_.get(); }
 
@@ -123,7 +124,7 @@ public:
   void onAddOrUpdateSecret() override;
 
 private:
-  Ssl::ContextManager& manager_;
+  Envoy::Ssl::ContextManager& manager_;
   Stats::Scope& stats_scope_;
   SslSocketFactoryStats stats_;
   Envoy::Ssl::ServerContextConfigPtr config_;

@@ -4,8 +4,8 @@
 #include <list>
 
 #include "envoy/common/time.h"
-#include "envoy/ssl/context_manager.h"
 #include "envoy/stats/scope.h"
+#include "envoy/ssl/context_manager.h"
 
 namespace Envoy {
 namespace Extensions {
@@ -24,11 +24,11 @@ public:
   ContextManagerImpl(TimeSource& time_source) : time_source_(time_source) {}
   ~ContextManagerImpl();
 
-  // Ssl::ContextManager
-  Ssl::ClientContextSharedPtr
+  // Envoy::Ssl::ContextManager
+  Envoy::Ssl::ClientContextSharedPtr
   createSslClientContext(Stats::Scope& scope,
                          const Envoy::Ssl::ClientContextConfig& config) override;
-  Ssl::ServerContextSharedPtr
+  Envoy::Ssl::ServerContextSharedPtr
   createSslServerContext(Stats::Scope& scope, const Envoy::Ssl::ServerContextConfig& config,
                          const std::vector<std::string>& server_names) override;
   size_t daysUntilFirstCertExpires() const override;
