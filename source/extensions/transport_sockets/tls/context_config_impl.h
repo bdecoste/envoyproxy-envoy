@@ -65,7 +65,6 @@ protected:
                     const unsigned default_max_protocol_version,
                     const std::string& default_cipher_suites, const std::string& default_curves,
                     Server::Configuration::TransportSocketFactoryContext& factory_context);
-  Api::Api& api_;
 
 private:
   static unsigned

@@ -77,7 +77,7 @@ Network::FilterStatus Filter::onAccept(Network::ListenerFilterCallbacks& cb) {
   ASSERT(file_event_ == nullptr);
 
   file_event_ = cb.dispatcher().createFileEvent(
-	  socket.ioHandle().fd(),
+	  socket.fd(),
       [this](uint32_t events) {
         if (events & Event::FileReadyType::Closed) {
           config_->stats().connection_closed_.inc();
@@ -135,7 +135,7 @@ void Filter::onRead() {
   // TODO(ggreenway): write an integration test to ensure the events work as expected on all
   // platforms.
   auto& os_syscalls = Api::OsSysCallsSingleton::get();
-  const Api::SysCallSizeResult result = os_syscalls.recv(cb_->socket().ioHandle().fd(), buf_,
+  const Api::SysCallSizeResult result = os_syscalls.recv(cb_->socket().fd(), buf_,
                                                          config_->maxClientHelloSize(), MSG_PEEK);
   ENVOY_LOG(trace, "tls inspector: recv: {}", result.rc_);
 

@@ -111,8 +111,7 @@ ContextConfigImpl::ContextConfigImpl(
     const unsigned default_min_protocol_version, const unsigned default_max_protocol_version,
     const std::string& default_cipher_suites, const std::string& default_curves,
     Server::Configuration::TransportSocketFactoryContext& factory_context)
-    : api_(factory_context.api()),
-      alpn_protocols_(RepeatedPtrUtil::join(config.alpn_protocols(), ",")),
+    :  alpn_protocols_(RepeatedPtrUtil::join(config.alpn_protocols(), ",")),
       cipher_suites_(StringUtil::nonEmptyStringOrDefault(
           RepeatedPtrUtil::join(config.tls_params().cipher_suites(), ":"), default_cipher_suites)),
       ecdh_curves_(StringUtil::nonEmptyStringOrDefault(
@@ -144,7 +143,7 @@ ContextConfigImpl::ContextConfigImpl(
   if (!tls_certificate_providers_.empty()) {
     for (auto& provider : tls_certificate_providers_) {
       if (provider->secret() != nullptr) {
-        tls_certificate_configs_.emplace_back(*provider->secret(), api_);
+        tls_certificate_configs_.emplace_back(*provider->secret());
       }
     }
   }
@@ -153,7 +152,7 @@ ContextConfigImpl::ContextConfigImpl(
       certificate_validation_context_provider_->secret() != nullptr) {
     validation_context_config_ =
         std::make_unique<Envoy::Ssl::CertificateValidationContextConfigImpl>(
-            *certificate_validation_context_provider_->secret(), api_);
+            *certificate_validation_context_provider_->secret());
   }
 }
 
@@ -162,7 +161,7 @@ ContextConfigImpl::getCombinedValidationContextConfig(
     const envoy::api::v2::auth::CertificateValidationContext& dynamic_cvc) {
   envoy::api::v2::auth::CertificateValidationContext combined_cvc = *default_cvc_;
   combined_cvc.MergeFrom(dynamic_cvc);
-  return std::make_unique<Envoy::Ssl::CertificateValidationContextConfigImpl>(combined_cvc, api_);
+  return std::make_unique<Envoy::Ssl::CertificateValidationContextConfigImpl>(combined_cvc);
 }
 
 void ContextConfigImpl::setSecretUpdateCallback(std::function<void()> callback) {
@@ -177,7 +176,7 @@ void ContextConfigImpl::setSecretUpdateCallback(std::function<void()> callback) 
           // This breaks multiple certificate support, but today SDS is only single cert.
           // TODO(htuch): Fix this when SDS goes multi-cert.
           tls_certificate_configs_.clear();
-          tls_certificate_configs_.emplace_back(*tls_certificate_providers_[0]->secret(), api_);
+          tls_certificate_configs_.emplace_back(*tls_certificate_providers_[0]->secret());
           callback();
         });
   }
@@ -203,7 +202,7 @@ void ContextConfigImpl::setSecretUpdateCallback(std::function<void()> callback) 
           certificate_validation_context_provider_->addUpdateCallback([this, callback]() {
             validation_context_config_ =
                 std::make_unique<Envoy::Ssl::CertificateValidationContextConfigImpl>(
-                    *certificate_validation_context_provider_->secret(), api_);
+                    *certificate_validation_context_provider_->secret());
             callback();
           });
     }
@@ -320,13 +319,13 @@ ServerContextConfigImpl::ServerContextConfigImpl(
                         DEFAULT_CIPHER_SUITES, DEFAULT_CURVES, factory_context),
       require_client_certificate_(
           PROTOBUF_GET_WRAPPED_OR_DEFAULT(config, require_client_certificate, false)),
-	  session_ticket_keys_([&config, &api = api_] {
+	  session_ticket_keys_([&config] {
         std::vector<SessionTicketKey> ret;
 
         switch (config.session_ticket_keys_type_case()) {
         case envoy::api::v2::auth::DownstreamTlsContext::kSessionTicketKeys:
           for (const auto& datasource : config.session_ticket_keys().keys()) {
-        	validateAndAppendKey(ret, Config::DataSource::read(datasource, false, api));
+        	validateAndAppendKey(ret, Config::DataSource::read(datasource, false));
           }
           break;
         case envoy::api::v2::auth::DownstreamTlsContext::kSessionTicketKeysSdsSecretConfig:
